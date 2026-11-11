@@ -49,3 +49,47 @@ let impactEvent;const impactGame=new VolleyballGame({mode:'1v1',onEvent:e=>{if(e
 const impactPlayer=impactGame.players[0];Object.assign(impactPlayer.head,{x:-4,y:3,z:0,vx:4,vy:0,vz:0});Object.assign(impactGame.ball,{x:-3.2,y:3,z:0,vx:-5,vy:0,vz:0});impactGame._ballStep(.001);
 assert(impactEvent.incomingSpeed>0&&impactEvent.impact>0);assert(impactEvent.normal.x>0&&impactEvent.velocity.x>0);assert(impactPlayer.neckPoints[8].vx<0,'impact recoils the chain');
 console.log('PASS: independent neck control, chain length, overshoot, whip velocity and impact recoil');
+
+// Ability presses shortly before landing/recovery are retained, then consumed once.
+const abilities=[];
+const buffered=new VolleyballGame({mode:'1v1',onEvent:e=>abilities.push(e)});buffered.start();
+const bp=buffered.players[0];bp.y=.05;bp._jumpV=-2;
+buffered.update(1/120,{jump:true});
+for(let i=0;i<15;i++)buffered.update(1/120);
+assert.equal(abilities.filter(e=>e.type==='jump').length,1,'pre-landing jump fires once');
+assert(bp.y>.2&&bp._jumpV>0,'buffered jump takes off after landing');
+bp._swingCooldown=.06;buffered.update(1/120,{swing:true});
+for(let i=0;i<15;i++)buffered.update(1/120);
+assert.equal(abilities.filter(e=>e.type==='smash').length,1,'recovery-buffered swing fires once');
+const expired=new VolleyballGame({mode:'1v1'});expired.start();expired.players[0].y=2;
+expired.update(1/120,{jump:true});for(let i=0;i<120;i++)expired.update(1/120);
+assert.equal(expired.players[0].y,0,'early airborne jump expires instead of auto-bouncing');
+const dashGame=new VolleyballGame({mode:'1v1'});dashGame.start();const dp=dashGame.players[0];
+const dashStart=dp.z;dashGame.update(1/120,{neckYaw:Math.PI/2,dash:true});
+let peakDash=0;for(let i=0;i<35;i++){dashGame.update(1/120,{neckYaw:-Math.PI/2});peakDash=Math.max(peakDash,dp.vz);}
+assert(dp.z>dashStart+.8,'idle dash travels along initial neck aim');
+assert(dp.vz>0&&peakDash>5.5,'dash direction remains committed when aim turns');
+near(dp.energy,1-.28+.13*36/120,.003);
+console.log('PASS: landing/recovery buffers, expired inputs, directional eased dash and single energy charge');
+
+// Both endpoints miss the head: the continuous sweep must still find the hit.
+const fast=new VolleyballGame({mode:'1v1'});fast.start();fast.phase='play';fast.lastHitter=null;fast.touchCooldown=0;
+Object.assign(fast.players[0].head,{x:-4,y:3,z:0,vx:0,vy:0,vz:0});
+Object.assign(fast.ball,{x:-5.2,y:3,z:0,vx:300,vy:0,vz:0});fast._ballStep(.01);
+assert.equal(fast.hits,1,'fast ball cannot tunnel through head');assert(fast.ball.vx<0);
+const falling=new VolleyballGame({mode:'1v1'});falling.start();falling.phase='play';falling.lastHitter=null;falling.touchCooldown=0;
+Object.assign(falling.players[0].head,{x:-4,y:3,z:0,vx:0,vy:0,vz:0});
+Object.assign(falling.ball,{x:-4,y:5,z:0,vx:0,vy:-600,vz:0});falling._ballStep(.01);
+assert.equal(falling.hits,1,'head collision before floor prevents false score');assert.equal(falling.phase,'play');
+const netSurface=new VolleyballGame({mode:'1v1'});netSurface.start();netSurface.phase='play';
+Object.assign(netSurface.ball,{x:-.3,y:2,z:0,vx:12,vy:0,vz:0});netSurface._ballStep(.01);
+assert(netSurface.ball.vx<0,'net collides at ball radius before center crosses');
+const aboveNet=new VolleyballGame({mode:'1v1'});aboveNet.start();aboveNet.phase='play';
+Object.assign(aboveNet.ball,{x:-1,y:4,z:0,vx:400,vy:-400,vz:0});aboveNet._ballStep(.005);
+assert(aboveNet.ball.vx>0,'a ball crossing above tape is not rejected from endpoint height');
+console.log('PASS: swept head collision, net surface contact and crossing-height accuracy');
+const ending=new VolleyballGame({mode:'1v1'});ending.start();ending.phase='play';ending.score=[6,0];
+Object.assign(ending.ball,{x:4,y:.231,z:0,vx:0,vy:-5,vz:0});
+let playerSteps=0;const normalStep=ending._stepPlayers.bind(ending);ending._stepPlayers=(...args)=>{playerSteps++;normalStep(...args);};
+ending.update(.05,{x:1});assert.equal(ending.phase,'finished');assert.equal(playerSteps,1,'winning point stops remaining physics substeps');
+console.log('PASS: finished match stops physics immediately');

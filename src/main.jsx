@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createWorld } from './art.js';
 import { VolleyballGame } from './physics.js';
+import { SmoothSimulation } from './motion.js';
 import { GameAudio } from './audio.js';
 import { GameMenu } from './game-menu.jsx';
 import './style.css';
@@ -11,7 +12,7 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 function App() {
   const canvas = useRef(null);
   const stage = useRef(null);
-  const runtime = useRef({ game: null, world: null, audio: null, keys: new Set(), edges: {}, started: false, hitStop: 0 });
+  const runtime = useRef({ game: null, world: null, audio: null, motion: null, keys: new Set(), edges: {}, started: false });
   const neckAim = useRef({ yaw: 0, pitch: .15, extension: .35 });
   const cameraAim = useRef({ yaw: 0, pitch: -.15, distance: 5.4 });
   const interaction = useRef({ mouseDown: false, cameraDrag: false, softLocked: false, hadLock: false, explicitUnlock: false, touches: new Map(), walk: { x: 0, z: 0 }, lastTap: 0 });
@@ -32,6 +33,7 @@ function App() {
   const clearInput = () => {
     runtime.current.keys.clear();
     runtime.current.edges = {};
+    runtime.current.motion?.reset();
     interaction.current.mouseDown = false;
     interaction.current.cameraDrag = false;
     interaction.current.softLocked = false;
@@ -95,14 +97,13 @@ function App() {
   useEffect(() => {
     const audio = new GameAudio();
     runtime.current.audio = audio;
-    let frame, observer, disposed = false;
+    let frame, observer, cleanup, disposed = false;
     try {
       const world = createWorld({ canvas: canvas.current });
       const game = new VolleyballGame({ mode, difficulty, onEvent: event => {
         if (!runtime.current.started) return;
         audio.event(event);
         world.impact?.(event);
-        if (event.type === 'hit' && event.power > .4) runtime.current.hitStop = .035 + event.power * .018;
         if (event.type === 'win') {
           setResult({ score: [...event.score], winner: event.team });
           showMenu('finished');
@@ -111,6 +112,8 @@ function App() {
       runtime.current.world = world;
       runtime.current.game = game;
       game.paused = true;
+      const motion = new SmoothSimulation(game);
+      runtime.current.motion = motion;
       const resize = () => world.resize(window.innerWidth, window.innerHeight);
       observer = new ResizeObserver(resize);
       observer.observe(canvas.current.parentElement);
@@ -118,18 +121,19 @@ function App() {
       let last = performance.now(), telemetryAt = 0, fpsAt = last, frameCount = 0;
       const loop = now => {
         if (disposed) return;
-        const dt = Math.min((now - last) / 1000, .05);
+        const dt = Math.max(0, Math.min((now - last) / 1000, .1));
         last = now;
         const { keys, edges } = runtime.current;
         const aim = neckAim.current;
         const view = cameraAim.current;
+        let renderGame;
         if (!menuRef.current) {
           view.yaw += (Number(keys.has('KeyL')) - Number(keys.has('KeyJ'))) * dt * 1.6;
           view.pitch = clamp(view.pitch + (Number(keys.has('KeyI')) - Number(keys.has('KeyK'))) * dt * .9, -.75, .4);
           aim.extension = clamp(aim.extension + (Number(keys.has('KeyE')) - Number(keys.has('KeyQ'))) * dt * .65, 0, 1);
           const forward = Number(keys.has('KeyW') || keys.has('ArrowUp')) - Number(keys.has('KeyS') || keys.has('ArrowDown')) - interaction.current.walk.z;
           const strafe = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft')) + interaction.current.walk.x;
-          game.update(runtime.current.hitStop > 0 ? dt * .08 : dt, {
+          renderGame = motion.advance(dt, {
             x: forward * Math.cos(view.yaw) - strafe * Math.sin(view.yaw),
             z: forward * Math.sin(view.yaw) + strafe * Math.cos(view.yaw),
             neckYaw: aim.yaw,
@@ -137,11 +141,10 @@ function App() {
             extension: aim.extension,
             ...edges,
           });
-        }
-        runtime.current.hitStop = Math.max(0, runtime.current.hitStop - dt);
+        } else renderGame = motion.reset();
         runtime.current.edges = {};
         world.setCamera?.(view);
-        world.update(dt, game, now / 1000);
+        world.update(Math.min(dt, .05), renderGame, now / 1000);
         world.renderer.render(world.scene, world.camera);
         frameCount++;
         if (now - fpsAt > 1000) {
@@ -153,6 +156,8 @@ function App() {
           canvas.current.dataset.neckAim = `${aim.yaw.toFixed(3)},${aim.pitch.toFixed(3)},${aim.extension.toFixed(3)}`;
           canvas.current.dataset.cameraAim = `${view.yaw.toFixed(3)},${view.pitch.toFixed(3)},${view.distance.toFixed(2)}`;
           canvas.current.dataset.phase = game.phase;
+          canvas.current.dataset.physicsHz = '120';
+          canvas.current.dataset.renderStats = JSON.stringify({ calls: world.renderer.info.render.calls, triangles: world.renderer.info.render.triangles });
           canvas.current.dataset.head = [game.players[0].head.x, game.players[0].head.y, game.players[0].head.z].map(value => value.toFixed(3)).join(',');
         }
         frame = requestAnimationFrame(loop);
@@ -182,7 +187,10 @@ function App() {
         if (event.code === 'Escape' || event.code === 'KeyP') showMenu('pause');
         if (event.code === 'KeyM') setMuted(value => !value);
         if (event.code === 'KeyR') neckAim.current = { yaw: 0, pitch: .15, extension: neckAim.current.extension };
-        if (event.code === 'KeyC') cameraAim.current = { yaw: 0, pitch: -.15, distance: 5.4 };
+        if (event.code === 'KeyC') {
+          cameraAim.current = { yaw: 0, pitch: -.15, distance: 5.4 };
+          world.resetCamera();
+        }
       };
       const keyup = event => runtime.current.keys.delete(event.code);
       const mousemove = event => {
@@ -238,7 +246,7 @@ function App() {
       document.addEventListener('pointerlockchange', lockchange);
       document.addEventListener('pointerlockerror', lockerror);
       document.addEventListener('fullscreenchange', fullscreenchange);
-      return () => {
+      cleanup = () => {
         disposed = true;
         cancelAnimationFrame(frame);
         observer.disconnect();
@@ -254,9 +262,14 @@ function App() {
         document.removeEventListener('pointerlockerror', lockerror);
         document.removeEventListener('fullscreenchange', fullscreenchange);
       };
+      return cleanup;
     } catch (cause) {
       console.error(cause);
       setError('The courtyard could not be prepared. Try loading it again.');
+      disposed = true;
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      runtime.current.world?.dispose();
       audio.dispose();
     }
   }, []);
@@ -283,7 +296,6 @@ function App() {
     if (!game) return;
     neckAim.current = { yaw: 0, pitch: .15, extension: .35 };
     cameraAim.current = { yaw: 0, pitch: -.15, distance: 5.4 };
-    runtime.current.hitStop = 0;
     game.reset({ mode, difficulty });
     game.start();
     runtime.current.started = true;
@@ -319,7 +331,10 @@ function App() {
       const touches = interaction.current.touches;
       touches.set(event.pointerId, { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, side: event.clientX < innerWidth * .45 ? 'walk' : 'look', moved: 0 });
       event.currentTarget.setPointerCapture(event.pointerId);
-      if (touches.size === 2) runtime.current.edges.jump = true;
+      if (touches.size === 2) {
+        for (const point of touches.values()) point.consumed = true;
+        runtime.current.edges.jump = true;
+      }
       if (touches.size >= 3) showMenu('pause');
     } else {
       if (event.button === 2) interaction.current.cameraDrag = true;
@@ -347,7 +362,7 @@ function App() {
       return;
     }
     const point = interaction.current.touches.get(event.pointerId);
-    if (point && point.moved < 12 && !menuRef.current) bonk();
+    if (event.type !== 'pointercancel' && point && !point.consumed && point.moved < 12 && !menuRef.current) bonk();
     if (point?.side === 'walk') interaction.current.walk = { x: 0, z: 0 };
     interaction.current.touches.delete(event.pointerId);
   };

@@ -26,24 +26,29 @@ export class VolleyballGame {
       const x = team ? 4.8 : -4.8, z = count === 1 ? 0 : (i ? 2 : -2), yaw = team ? Math.PI : 0;
       this.players.push({ id: team * count + i, team, human: !team && !i, x, z, y: 0, vx: 0, vz: 0, heading: team ? -1 : 1, jump: 0, action: '', energy: 1,
         bodyYaw: yaw, neckPoints: [], head: { x, y: 3.2, z, vx: 0, vy: 0, vz: 0 }, neck: { yaw, pitch: team === 0 && i === 0 ? -.12 : .1, extension: .35 }, swing: 0,
-        _jumpV: 0, _dash: 0, _swingTime: 0, _swingCooldown: 0, _reaction: 0, _tx: x, _tz: z });
+        _jumpV: 0, _jumpBuffer: 0, _dash: 0, _dashCooldown: 0, _dashBuffer: 0, _dashX: 0, _dashZ: 0,
+        _swingTime: 0, _swingCooldown: 0, _swingBuffer: 0, _reaction: 0, _tx: x, _tz: z });
     }
     for (const p of this.players) this._initNeck(p);
     this.ball = { x: -5, y: 3.2, z: 0, vx: 0, vy: 0, vz: 0, spin: 0 };
     this._launch(0, true); return this;
   }
   start() { this.paused = false; this.phase = 'serve'; this.score = [0, 0]; this.rally = this.hits = this.rallyHits = 0; this.server = 0; this.timer = 0; this.message = 'YOUR SERVE'; this.lastHitter = this.lastTeam = null; this._place(); this._hold(); return this; }
-  togglePause() { return this.paused = !this.paused; }
+  togglePause() { this.paused = !this.paused; if (this.paused) this.clearBufferedInput(); return this.paused; }
+  clearBufferedInput() {
+    for (const player of this.players) player._jumpBuffer = player._dashBuffer = player._swingBuffer = 0;
+  }
   _place() {
     const count = this.mode === '1v1' ? 1 : 2;
     for (const p of this.players) {
       p.x = p.team ? 4.8 : -4.8; p.z = count === 1 ? 0 : ((p.id % count) ? 2 : -2); p.y = p.jump = p._jumpV = 0;
-      p.vx = p.vz = 0; p._dash = p._swingTime = p._swingCooldown = 0; p.swing = 0;
+      p.vx = p.vz = 0; p._dash = p._dashCooldown = p._dashBuffer = p._jumpBuffer = p._swingBuffer = p._swingTime = p._swingCooldown = 0; p.swing = 0;
       this._initNeck(p);
     }
   }
   _initNeck(p) {
     p.neckPoints = Array.from({length:9}, (_,i) => ({x:p.x, y:1.45+p.y+i*1.8/8, z:p.z, vx:0, vy:0, vz:0}));
+    p._previousNeck = p.neckPoints.map(q => ({x:q.x, y:q.y, z:q.z}));
     Object.assign(p.head, p.neckPoints[8]);
   }
   _hold() {
@@ -79,6 +84,8 @@ export class VolleyballGame {
     for (const p of this.players) {
       const human = p.human && this.phase !== 'attract'; let dx = 0, dz = 0;
       p.energy = clamp(p.energy + dt*.13, 0, 1); p._dash = Math.max(0,p._dash-dt); p._swingCooldown = Math.max(0,p._swingCooldown-dt);
+      p._dashCooldown = Math.max(0,p._dashCooldown-dt);
+      p._jumpBuffer = Math.max(0,p._jumpBuffer-dt); p._dashBuffer = Math.max(0,p._dashBuffer-dt); p._swingBuffer = Math.max(0,p._swingBuffer-dt);
       if (human) {
         dx = clamp(Number(input.x)||0,-1,1); dz = clamp(Number(input.z)||0,-1,1);
         const neckYaw = Number.isFinite(input.neckYaw) ? input.neckYaw : input.lookYaw;
@@ -86,9 +93,19 @@ export class VolleyballGame {
         if (Number.isFinite(neckYaw)) p.neck.yaw = neckYaw;
         if (Number.isFinite(neckPitch)) p.neck.pitch = clamp(neckPitch,-1.22,1.35);
         if (Number.isFinite(input.extension)) p.neck.extension = clamp(input.extension,0,1);
-        if (input.jump && p.y === 0) { p._jumpV = 7.8; this.emit('jump',{player:p.id,x:p.x,z:p.z}); }
-        if (input.dash && p.energy >= .28 && !p._dash) { p.energy -= .28; p._dash = .3; this.emit('dash',{player:p.id,x:p.x,z:p.z}); }
-        if (input.swing || input.smash) this._swing(p);
+        // Short buffers forgive a press just before landing or an ability recovering.
+        if (input.jump) p._jumpBuffer = .12;
+        if (input.dash) p._dashBuffer = .12;
+        if (input.swing || input.smash) p._swingBuffer = .12;
+        if (p._jumpBuffer > 0 && p.y === 0) { p._jumpBuffer = 0; p._jumpV = 7.8; this.emit('jump',{player:p.id,x:p.x,z:p.z}); }
+        if (p._dashBuffer > 0 && p.energy >= .28 && p._dashCooldown === 0) {
+          const direction = Math.hypot(dx,dz);
+          p._dashX = direction > .1 ? dx/direction : Math.cos(p.neck.yaw);
+          p._dashZ = direction > .1 ? dz/direction : Math.sin(p.neck.yaw);
+          p._dashBuffer = 0; p.energy -= .28; p._dash = .3; p._dashCooldown = .55;
+          this.emit('dash',{player:p.id,x:p.x,z:p.z});
+        }
+        if (p._swingBuffer > 0 && p._swingCooldown === 0) { p._swingBuffer = 0; this._swing(p); }
       } else {
         p._reaction -= dt;
         if (p._reaction <= 0) {
@@ -102,7 +119,9 @@ export class VolleyballGame {
             p._tz = pred.z + (this.random()-.5)*skill.error;
           } else { p._tx = (p.team ? 1 : -1)*4.3; p._tz = count===1 ? 0 : (p.id%count ? 2 : -2); }
         }
-        dx=p._tx-p.x; dz=p._tz-p.z; const len=Math.hypot(dx,dz); if(len>.25){dx/=len;dz/=len;}else{dx=dz=0;}
+        dx=p._tx-p.x; dz=p._tz-p.z; const len=Math.hypot(dx,dz);
+        // Ease into the receive position instead of repeatedly braking at full speed.
+        if(len>.08){const arrival=Math.min(1,len/.7);dx=dx/len*arrival;dz=dz/len*arrival;}else{dx=dz=0;}
         p.neck.yaw = p.team ? Math.PI : 0; p.neck.pitch = -.3; p.neck.extension = 0;
         const d=Math.hypot(b.x-p.head.x,b.z-p.head.z);
         if (this.phase !== 'serve' && this.phase !== 'point' && d < 2.1 && b.y > p.head.y-.5 && b.y < p.head.y+1.6 && b.vy < 2 && p._swingCooldown<=0) this._swing(p);
@@ -110,11 +129,17 @@ export class VolleyballGame {
       }
       if (!human && (this.phase === 'serve' || this.phase === 'point')) { dx = 0; dz = 0; }
       let len=Math.hypot(dx,dz); if(len>1){dx/=len;dz/=len;}
-      const speed=(human?5.5:skill.speed)*(p._dash?1.8:1);
+      const speed=human?5.5:skill.speed;
+      const dashProgress = p._dash > 0 ? (1-p._dash/.3) : 1;
+      const dashEnvelope = p._dash > 0 ? Math.sin(Math.PI*Math.min(1,dashProgress+.06)) : 0;
+      // The dash has a committed direction and a rounded acceleration/recovery curve.
+      const dashWeight = p._dash > 0 ? .8*dashEnvelope : 0;
+      const targetX = dx*speed*(1-dashWeight) + p._dashX*10.8*dashWeight;
+      const targetZ = dz*speed*(1-dashWeight) + p._dashZ*10.8*dashWeight;
       // Acceleration and drag make direction changes gradual; air steering is weaker.
-      const response = p.y > .01 ? 4 : (dx || dz ? 13 : 10);
+      const response = p._dash > 0 ? 25 : (p.y > .01 ? 5 : (dx || dz ? 16 : 12));
       const blend = 1 - Math.exp(-response * dt);
-      p.vx += (dx*speed-p.vx)*blend; p.vz += (dz*speed-p.vz)*blend;
+      p.vx += (targetX-p.vx)*blend; p.vz += (targetZ-p.vz)*blend;
       const minX=p.team?.7:-8.6, maxX=p.team?8.6:-.7;
       p.x=clamp(p.x+p.vx*dt,minX,maxX);p.z=clamp(p.z+p.vz*dt,-4.6,4.6);
       if ((p.x<=minX&&p.vx<0)||(p.x>=maxX&&p.vx>0)) p.vx=0;
@@ -134,7 +159,8 @@ export class VolleyballGame {
     const base={x:p.x,y:1.45+p.y,z:p.z};
     const target={x:base.x+Math.cos(yaw)*reach,y:base.y+vertical,z:base.z+Math.sin(yaw)*reach};
     Object.assign(points[0],base);
-    const previous=points.map(q=>({x:q.x,y:q.y,z:q.z}));
+    const previous=p._previousNeck;
+    for(let i=1;i<9;i++){const q=points[i],old=previous[i];old.x=q.x;old.y=q.y;old.z=q.z;}
     for(let i=1;i<9;i++) {
       const q=points[i], t=i/8;
       // Every joint has inertia. Lower damping leaves a pronounced visible whip.
@@ -161,33 +187,58 @@ export class VolleyballGame {
     Object.assign(p.head,points[8]);
   }
   _ballStep(dt) {
-    const b=this.ball, oldX=b.x; b.vy-=G*dt;
+    const b=this.ball, oldX=b.x, oldY=b.y, oldZ=b.z; b.vy-=G*dt;
     const drag=Math.exp(-.018*dt);b.vx*=drag;b.vy*=drag;b.vz*=drag;
     b.x+=b.vx*dt;b.y+=b.vy*dt;b.z+=b.vz*dt;b.spin*=Math.exp(-.35*dt);
-    if(oldX*b.x<=0 && Math.abs(b.z)<5+BALL_R && b.y-BALL_R<2.35 && b.y+BALL_R>0 && !this.netCooldown){b.x=oldX<0?-BALL_R:BALL_R;b.vx*=-.32;b.vy*=.8;this.netCooldown=.25;this.emit('net',{x:0,y:b.y,z:b.z});}
-    if(b.y<=BALL_R){const out=Math.abs(b.x)>9 || Math.abs(b.z)>5;const side=b.x<0?0:1;this._point(out?(this.lastTeam===null?1-side:1-this.lastTeam):1-side,out?'out':'floor');return;}
-    if(Math.abs(b.x)>13||Math.abs(b.z)>9||b.y>22){this._point(this.lastTeam===null?0:1-this.lastTeam,'out');return;}
-    if(this.touchCooldown>0)return;
-    for(const p of this.players){
+    const netSide=oldX<0?-1:1, netSurface=netSide*BALL_R;
+    const towardNet=(b.x-oldX)*netSide<0;
+    const crossedNet=towardNet && (oldX-netSurface)*netSide>=0 && (b.x-netSurface)*netSide<=0;
+    const crossedCenter=oldX*b.x<=0;
+    if((crossedNet||crossedCenter) && !this.netCooldown){
+      const t=clamp((netSurface-oldX)/(b.x-oldX||1e-8),0,1);
+      const y=oldY+(b.y-oldY)*t,z=oldZ+(b.z-oldZ)*t;
+      if(Math.abs(z)<5+BALL_R && y-BALL_R<2.35 && y+BALL_R>0){
+        b.vx*=-.32;b.vy*=.8;b.x=netSurface+b.vx*dt*(1-t);
+        this.netCooldown=.08;this.emit('net',{x:0,y,z});
+      }
+    }
+    const floorTime=b.y<=BALL_R?clamp((oldY-BALL_R)/(oldY-b.y||1e-8),0,1):1;
+    if(this.touchCooldown<=0)for(const p of this.players){
       if(p.id===this.lastHitter)continue;
-      const h=p.head, dx=b.x-h.x,dy=b.y-h.y,dz=b.z-h.z,d=Math.hypot(dx,dy,dz), min=BALL_R+HEAD_R;
-      if(d>=min || d<.0001)continue;
+      const h=p.head, min=BALL_R+HEAD_R;
+      // Sweep the ball against the moving head so a fast whip cannot tunnel through it.
+      const sx=oldX-(h.x-h.vx*dt),sy=oldY-(h.y-h.vy*dt),sz=oldZ-(h.z-h.vz*dt);
+      const ex=b.x-h.x,ey=b.y-h.y,ez=b.z-h.z;
+      const mx=ex-sx,my=ey-sy,mz=ez-sz;
+      const aa=mx*mx+my*my+mz*mz,bb=2*(sx*mx+sy*my+sz*mz),cc=sx*sx+sy*sy+sz*sz-min*min;
+      let t=0;
+      if(cc>0){
+        const discriminant=bb*bb-4*aa*cc;
+        if(aa<1e-12||discriminant<0)continue;
+        t=(-bb-Math.sqrt(discriminant))/(2*aa);
+        if(t<0||t>floorTime)continue;
+      }
+      const dx=sx+mx*t,dy=sy+my*t,dz=sz+mz*t,d=Math.hypot(dx,dy,dz);
+      if(d<.0001)continue;
       const nx=dx/d,ny=dy/d,nz=dz/d, relative=(b.vx-h.vx)*nx+(b.vy-h.vy)*ny+(b.vz-h.vz)*nz;
       if(relative>=0)continue;
       const impulse=-(1+.95)*relative;
       b.vx+=impulse*nx;b.vy+=impulse*ny;b.vz+=impulse*nz;
       b.x=h.x+nx*(min+.01);b.y=h.y+ny*(min+.01);b.z=h.z+nz*(min+.01);
       b.spin=clamp((h.vz-b.vz)*nx-(h.vx-b.vx)*nz,-15,15);
-      this.lastTeam=p.team;this.lastHitter=p.id;this.touchCooldown=.24;this.hits++;this.rallyHits++;
+      this.lastTeam=p.team;this.lastHitter=p.id;this.touchCooldown=.08;this.hits++;this.rallyHits++;
       const tip=p.neckPoints[8]; tip.vx-=nx*impulse*.16;tip.vy-=ny*impulse*.16;tip.vz-=nz*impulse*.16;
       this.emit('hit',{player:p.id,team:p.team,x:b.x,y:b.y,z:b.z,power:clamp(impulse/14,0,1),incomingSpeed:-relative,impact:impulse,normal:{x:nx,y:ny,z:nz},velocity:{x:b.vx,y:b.vy,z:b.vz}});break;
     }
+    if(b.y<=BALL_R){const out=Math.abs(b.x)>9 || Math.abs(b.z)>5;const side=b.x<0?0:1;this._point(out?(this.lastTeam===null?1-side:1-this.lastTeam):1-side,out?'out':'floor');return;}
+    if(Math.abs(b.x)>13||Math.abs(b.z)>9||b.y>22){this._point(this.lastTeam===null?0:1-this.lastTeam,'out');}
   }
   update(dt,input={}) {
     if(this.paused)return;dt=clamp(Number(dt)||0,0,.05);if(!dt||this.phase==='finished')return;
     this.timer+=dt;
     const steps=Math.max(1,Math.ceil(dt/(1/120))), step=dt/steps;
     for(let i=0;i<steps;i++){
+      if(this.paused||this.phase==='finished')break;
       const edges=i===0?input:{...input,jump:false,dash:false,smash:false,swing:false,serve:false};
       this.touchCooldown=Math.max(0,this.touchCooldown-step);this.netCooldown=Math.max(0,this.netCooldown-step);
       this._stepPlayers(step,edges);

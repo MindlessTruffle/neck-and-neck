@@ -7,11 +7,12 @@ const V = (point) => new THREE.Vector3(point.x, point.y, point.z);
 
 /** Drives the Blender armature from the simulation's articulated chain. */
 export class GiraffeRig {
-  constructor(template, scene, index = 0) {
+  constructor(template, scene, index = 0, toon = null) {
     this.root = new THREE.Group();
     this.model = cloneSkeleton(template);
     this.root.add(this.model); scene.add(this.root);
     this.index = index; this.yaw = Math.PI / 2; this.team = -1;
+    this.gaitPhase = index * 1.7; this.moving = 0; this.headOrientation = null;
     this.bones = new Map(); this.materials = [];
     this.root.updateMatrixWorld(true);
     this.model.traverse(object => {
@@ -22,7 +23,7 @@ export class GiraffeRig {
       }
       if (object.isMesh) {
         object.castShadow = true; object.receiveShadow = true; object.frustumCulled = false;
-        const copyMaterial = material => { const copy = material.clone(); copy.roughness = .72; this.materials.push(copy); return copy; };
+        const copyMaterial = material => { const copy = toon ? toon.material(material, { unique: true }) : material.clone(); this.materials.push(copy); return copy; };
         object.material = Array.isArray(object.material) ? object.material.map(copyMaterial) : copyMaterial(object.material);
       }
     });
@@ -40,6 +41,7 @@ export class GiraffeRig {
       leg.lower.length = leg.restFoot.distanceTo(leg.lower.restPosition);
       leg.lower.axis.copy(leg.restFoot).sub(leg.lower.restPosition).normalize().applyQuaternion(leg.lower.restQuaternion.clone().invert());
     });
+    this.ink = toon?.ink(this.model, { width: index === 0 ? 3.6 : 2.7, skinned: true });
   }
 
   poseSegment(record, start, end, stretch = false) {
@@ -69,13 +71,16 @@ export class GiraffeRig {
     }
     // Restore the bind pose before posing children in hierarchy order.
     for (const r of this.bones.values()) { r.bone.position.copy(r.position); r.bone.quaternion.copy(r.quaternion); r.bone.scale.copy(r.scale); }
-    const speed = Math.hypot(player.vx || 0, player.vz || 0), moving = Math.min(1, speed / 5);
+    const speed = Math.hypot(player.vx || 0, player.vz || 0);
+    this.moving = THREE.MathUtils.lerp(this.moving, Math.min(1, speed / 5), 1 - Math.exp(-dt * 13));
+    const moving = this.moving;
     const targetYaw = player.team === 0 ? Math.PI / 2 : -Math.PI / 2;
     const turn = targetYaw + THREE.MathUtils.clamp((player.vz || 0) * (player.team ? .08 : -.08), -.4, .4);
-    this.yaw += Math.atan2(Math.sin(turn - this.yaw), Math.cos(turn - this.yaw)) * Math.min(1, dt * 8);
+    this.yaw += Math.atan2(Math.sin(turn - this.yaw), Math.cos(turn - this.yaw)) * (1 - Math.exp(-dt * 8));
     this.root.position.set(player.x, player.y || 0, player.z); this.root.rotation.y = this.yaw;
     this.root.updateMatrixWorld(true);
-    const gait = time * (7 + speed * .55) + this.index * 1.7;
+    this.gaitPhase += dt * (7 + speed * .55) * (.2 + moving * .8);
+    const gait = this.gaitPhase;
     this.legs.forEach((leg, i) => {
       const phase = gait + (i === 0 || i === 3 ? 0 : Math.PI);
       const hipLocal = leg.upper.restPosition.clone();
@@ -107,9 +112,16 @@ export class GiraffeRig {
       const record = this.head, bone = record.bone;
       bone.parent.updateWorldMatrix(true, false);
       bone.position.copy(bone.parent.worldToLocal(V(player.head)));
-      const yaw = player.neck?.yaw ?? (player.team ? Math.PI : 0), pitch = player.neck?.pitch || 0;
+      const aimYaw = player.neck?.yaw ?? (player.team ? Math.PI : 0), pitch = player.neck?.pitch || 0;
+      let yaw = aimYaw;
+      if (points?.length >= 9) {
+        const a = points[7], b = points[8], dx = b.x - a.x, dz = b.z - a.z;
+        if (Math.hypot(dx, dz) > .035) yaw += Math.atan2(Math.sin(Math.atan2(dz, dx) - aimYaw), Math.cos(Math.atan2(dz, dx) - aimYaw)) * .24;
+      }
       const wanted = new THREE.Quaternion().setFromEuler(new THREE.Euler(-pitch, Math.PI / 2 - yaw, 0, 'YXZ')).multiply(record.restQuaternion);
-      bone.quaternion.copy(bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(wanted));
+      if (!this.headOrientation) this.headOrientation = wanted.clone();
+      this.headOrientation.slerp(wanted, 1 - Math.exp(-dt * 13));
+      bone.quaternion.copy(bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(this.headOrientation));
       const swing = player.swing || 0;
       bone.scale.set(1 + swing * .035, 1 - swing * .045, 1 + swing * .025);
     }
