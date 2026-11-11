@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.log
+work/
+outputs/
+*.blend1
+*.blend2
+.DS_Store

@@ -1,0 +1,393 @@
+{
+  "asset": "giraffe-athlete.glb",
+  "up": "+Y",
+  "forward": "+Z",
+  "neckPoints": [
+    [
+      0,
+      1.45,
+      0.28
+    ],
+    [
+      0,
+      1.6375,
+      0.2865975395538645
+    ],
+    [
+      0,
+      1.825,
+      0.295157165665104
+    ],
+    [
+      0,
+      2.0125,
+      0.3046562774427584
+    ],
+    [
+      0,
+      2.2,
+      0.314822022531845
+    ],
+    [
+      0,
+      2.3875,
+      0.32551410507565204
+    ],
+    [
+      0,
+      2.575,
+      0.33664525067769413
+    ],
+    [
+      0,
+      2.7625,
+      0.3481553026430618
+    ],
+    [
+      0,
+      2.95,
+      0.36000000000000004
+    ]
+  ],
+  "headOrigin": [
+    0,
+    2.95,
+    0.36000000000000004
+  ],
+  "bodyCenter": [
+    0,
+    1.1,
+    -0.05
+  ],
+  "bones": [
+    {
+      "name": "Root",
+      "head": [
+        0,
+        0,
+        0
+      ],
+      "tail": [
+        0,
+        0.35,
+        0
+      ],
+      "parent": null,
+      "length": 0.34999999276229304
+    },
+    {
+      "name": "Body",
+      "head": [
+        0,
+        1.1,
+        -0.05
+      ],
+      "tail": [
+        0,
+        1.55,
+        -0.05
+      ],
+      "parent": "Root",
+      "length": 0.44999993443488595
+    },
+    {
+      "name": "Neck_00",
+      "head": [
+        0,
+        1.45,
+        0.28
+      ],
+      "tail": [
+        0,
+        1.6375,
+        0.2865975395538645
+      ],
+      "parent": "Body",
+      "length": 0.1876160378240979
+    },
+    {
+      "name": "Neck_01",
+      "head": [
+        0,
+        1.6375,
+        0.2865975395538645
+      ],
+      "tail": [
+        0,
+        1.825,
+        0.295157165665104
+      ],
+      "parent": "Neck_00",
+      "length": 0.18769527698220284
+    },
+    {
+      "name": "Neck_02",
+      "head": [
+        0,
+        1.825,
+        0.295157165665104
+      ],
+      "tail": [
+        0,
+        2.0125,
+        0.3046562774427584
+      ],
+      "parent": "Neck_01",
+      "length": 0.18774046701683503
+    },
+    {
+      "name": "Neck_03",
+      "head": [
+        0,
+        2.0125,
+        0.3046562774427584
+      ],
+      "tail": [
+        0,
+        2.2,
+        0.314822022531845
+      ],
+      "parent": "Neck_02",
+      "length": 0.18777537775855016
+    },
+    {
+      "name": "Neck_04",
+      "head": [
+        0,
+        2.2,
+        0.314822022531845
+      ],
+      "tail": [
+        0,
+        2.3875,
+        0.32551410507565204
+      ],
+      "parent": "Neck_03",
+      "length": 0.18780460799626983
+    },
+    {
+      "name": "Neck_05",
+      "head": [
+        0,
+        2.3875,
+        0.32551410507565204
+      ],
+      "tail": [
+        0,
+        2.575,
+        0.33664525067769413
+      ],
+      "parent": "Neck_04",
+      "length": 0.1878301153276659
+    },
+    {
+      "name": "Neck_06",
+      "head": [
+        0,
+        2.575,
+        0.33664525067769413
+      ],
+      "tail": [
+        0,
+        2.7625,
+        0.3481553026430618
+      ],
+      "parent": "Neck_05",
+      "length": 0.18785295077919925
+    },
+    {
+      "name": "Neck_07",
+      "head": [
+        0,
+        2.7625,
+        0.3481553026430618
+      ],
+      "tail": [
+        0,
+        2.95,
+        0.36000000000000004
+      ],
+      "parent": "Neck_06",
+      "length": 0.18787375416245397
+    },
+    {
+      "name": "Head",
+      "head": [
+        0,
+        2.95,
+        0.36000000000000004
+      ],
+      "tail": [
+        0,
+        3.35,
+        0.36
+      ],
+      "parent": "Neck_07",
+      "length": 0.39999986514446845
+    },
+    {
+      "name": "Front_L_Upper",
+      "head": [
+        -0.31,
+        1.2,
+        0.43
+      ],
+      "tail": [
+        -0.36,
+        0.62,
+        0.52
+      ],
+      "parent": "Body",
+      "length": 0.5890671086621173
+    },
+    {
+      "name": "Front_L_Lower",
+      "head": [
+        -0.36,
+        0.62,
+        0.52
+      ],
+      "tail": [
+        -0.37,
+        0.15,
+        0.56
+      ],
+      "parent": "Front_L_Upper",
+      "length": 0.471805045178411
+    },
+    {
+      "name": "Front_R_Upper",
+      "head": [
+        0.31,
+        1.2,
+        0.43
+      ],
+      "tail": [
+        0.36,
+        0.62,
+        0.52
+      ],
+      "parent": "Body",
+      "length": 0.5890671086621173
+    },
+    {
+      "name": "Front_R_Lower",
+      "head": [
+        0.36,
+        0.62,
+        0.52
+      ],
+      "tail": [
+        0.37,
+        0.15,
+        0.56
+      ],
+      "parent": "Front_R_Upper",
+      "length": 0.471805045178411
+    },
+    {
+      "name": "Back_L_Upper",
+      "head": [
+        -0.31,
+        1.2,
+        -0.43
+      ],
+      "tail": [
+        -0.36,
+        0.62,
+        -0.49
+      ],
+      "parent": "Body",
+      "length": 0.5852350494673436
+    },
+    {
+      "name": "Back_L_Lower",
+      "head": [
+        -0.36,
+        0.62,
+        -0.49
+      ],
+      "tail": [
+        -0.37,
+        0.15,
+        -0.57
+      ],
+      "parent": "Back_L_Upper",
+      "length": 0.47686475699091874
+    },
+    {
+      "name": "Back_R_Upper",
+      "head": [
+        0.31,
+        1.2,
+        -0.43
+      ],
+      "tail": [
+        0.36,
+        0.62,
+        -0.49
+      ],
+      "parent": "Body",
+      "length": 0.5852350494673436
+    },
+    {
+      "name": "Back_R_Lower",
+      "head": [
+        0.36,
+        0.62,
+        -0.49
+      ],
+      "tail": [
+        0.37,
+        0.15,
+        -0.57
+      ],
+      "parent": "Back_R_Upper",
+      "length": 0.47686475699091874
+    },
+    {
+      "name": "Tail_00",
+      "head": [
+        0,
+        1.24,
+        -0.73
+      ],
+      "tail": [
+        0,
+        1.02,
+        -1.04
+      ],
+      "parent": "Body",
+      "length": 0.38013152485415413
+    },
+    {
+      "name": "Tail_01",
+      "head": [
+        0,
+        1.02,
+        -1.04
+      ],
+      "tail": [
+        0.05,
+        0.65,
+        -1.11
+      ],
+      "parent": "Tail_00",
+      "length": 0.37986841854832887
+    }
+  ],
+  "materials": [
+    "GoldenCoat",
+    "WarmMuzzle",
+    "CaramelPatches",
+    "Cream",
+    "Iris",
+    "TeamScarf",
+    "TeamTrim",
+    "EarBlush",
+    "Brow",
+    "Hoof",
+    "Highlight"
+  ],
+  "notes": "Neck_00..Neck_07 spans physical neckPoints0..8. Bone local +Y points to tail in Blender but glTF bone orientation may need bind-rest inverse; fit using saved restworld endpoints. Head origin is physical head center. Feet grounded. Four upper/lower limb chains. Scarf material TeamScarf and TeamTrim may be recolored."
+}
