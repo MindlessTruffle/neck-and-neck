@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import * as THREE from 'three';
 import { createVFX } from '../src/vfx.js';
 import { GameAudio } from '../src/audio.js';
@@ -68,6 +69,24 @@ game.paused = false;
 effects.setReducedMotion(true);
 assert.equal(effects.cameraImpulse(), 0);
 assert.equal(trail.geometry.drawRange.count, 0);
+effects.update(1, game);
+for (const action of ['set', 'spike', 'block', 'dive']) {
+  effects.impact({ type: 'hit', action, rallyHits: 1, power: .15, x: 1, y: 3, z: 0 });
+  assert(root.children.some(object => object.name === 'VolleyComicCallout' && object.visible && object.userData.text === `${action.toUpperCase()}!`));
+  assert.equal(effects.cameraImpulse(), 0);
+  effects.update(1, game);
+}
+effects.impact({ type: 'round', abilities: [{ player: 0, id: 'feather', x: -4, y: 3, z: 0 }] });
+game.phase = 'serve'; effects.update(.1, game);
+assert(root.children.some(object => object.name === 'VolleyComicCallout' && object.visible && object.userData.text === 'FEATHER FLOAT!'), 'round identity remains readable before serving');
+game.phase = 'play'; effects.update(2, game);
+for (const [ability, label] of [['feather', 'FEATHER FLOAT!'], ['spring', 'SPRING STEP!'], ['magnet', 'MAGNET HEAD!'], ['rocket', 'ROCKET HOOVES!'], ['shield', 'IRON CANOPY!']]) {
+  effects.impact({ type: 'ability', ability, x: 1, y: 3, z: 0 });
+  assert(root.children.some(object => object.name === 'VolleyComicCallout' && object.visible && object.userData.text === label));
+  assert.equal(effects.cameraImpulse(), 0);
+  effects.update(2, game);
+}
+assert.deepEqual(root.children, objects, 'new actions and all random kits must reuse the same pools');
 let geometryDisposals = 0;
 let textureDisposals = 0;
 saveTexture.addEventListener('dispose', () => textureDisposals++);
@@ -79,6 +98,21 @@ assert.equal(geometryDisposals, 1);
 assert.equal(textureDisposals, 2);
 console.log('PASS VFX: low-power success callouts, escalating volleys, pooled label textures, missed-swing isolation, clean pause/reset trails, bounded GPU resources and disposal.');
 
+// Browser-like canvas creation must paint real text instead of using the Node fallback.
+const previousDocument = globalThis.document;
+const paintedLabels = [];
+try {
+  globalThis.document = { createElement: type => {
+    assert.equal(type, 'canvas');
+    return { width: 0, height: 0, getContext: () => ({ translate() {}, rotate() {}, strokeText() {}, fillText: text => paintedLabels.push(text) }) };
+  } };
+  const paintedScene = new THREE.Scene(), paintedEffects = createVFX(paintedScene, { camera });
+  const sprite = paintedScene.getObjectByName('VolleyComicCallout');
+  assert(sprite.material.map.isCanvasTexture);
+  for (const text of ['NICE!', 'SET!', 'SPIKE!', 'BLOCK!', 'DIVE!', 'FEATHER FLOAT!', 'ROCKET HOOVES!']) assert(paintedLabels.includes(text));
+  paintedEffects.dispose();
+} finally { globalThis.document = previousDocument; }
+
 class Parameter {
   constructor(value = 0) { this.value = value; }
   setValueAtTime(value) { this.value = value; }
@@ -87,7 +121,7 @@ class Parameter {
   setTargetAtTime(value) { this.value = value; }
 }
 class AudioNode {
-  constructor(kind) { this.kind = kind; this.gain = new Parameter(); this.frequency = new Parameter(); this.disconnected = 0; this.stopped = false; this.onended = null; }
+  constructor(kind) { this.kind = kind; this.gain = new Parameter(); this.frequency = new Parameter(); this.playbackRate = new Parameter(1); this.disconnected = 0; this.stopped = false; this.onended = null; }
   connect(node) { this.connected = node; }
   disconnect() { this.disconnected++; }
   start() { this.started = true; }
@@ -103,6 +137,7 @@ class MockContext {
   createBufferSource() { return this.node('source'); }
   createBiquadFilter() { return this.node('filter'); }
   createBuffer(channels, length) { this.buffers++; const samples = new Float32Array(length); return { getChannelData: () => samples }; }
+  async decodeAudioData(bytes) { this.decodes = (this.decodes || 0) + 1; const marker = new Uint8Array(bytes)[0]; if (marker === 255) throw new Error('unsupported codec'); return { duration: marker === 1 ? 41.14 : .2, marker }; }
   node(kind) { const node = new AudioNode(kind); this.nodes.push(node); return node; }
   close() { this.closed++; this.state = 'closed'; return Promise.resolve(); }
 }
@@ -152,10 +187,101 @@ try {
   const retried = retryAudio.unlock(), retryContext = MockContext.contexts.at(-1);
   retryContext.resolveResume(); assert.equal(await retried, true); retryAudio.dispose();
   assert.equal(intervals.size, 0);
+  // Real local stock buffers are cached, looped and independently muted.
+  const requests = [];
+  const fakeFetch = async (url, { signal }) => {
+    requests.push({ url, signal });
+    return { ok: true, arrayBuffer: async () => new Uint8Array([url.includes('adventure') ? 1 : 0]).buffer };
+  };
+  const stockAudio = new GameAudio({ fetcher: fakeFetch, resolveAsset: path => path });
+  const stockUnlocked = stockAudio.unlock(), stockContext = MockContext.contexts.at(-1);
+  stockContext.resolveResume(); await stockUnlocked; await stockAudio._assetsReady;
+  assert.equal(requests.length, 9, 'eight WAV samples and one loop load once');
+  assert.equal(stockAudio._stockMusicSource.loop, true);
+  const loop = stockAudio._stockMusicSource;
+  assert.equal(loop.buffer.duration, 41.14);
+  await stockAudio.unlock(); stockAudio.setMusic(false);
+  assert.equal(stockAudio.musicBus.gain.value, 0);
+  assert.equal(stockAudio.master.gain.value, .48, 'music switch does not mute SFX');
+  stockAudio.setMusic(true); stockAudio.setMuted(true);
+  assert.equal(stockAudio.master.gain.value, 0); stockAudio.setMuted(false);
+  assert.equal(stockAudio._stockMusicSource, loop);
+  assert.equal(requests.length, 9, 'resuming and toggling music do not refetch assets');
+  stockAudio.event('menu');
+  assert(stockContext.nodes.some(node => node.kind === 'source' && node.buffer === stockAudio._stockBuffers.get('click')));
+  stockAudio.event({ type: 'hit', action: 'spike', power: .2, rallyHits: 2 });
+  assert(stockContext.nodes.some(node => node.kind === 'source' && node.buffer === stockAudio._stockBuffers.get('spike')));
+  stockAudio.event({ type: 'dive' });
+  assert(stockContext.nodes.some(node => node.kind === 'source' && node.buffer === stockAudio._stockBuffers.get('dive')));
+  stockAudio.event({ type: 'ability', ability: 'magnet' });
+  assert(stockContext.nodes.some(node => node.kind === 'source' && node.buffer === stockAudio._stockBuffers.get('ability')));
+  stockAudio.event('score'); stockAudio.event('win');
+  assert.equal(stockContext.nodes.filter(node => node.kind === 'source' && node.buffer === stockAudio._stockBuffers.get('point')).length, 1, 'winning point must not double the stock jingle');
+  stockAudio.dispose(); assert(requests.every(request => request.signal.aborted)); assert.equal(intervals.size, 0);
+  assert.equal(stockAudio._assetsReady, null, 'dispose releases decoded buffers retained by readiness promises');
+
+  // Unsupported Ogg falls back to the bundled MP3, not a remote request.
+  const codecRequests = [];
+  const codecAudio = new GameAudio({ resolveAsset: path => path, fetcher: async url => { codecRequests.push(url); return { ok: true, arrayBuffer: async () => new Uint8Array([url.endsWith('.ogg') ? 255 : url.endsWith('.mp3') ? 1 : 0]).buffer }; } });
+  const codecUnlocked = codecAudio.unlock(), codecContext = MockContext.contexts.at(-1);
+  codecContext.resolveResume(); await codecUnlocked; await codecAudio._assetsReady;
+  assert(codecRequests.includes('audio/adventure-stage1.mp3'));
+  assert(codecAudio._stockMusicSource?.loop); codecAudio.dispose();
+
+  // Disposal cannot resurrect a stock loop even when a fetch ignores abort.
+  const pendingDownloads = [];
+  const lateAudio = new GameAudio({ resolveAsset: path => path, fetcher: (url, options) => new Promise(resolve => pendingDownloads.push({ url, options, resolve })) });
+  const lateUnlocked = lateAudio.unlock(), lateContext = MockContext.contexts.at(-1);
+  lateContext.resolveResume(); await lateUnlocked;
+  const lateReady = lateAudio._assetsReady;
+  assert.equal(pendingDownloads.length, 9); lateAudio.dispose();
+  for (const download of pendingDownloads) download.resolve({ ok: true, arrayBuffer: async () => new Uint8Array([1]).buffer });
+  await lateReady;
+  assert(pendingDownloads.every(download => download.options.signal.aborted));
+  assert.equal(lateContext.decodes || 0, 0);
+  assert.equal(lateAudio._stockMusicSource, null);
+  assert.equal(lateAudio._stockBuffers.size, 0);
+  assert.equal(intervals.size, 0);
+
+  // A decode already in progress also checks disposal before installing its buffer.
+  const decodingAudio = new GameAudio({ resolveAsset: path => path, fetcher: fakeFetch });
+  const decodingUnlocked = decodingAudio.unlock(), decodingContext = MockContext.contexts.at(-1), decodeResolvers = [];
+  decodingContext.decodeAudioData = () => new Promise(resolve => decodeResolvers.push(resolve));
+  decodingContext.resolveResume(); await decodingUnlocked;
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(decodeResolvers.length, 9);
+  const decodingReady = decodingAudio._assetsReady; decodingAudio.dispose();
+  for (const resolve of decodeResolvers) resolve({ duration: 41.14 });
+  await decodingReady;
+  assert.equal(decodingAudio._stockBuffers.size, 0);
+  assert.equal(decodingAudio._stockMusicSource, null);
+  assert.equal(intervals.size, 0);
+
+  // Failed local downloads leave procedural music and SFX available.
+  const offlineAudio = new GameAudio({ resolveAsset: path => path, fetcher: async () => { throw new Error('offline'); } });
+  const offlineUnlocked = offlineAudio.unlock(), offlineContext = MockContext.contexts.at(-1);
+  offlineContext.resolveResume(); await offlineUnlocked; await offlineAudio._assetsReady;
+  assert.equal(offlineAudio._stockMusicSource, null);
+  const oscillatorCount = offlineContext.nodes.filter(node => node.kind === 'oscillator').length;
+  offlineAudio.event('menu');
+  assert(offlineContext.nodes.filter(node => node.kind === 'oscillator').length > oscillatorCount);
+  offlineAudio.dispose(); assert.equal(intervals.size, 0);
   console.log('PASS Audio: concurrent gesture unlock uses one context, no empty-swing bass, cached noise, ended-voice disconnection, retry after browser refusal, disposal during pending resume cannot resurrect audio.');
+  console.log('PASS Stock audio: local decoded music loop, reusable action samples, separate music/mute, MP3 fallback, point-jingle deduplication, abort safety and procedural offline fallback.');
 } finally {
   globalThis.AudioContext = originalContext;
   globalThis.setInterval = originalInterval;
   globalThis.clearInterval = originalClearInterval;
 }
+
+const audioFolder = new URL('../public/audio/', import.meta.url);
+const audioFiles = fs.readdirSync(audioFolder, { withFileTypes: true }).filter(entry => entry.isFile());
+assert(audioFiles.reduce((bytes, entry) => bytes + fs.statSync(new URL(entry.name, audioFolder)).size, 0) < 4 * 1024 * 1024);
+for (const name of ['click', 'bump', 'set', 'spike', 'block', 'dive', 'point', 'ability']) {
+  const bytes = fs.readFileSync(new URL(`${name}.wav`, audioFolder));
+  assert.equal(bytes.toString('ascii', 0, 4), 'RIFF'); assert.equal(bytes.toString('ascii', 8, 12), 'WAVE');
+}
+assert.equal(fs.readFileSync(new URL('adventure-stage1.ogg', audioFolder)).toString('ascii', 0, 4), 'OggS');
+for (const license of ['Juhani-Junkala-CC0.txt', 'Kenney-Impact-CC0.txt', 'Kenney-Interface-CC0.txt', 'Kenney-Jingles-CC0.txt']) assert(fs.readFileSync(new URL(`licenses/${license}`, audioFolder), 'utf8').includes('CC0'));
+console.log('PASS Bundled audio: eight browser-compatible WAV samples, Ogg/MP3 music, included CC0 license files, total audio under 4 MiB.');
 

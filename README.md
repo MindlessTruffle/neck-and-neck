@@ -1,89 +1,103 @@
 # Neck & Neck: Meadow Mayhem
 
-[Play on GitHub Pages](https://mindlesstruffle.github.io/neck-and-neck/) · [Source repository](https://github.com/MindlessTruffle/neck-and-neck)
+[Play on GitHub Pages](https://mindlesstruffle.github.io/neck-and-neck/) · [Source](https://github.com/MindlessTruffle/neck-and-neck)
 
-A cartoon 3D giraffe volleyball game with an elevated camera, independently controlled floppy neck, Blender-skinned athletes, an ink-outlined meadow stadium, Kenney assets, and dramatic world-space effects. Both 1v1 and 2v2 use physical bots. Gameplay keeps a centered aiming cursor, world-space feedback, highlighted ball, and physical scoreboard.
+A cartoon giraffe volleyball game: physical floppy necks, high shoulder camera, approachable mouse-only rallies, 1v1 and 2v2 with bots, and a new random power every point.
 
-## Start
+## Start locally
 
-Double-click **Start Game.cmd**, or run `npm run dev -- --port 5173` in this folder and open http://127.0.0.1:5173. Requires Node.js 20.19+ or 22.12+ and a WebGL-capable browser. Run `npm install` if dependencies are missing. Local development serves on localhost. The public release is deployed to GitHub Pages. No game account is required.
+Double-click **Start Game.cmd**, or run:
 
-## Cartoon game interface
+```sh
+npm install
+npm run dev -- --port 5173
+```
 
-Original hand-inked giraffe illustrations, a chunky title crest, ragged parchment, wooden foe selector, red cloth banners, hard shadows, and tactile game buttons replace the former card interface. Start, pause, victory, defeat, controls, sound and fullscreen screens share the same illustrated style. Arrow keys browse menus; Enter chooses; H opens controls; F toggles fullscreen. Starting or resuming requests fullscreen when supported. Gameplay keeps a centered cursor and a capture prompt only while mouse capture is released.
+Open http://127.0.0.1:5173. Development binds to localhost. Requires Node.js 20.19+ or 22.12+ and WebGL2. All models, fonts, music and sounds are bundled locally.
 
-Characters and scenery use four-band cel materials, warm flat colors, and dark ink silhouettes. The character outlines follow the actual deformed Blender skin; scenery outlines share geometry and repeated scene pieces are instanced. Outline widths stay legible at different camera distances. The world and menus share the same original cartoon-brawler art direction.
+## Play with a mouse
 
-## PC controls
+- Move the mouse to swing the physical neck. The high shoulder camera follows the actual neck with a small, bounded spring lag; there is no right-mouse camera mode.
+- Click to bump or spike. Assisted footwork approaches the ball; a click near a reachable high ball can trigger a jump spike.
+- Serve with two clicks: toss, then strike when the power meter reaches the highlighted zone. Missing the second click produces a gentle fallback serve.
+- Hold left click for about half a second during a rally to use your round power.
+- Alt toggles native mouse capture; a drawn cursor stays centered. Escape pauses.
+
+Assisted footwork is enabled by default and can be disabled in the lobby or pause menu. WASD or the mobile stick overrides automatic movement immediately. Physical contact still depends on the moving neck; the game does not teleport the ball onto a scripted hit.
+
+Native pointer lock is requested before fullscreen within the same gesture. Unsupported embedded previews show an honest capture prompt and support left-drag swings. Open directly in Chrome or Edge for native capture. F toggles fullscreen; leaving fullscreen preserves windowed play on resume.
+
+## Optional controls
 
 | Input | Action |
 | --- | --- |
-| Mouse | Swing and bend your neck independently of the camera |
-| Left click | Headbutt / serve |
-| Right mouse held + move | Turn the camera horizontally without changing neck aim; height stays locked |
-| Alt | Toggle native mouse capture / release, with a visible centered game cursor |
-| WASD / arrows | Move relative to the camera |
-| Scroll / Q and E | Shorten / extend neck |
-| Right mouse + scroll | Change camera distance |
+| WASD / arrows | Manual movement relative to the camera |
+| Left click | Bump on ground / spike in air; toss / strike when serving |
+| Q | Set on ground / block in air |
+| E | Jump set |
+| Ctrl | Diving save |
 | Space / Shift | Jump / dash |
-| R / C | Center neck / reset camera |
-| J / L | Keyboard camera turn alternative |
-| Esc / P | Pause; P also resumes |
-| M | Toggle audio |
+| X or hold left click | Activate round ability |
+| Scroll / [ / ] | Extend or shorten neck |
+| R / C | Recenter neck / reset view |
+| J / L | Keyboard turning |
+| Esc / P | Pause; P resumes |
+| M / F | Mute / fullscreen |
 
-Starting, resuming, or pressing Alt requests pointer lock before fullscreen, within the same user gesture. Native capture keeps relative mouse movement inside the game while a drawn cursor stays centered. Escape pauses and releases capture. If an embedded browser rejects capture, the game shows a retry prompt and leaves the real pointer visible; it never claims a fake lock. Left-drag remains available. Open the game in Chrome or Edge for native capture.
+On phones, drag the right field to swing and use the labeled return/action buttons. The left thumbstick overrides assisted footwork. Portrait and landscape layouts are supported; landscape shows more court. Touch controls can also be switched on for a touchscreen laptop. Controls use pointer capture, ownership tracking, cancel handling and safe-area spacing.
 
-Camera height stays fixed at 6.8 units with a 65° field of view. Jumping, mouse pitch, and impacts cannot move it vertically. Horizontal turning and distance adjustment remain available.
+## Volleyball systems
 
-Touch stays free of on-screen buttons: left drag moves, right drag swings the neck, tap bonks, two fingers jump, three fingers pause.
+The action grammar follows the [official Volleyball Legends controls](https://www.roblox.com/games/73956553001240/Volleyball-Legends): contextual bump/spike and set/block, dives, two-step serves and directional aiming. The sports UI uses a top score strip, team-touch pips, timed serve meter, contextual action deck and round-power reveal. Artwork, giraffe rig, audio selection and implementation are this game's own.
 
-## Physics and play
+- Real bump, set, spike, block, jump-set and low diving contacts.
+- Three touches per possession. Doubles alternate receivers; a block is exempt. Solo permits repeat touches. Lingering body overlap cannot cause accidental double-touch faults.
+- Bots predict trajectories, cover lanes, set partners, attack openings, block and dive. They use all five powers.
+- First to 7, win by 2, capped at 11. Modes are one local human plus bots, not network multiplayer.
+- Ball radius .34, gravity 10.8, outgoing speed cap 11.5. Wider human contact margins, soft momentum transfer and forward-return assistance make rallies forgiving.
+- Neck remains a nine-point physical spring chain with inertia, whip and recoil. Rigged Blender skin follows those joints.
+- Fixed 120 Hz simulation and interpolated rendering. Inputs survive between display frames; movement and actions have recovery buffers.
 
-Nine physical neck joints use damped springs, inertia, and iterative distance constraints. The human neck has low damping, visible overshoot, whip momentum, and contact recoil. Head contacts use relative velocity with a padded, softer response and an 11.5 units/second outgoing speed cap. Human contact radius gains .25 units, or .35 during a swing. Forward and top contacts get moderate court-direction assistance and a lifted return arc; backward hits retain their direction. Mouse and headbutts still control the physical neck independently of camera turning.
+## Random round powers
 
-Ball gravity is 12 rather than 18, and serves travel horizontally at 6.4 rather than 8.5 units/second. Test strikes reduced horizontal return speed by approximately 63% for an ordinary swing and 82% for an extreme whip. Player jump gravity is unchanged.
+Every player receives one free, non-repeating random ability each point. One activation per point; bots follow the same rule.
 
-Physics runs at a fixed 120 Hz. Rendering interpolates body, ball, head, and neck poses between ticks, including on high-refresh displays. Inputs wait for the next physics tick instead of disappearing. Jump, dash, and headbutt also accept a short recovery buffer. Swept head and net contacts catch fast motion between ticks. Visual impact effects never slow movement or physics.
+| Power | Effect |
+| --- | --- |
+| Feather Float | Slower, lofted next return |
+| Spring Step | Higher jump for an attack or block |
+| Magnet Head | Wider receiving field |
+| Rocket Hooves | Burst movement and extended diving reach |
+| Iron Canopy | Broad blocking window |
 
-Movement has acceleration, friction, reduced air control, and regenerating dash energy. Dash commits to your movement direction (or neck aim when standing) with an eased boost. Human serves wait for input. Bots predict ball flight, brake into position, cover court lanes, and position their heads to make physical contact. Different bot levels change reaction, movement and error. First to 7, win by 2, cap at 11. Ground contact and out-of-bounds rules apply.
+World-space action callouts, ball highlights, landing locator, impact rings, colored trails and rising volley notes communicate contact and long rallies. VFX reuse bounded pools. Motion effects respect reduced-motion preferences.
 
-The ball has a highlighted silhouette, world-anchored locator rings visible through the player, a chevron, comet trail, and predicted landing marker. Even gentle hits produce clear contact rings and comic callouts such as “GOOD SAVE!” and “VOLLEY 3!” Longer rallies strengthen the ball aura and trail, and return notes rise with the volley count. Four pooled labels reuse prepainted textures. Missed swings use a smaller wind-up effect. Dashes, jumps, and points have their own effects. The system respects the operating system's reduced-motion preference for shake and heavy effects.
+## Art, stock audio and performance
 
-## Blender assets
+Characters and scenery use cel shading and thick ink silhouettes. Blender-created weighted giraffes and pavilion sit among actual Kenney Nature Kit models: trees, bushes, flowers, rocks, fences, gate, signs, logs, stumps and mushrooms. Kenney input prompts appear in the action deck.
 
-The connected Blender MCP created, rigged, exported, and rendered the actual runtime assets in an isolated Blender session. The existing user scene was preserved.
+Stock music is **Chiptune Adventures — Stage 1** by Juhani Junkala / SubspaceAudio, under CC0. Eight stock effects come from Kenney Impact Sounds, Interface Sounds and Music Jingles. Original licenses and source filenames are included. See [CREDITS.md](CREDITS.md) and [audio sources](public/audio/SOURCES.md).
 
-- `Blender/neck-athlete.blend`: editable athlete and pavilion studio scenes.
-- `Blender/athlete-preview.png`, `Blender/pavilion-preview.png`: rendered asset previews.
-- `public/models/giraffe-athlete.glb`: 12,951 vertices, 21 skin joints, continuous weighted eight-bone neck, head, articulated legs, tail, eyes, ears, ossicones, irregular spots, and team scarf.
-- `public/models/giraffe-rig.json`: rest transforms and runtime skeleton metadata.
-- `public/models/meadow-pavilion.glb`: timber club pavilion with curved tiled roof, benches, lanterns, banners, and planters.
+Audio totals approximately 2.38 MiB. The music loop has Ogg and MP3 copies for codec compatibility. Samples are decoded once and cached; music and sound switches are independent. A procedural fallback remains available when decoding fails. Disposal aborts pending requests and releases voices/buffers.
 
-Runtime armatures follow the nine physical neck points; each leg uses two-bone IK. Skinning alignment was checked on extreme curved poses with finite bounds and exact head/neck positions. World art also includes Kenney vegetation and rocks, wooden tribunes, cheering spectators, pennants, paths, flowerbeds, clouds, birds, grass and hills. See `CREDITS.md`.
+Device budgets cap pixel ratio at 1.25 on mobile, 1.4 on low-power desktop and 1.75 otherwise. Mobile starts with fewer grass blades, trees and spectators plus 1024px shadows. Sustained slow frames lower resolution and decoration density further. Instanced scenery and shared geometry reduce draw overhead. Camera hot paths reuse vectors. Portrait FOV expands to 85 degrees; wider screens use 65, with a smooth aspect-ratio transition on resize.
 
-## Build and verification
+Browser QA checks desktop and phone-sized layouts; automated tests cover device budgets and quality adaptation. These are not benchmarks on every physical phone or GPU. WebGL context loss gives a recovery message, and losing visibility pauses play.
 
-- `npm run build`: production files in `dist/`.
-- `npm run preview`: localhost preview of the production build.
-- `npm test`: ball/head momentum, independent neck input, bounded chain length, overshoot, whip velocity, recoil, serving, buffered abilities, continuous contacts, pause/reset isolation, and identical physics across 30–240 Hz displays.
-- `npm run test:simulation`: 120 complete bot matches across both modes and all difficulties; asserts completion and score validity.
+## Verification
 
-The forgiving-ball update was compared against the prior release with the same seeded bot matches. Every match finished and both teams won in each mode/difficulty group:
+```sh
+npm test
+npm run test:simulation
+npm run build
+npm run preview
+```
 
-| Foes | 1v1 hits/point, before → after | 2v2 hits/point, before → after |
-| --- | --- | --- |
-| Chill | 1.92 → 4.19 | 2.21 → 4.85 |
-| Scrappy | 3.04 → 4.71 | 3.07 → 5.75 |
-| Savage | 3.58 → 5.26 | 3.28 → 6.21 |
+Regression suites cover neck/ball physics, contact forgiveness, all six volleyball actions, timed serves and fallback, every ability, possession faults, round resets, input buffering, 30–240 Hz display equivalence, camera following, multi-pointer controls, adaptive rendering, asset geometry, stock audio, cleanup and bounded VFX.
 
-The longest new rally reached 25 hits. Separate regressions check contact forgiveness, bounded impact speed, forward-only assistance, pose interpolation, preserved input edges, pause buffers, capture request ordering, audio startup/disposal, bounded VFX resources, and outline geometry integrity.
-
-The preceding cel-shading release was measured at 60 fps on the test machine, with 148 render calls versus 562 before batching. The new capture flow has ordering and rejection regression tests. The embedded preview reports “The root document of this element is not valid for pointer lock,” so native capture must be used in a supported desktop browser; no false locked state is displayed.
-
-React + Vite + Three.js. All runtime assets and fonts are local. No online multiplayer, game backend, or remote telemetry. GitHub Pages hosts the static release.
-
+The mechanics release completed 120 seeded bot matches across both modes and all three difficulties. Every configuration produced wins for both teams. Mean hits per point ranged from 3.81 to 10.39; longest rally was 51. Tests also counted actual sets, spikes, blocks, diving contacts and all five ability activations.
 
 ## Publishing
 
-Pushes to main run the pinned GitHub Actions workflow in .github/workflows/pages.yml. It installs dependencies, runs gameplay and 120-match simulation checks, builds the game, and deploys dist to GitHub Pages. Relative asset paths support the repository subdirectory and localhost.
+The GitHub Pages workflow on main installs dependencies, runs regression suites and all 120 simulation matches, builds the game and deploys dist. Relative asset paths support the repository subdirectory. Keep local preview available with Start Game.cmd.
 

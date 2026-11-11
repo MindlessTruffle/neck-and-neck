@@ -6,6 +6,8 @@ import { SmoothSimulation } from './motion.js';
 import { requestGameCapture } from './capture.js';
 import { GameAudio } from './audio.js';
 import { GameMenu } from './game-menu.jsx';
+import { MatchUI } from './match-ui.jsx';
+import { steerLook, cameraRelativeMovement, stickMovement, applyWalk } from './controls.js';
 import './style.css';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -20,6 +22,10 @@ function App() {
   const interaction = useRef({ mouseDown: false, cameraDrag: false, hadLock: false, explicitUnlock: false, touches: new Map(), walk: { x: 0, z: 0 }, lastTap: 0 });
   const menuRef = useRef('lobby');
   const panel = useRef(null);
+  const touchOverride = useRef(null);
+  const fullscreenPreference = useRef(true);
+  const autoFeetRef = useRef(true);
+  const [autoFeet, setAutoFeet] = useState(true);
   const [menu, setMenu] = useState('lobby');
   const [mode, setMode] = useState('2v2');
   const [difficulty, setDifficulty] = useState('club');
@@ -31,6 +37,8 @@ function App() {
   const [mouseFocused, setMouseFocused] = useState(false);
   const [captureFailed, setCaptureFailed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [touch, setTouch] = useState(() => window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 700);
+  const [match, setMatch] = useState({ score: [0, 0], touches: [0, 0], energy: 1, round: 1, mode: '2v2', phase: 'serve' });
 
   const clearInput = () => {
     runtime.current.keys.clear();
@@ -41,6 +49,7 @@ function App() {
     setMouseFocused(false);
     interaction.current.touches.clear();
     interaction.current.walk = { x: 0, z: 0 };
+    interaction.current.walkOwner = null;
   };
 
   const showMenu = next => {
@@ -53,8 +62,8 @@ function App() {
 
   const captureMouse = () => {
     requestGameCapture({
-      canvas: canvas.current, stage: stage.current,
-      coarse: window.matchMedia('(pointer: coarse)').matches,
+      canvas: canvas.current, stage: fullscreenPreference.current ? stage.current : null,
+      coarse: window.matchMedia('(pointer: coarse)').matches || stage.current?.dataset.touch === 'true',
       onError: error => {
         const locked = document.pointerLockElement === canvas.current;
         if (!locked && canvas.current) canvas.current.dataset.captureError = error?.message || 'Pointer capture was refused.';
@@ -71,8 +80,8 @@ function App() {
   };
 
   const toggleFullscreen = () => {
-    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-    else stage.current?.requestFullscreen?.().catch(() => {});
+    if (document.fullscreenElement) { fullscreenPreference.current = false; document.exitFullscreen?.().catch(() => {}); }
+    else { fullscreenPreference.current = true; stage.current?.requestFullscreen?.().catch(() => {}); }
   };
 
   const immersiveFocus = () => {
@@ -106,11 +115,11 @@ function App() {
       game.paused = true;
       const motion = new SmoothSimulation(game);
       runtime.current.motion = motion;
-      const resize = () => world.resize(window.innerWidth, window.innerHeight);
+      const resize = () => world.resize(stage.current.clientWidth, stage.current.clientHeight);
       observer = new ResizeObserver(resize);
       observer.observe(canvas.current.parentElement);
       resize();
-      let last = performance.now(), telemetryAt = 0, fpsAt = last, frameCount = 0;
+      let last = performance.now(), telemetryAt = 0, fpsAt = last, frameCount = 0, lastRound = -1, revealUntil = 0;
       const loop = now => {
         if (disposed) return;
         const dt = Math.max(0, Math.min((now - last) / 1000, .1));
@@ -120,13 +129,18 @@ function App() {
         const view = cameraAim.current;
         let renderGame;
         if (!menuRef.current) {
-          view.yaw += (Number(keys.has('KeyL')) - Number(keys.has('KeyJ'))) * dt * 1.6;
-          aim.extension = clamp(aim.extension + (Number(keys.has('KeyE')) - Number(keys.has('KeyQ'))) * dt * .65, 0, 1);
+          if (interaction.current.mouseDown && !interaction.current.powerSpent && now - interaction.current.pressStarted > 450 && game.phase === 'play') {
+            edges.ability = true; interaction.current.powerSpent = true;
+          }
+          const turn = (Number(keys.has('KeyL')) - Number(keys.has('KeyJ'))) * dt * 1.6;
+          view.yaw += turn; aim.yaw += turn;
+          aim.extension = clamp(aim.extension + (Number(keys.has('BracketRight')) - Number(keys.has('BracketLeft'))) * dt * .65, 0, 1);
           const forward = Number(keys.has('KeyW') || keys.has('ArrowUp')) - Number(keys.has('KeyS') || keys.has('ArrowDown')) - interaction.current.walk.z;
           const strafe = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft')) + interaction.current.walk.x;
           renderGame = motion.advance(dt, {
-            x: forward * Math.cos(view.yaw) - strafe * Math.sin(view.yaw),
-            z: forward * Math.sin(view.yaw) + strafe * Math.cos(view.yaw),
+            ...cameraRelativeMovement(forward, strafe, view.yaw),
+            aimYaw: view.yaw,
+            autoMove: autoFeetRef.current,
             neckYaw: aim.yaw,
             neckPitch: aim.pitch,
             extension: aim.extension,
@@ -153,6 +167,19 @@ function App() {
           canvas.current.dataset.physicsHz = '120';
           canvas.current.dataset.renderStats = JSON.stringify({ calls: world.renderer.info.render.calls, triangles: world.renderer.info.render.triangles });
           canvas.current.dataset.head = [game.players[0].head.x, game.players[0].head.y, game.players[0].head.z].map(value => value.toFixed(3)).join(',');
+          canvas.current.dataset.round = String(game.round || 1);
+          canvas.current.dataset.ability = game.players[0].ability?.id || '';
+          canvas.current.dataset.footwork = game.players[0].assisting ? 'assisted' : 'manual';
+          canvas.current.dataset.body = [game.players[0].x, game.players[0].y, game.players[0].z].map(value => value.toFixed(3)).join(',');
+          if (game.round !== lastRound) { lastRound = game.round; revealUntil = now + 3500; }
+          if (!menuRef.current) {
+            const player = game.players[0];
+            setMatch({ score: [...game.score], mode: game.mode, phase: game.phase, server: game.server,
+              round: game.round, touches: [...(game.touches || [0, 0])], touchTeam: game.touchTeam,
+              rallyHits: game.rallyHits, message: game.message, serveStage: game.serveStage, serveCharge: game.serveCharge,
+              airborne: player.y > .2, energy: player.energy, ability: player.ability ? { ...player.ability } : null,
+              reveal: now < Math.max(revealUntil, runtime.current.revealUntil || 0), lastAction: game.lastAction, autoFeet: autoFeetRef.current });
+          }
         }
         frame = requestAnimationFrame(loop);
       };
@@ -168,33 +195,34 @@ function App() {
           if (event.code === 'KeyP' && menuRef.current === 'pause' && !document.querySelector('.help-scroll')) resume();
           return;
         }
+        if (['BUTTON', 'INPUT', 'SELECT'].includes(event.target?.tagName) && ['Space', 'Enter'].includes(event.code)) return;
         if (event.code === 'AltLeft' || event.code === 'AltRight') {
           event.preventDefault();
           if (!event.repeat) toggleMouseFocus();
           return;
         }
-        if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyQ', 'KeyE'].includes(event.code)) event.preventDefault();
+        if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyQ', 'KeyE', 'KeyX', 'ControlLeft', 'ControlRight'].includes(event.code)) event.preventDefault();
         if (event.repeat) return;
         runtime.current.keys.add(event.code);
         if (event.code === 'Space') runtime.current.edges.jump = true;
         if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') runtime.current.edges.dash = true;
+        if (event.code === 'KeyQ') runtime.current.edges.set = true;
+        if (event.code === 'KeyE') runtime.current.edges.jumpSet = true;
+        if (event.code === 'ControlLeft' || event.code === 'ControlRight') runtime.current.edges.dive = true;
+        if (event.code === 'KeyX') runtime.current.edges.ability = true;
         if (event.code === 'Escape' || event.code === 'KeyP') showMenu('pause');
         if (event.code === 'KeyM') setMuted(value => !value);
-        if (event.code === 'KeyR') neckAim.current = { yaw: 0, pitch: .15, extension: neckAim.current.extension };
+        if (event.code === 'KeyR') neckAim.current = { yaw: cameraAim.current.yaw, pitch: .15, extension: neckAim.current.extension };
         if (event.code === 'KeyC') {
           cameraAim.current = { yaw: 0, pitch: 0, distance: 7.2 };
+          neckAim.current.yaw = 0;
           world.resetCamera();
         }
       };
       const keyup = event => runtime.current.keys.delete(event.code);
       const mousemove = event => {
-        if (menuRef.current || (document.pointerLockElement !== canvas.current && !interaction.current.mouseDown && !interaction.current.cameraDrag)) return;
-        if (interaction.current.cameraDrag) {
-          cameraAim.current.yaw += event.movementX * .0037;
-        } else {
-          neckAim.current.yaw = clamp(neckAim.current.yaw + event.movementX * .009, -1.8, 1.8);
-          neckAim.current.pitch = clamp(neckAim.current.pitch - event.movementY * .009, -.9, 1.2);
-        }
+        if (menuRef.current || (document.pointerLockElement !== canvas.current && !interaction.current.mouseDown)) return;
+        steerLook(cameraAim.current, neckAim.current, event.movementX, event.movementY);
       };
       const mouseup = event => {
         if (event.button === 0) interaction.current.mouseDown = false;
@@ -203,8 +231,7 @@ function App() {
       const wheel = event => {
         if (menuRef.current) return;
         event.preventDefault();
-        if (interaction.current.cameraDrag) cameraAim.current.distance = clamp(cameraAim.current.distance + event.deltaY * .004, 6, 10);
-        else neckAim.current.extension = clamp(neckAim.current.extension - event.deltaY * .0012, 0, 1);
+        neckAim.current.extension = clamp(neckAim.current.extension - event.deltaY * .0012, 0, 1);
       };
       const lockchange = () => {
         const locked = document.pointerLockElement === canvas.current;
@@ -224,8 +251,11 @@ function App() {
         if (!menuRef.current && runtime.current.started) showMenu('pause');
         else clearInput();
       };
+      const visibility = () => { if (document.hidden) blur(); };
+      const contextLost = event => { event.preventDefault(); showMenu('pause'); setError('Graphics paused by your device. Reload to return to the court.'); };
       const fullscreenchange = () => {
         setIsFullscreen(Boolean(document.fullscreenElement));
+        if (!document.fullscreenElement) fullscreenPreference.current = false;
         if (!document.fullscreenElement && runtime.current.started && !menuRef.current) showMenu('pause');
       };
       window.addEventListener('keydown', keydown);
@@ -234,6 +264,8 @@ function App() {
       window.addEventListener('mouseup', mouseup);
       window.addEventListener('wheel', wheel, { passive: false });
       window.addEventListener('blur', blur);
+      document.addEventListener('visibilitychange', visibility);
+      canvas.current.addEventListener('webglcontextlost', contextLost);
       document.addEventListener('pointerlockchange', lockchange);
       document.addEventListener('pointerlockerror', lockerror);
       document.addEventListener('fullscreenchange', fullscreenchange);
@@ -249,6 +281,8 @@ function App() {
         window.removeEventListener('mouseup', mouseup);
         window.removeEventListener('wheel', wheel);
         window.removeEventListener('blur', blur);
+        document.removeEventListener('visibilitychange', visibility);
+        canvas.current?.removeEventListener('webglcontextlost', contextLost);
         document.removeEventListener('pointerlockchange', lockchange);
         document.removeEventListener('pointerlockerror', lockerror);
         document.removeEventListener('fullscreenchange', fullscreenchange);
@@ -267,6 +301,12 @@ function App() {
 
   useEffect(() => { runtime.current.audio?.setMuted(muted); }, [muted]);
   useEffect(() => { runtime.current.audio?.setMusic(music); }, [music]);
+  useEffect(() => {
+    const media = window.matchMedia('(pointer: coarse), (max-width: 699px)');
+    const change = () => { if (touchOverride.current === null) setTouch(media.matches); };
+    media.addEventListener('change', change);
+    return () => media.removeEventListener('change', change);
+  }, []);
   useEffect(() => {
     if (!menu) return;
     const button = panel.current?.querySelector('.play-button:not(:disabled)') || panel.current?.querySelector('button:not(:disabled)');
@@ -288,9 +328,11 @@ function App() {
     neckAim.current = { yaw: 0, pitch: .15, extension: .35 };
     cameraAim.current = { yaw: 0, pitch: 0, distance: 7.2 };
     game.reset({ mode, difficulty });
-    game.start();
+    game.seed = crypto.getRandomValues(new Uint32Array(1))[0];
     runtime.current.started = true;
+    runtime.current.revealUntil = performance.now() + 3500;
     runtime.current.audio.unlock();
+    game.start();
     setResult(null);
     showMenu(null);
     immersiveFocus();
@@ -316,21 +358,24 @@ function App() {
     runtime.current.audio?.unlock();
   };
 
+  const action = name => {
+    if (menuRef.current) return;
+    if (name === 'swing') bonk();
+    else runtime.current.edges[name] = true;
+    runtime.current.audio?.unlock();
+  };
+
   const pointerDown = event => {
     if (menuRef.current) return;
     if (event.pointerType === 'touch') {
+      if (touchOverride.current !== false) setTouch(true);
       const touches = interaction.current.touches;
       touches.set(event.pointerId, { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, side: event.clientX < innerWidth * .45 ? 'walk' : 'look', moved: 0 });
       event.currentTarget.setPointerCapture(event.pointerId);
-      if (touches.size === 2) {
-        for (const point of touches.values()) point.consumed = true;
-        runtime.current.edges.jump = true;
-      }
-      if (touches.size >= 3) showMenu('pause');
     } else {
+      if (event.button !== 0) return;
       if (document.pointerLockElement !== canvas.current) captureMouse();
-      if (event.button === 2) interaction.current.cameraDrag = true;
-      else if (event.button === 0) { interaction.current.mouseDown = true; bonk(); }
+      interaction.current.mouseDown = true; interaction.current.pressStarted = performance.now(); interaction.current.powerSpent = false; bonk();
     }
   };
 
@@ -341,9 +386,8 @@ function App() {
     const dx = event.clientX - point.x, dy = event.clientY - point.y;
     point.moved += Math.hypot(dx, dy);
     if (point.side === 'look') {
-      neckAim.current.yaw = clamp(neckAim.current.yaw + dx * .012, -1.8, 1.8);
-      neckAim.current.pitch = clamp(neckAim.current.pitch - dy * .012, -.9, 1.2);
-    } else interaction.current.walk = { x: clamp((event.clientX - point.startX) / 60, -1, 1), z: clamp((event.clientY - point.startY) / 60, -1, 1) };
+      steerLook(cameraAim.current, neckAim.current, dx, dy, true);
+    } else applyWalk(interaction.current, stickMovement(event.clientX - point.startX, event.clientY - point.startY, 60), `canvas:${event.pointerId}`);
     point.x = event.clientX; point.y = event.clientY;
   };
 
@@ -354,21 +398,22 @@ function App() {
       return;
     }
     const point = interaction.current.touches.get(event.pointerId);
-    if (event.type !== 'pointercancel' && point && !point.consumed && point.moved < 12 && !menuRef.current) bonk();
-    if (point?.side === 'walk') interaction.current.walk = { x: 0, z: 0 };
+    if (event.type === 'pointerup' && point && !point.consumed && point.moved < 12 && !menuRef.current) bonk();
+    if (point?.side === 'walk') applyWalk(interaction.current, { x: 0, z: 0 }, `canvas:${event.pointerId}`);
     interaction.current.touches.delete(event.pointerId);
   };
 
-  return <main ref={stage} className="meadow" data-camera="elevated-locked" data-playing={!menu} data-mouse-focus={mouseFocused}>
-    <canvas ref={canvas} tabIndex={menu ? -1 : 0} aria-label="Elevated-view giraffe volleyball. Mouse swings your floppy neck independently. Hold right mouse to turn camera horizontally. Alt locks or releases mouse with a centered cursor. WASD walks, click headbutts or serves, Q and E stretch, Space jumps, Escape pauses." onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onContextMenu={event => event.preventDefault()} />
+  return <main ref={stage} className="meadow" data-camera="mouse-shoulder" data-playing={!menu} data-mouse-focus={mouseFocused} data-touch={touch}>
+    <canvas ref={canvas} tabIndex={menu ? -1 : 0} aria-label="Mouse swings physical giraffe neck; high shoulder camera gently follows. Click returns ball or serves. Hold click for round power. Assisted footwork moves toward the ball. Optional WASD movement, Q set, E jump set, Ctrl dive, X ability, Space jump, Escape pause." onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onLostPointerCapture={pointerUp} onContextMenu={event => event.preventDefault()} />
     {!menu && <>
       <div ref={reticle} className="center-cursor" aria-hidden="true" data-locked={mouseFocused}>
         <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="10"/><path d="M20 3v6m0 22v6M3 20h6m22 0h6"/><circle className="cursor-dot" cx="20" cy="20" r="2.5"/></svg>
       </div>
-      {!mouseFocused && <button className="capture-prompt" onClick={captureMouse}>
-        {captureFailed ? 'Click to retry mouse lock' : 'Click to lock mouse'}
-        <small>{captureFailed ? 'Capture blocked? Open in Chrome or Edge. Drag still swings.' : 'Centered cursor · Alt releases · Esc pauses'}</small>
+      {!mouseFocused && !touch && <button className="capture-prompt" onClick={captureMouse}>
+        {captureFailed ? 'LOCK MOUSE · ALT' : 'CLICK TO LOCK MOUSE'}
+        <small>{captureFailed ? 'Embedded preview? Drag to swing, or open in Chrome / Edge.' : 'Swing neck · camera follows'}</small>
       </button>}
+      <MatchUI state={match} onAction={action} onPause={() => showMenu('pause')} onWalk={(walk, id) => applyWalk(interaction.current, walk, `stick:${id}`)} touch={touch}/>
     </>}
     {menu && <GameMenu
       menu={menu} mode={mode} difficulty={difficulty} onMode={setMode} onDifficulty={setDifficulty}
@@ -376,6 +421,8 @@ function App() {
       muted={muted} music={music} onMuted={() => setMuted(value => !value)} onMusic={() => setMusic(value => !value)}
       captureFailed={captureFailed} onReload={() => location.reload()} panelRef={panel}
       onFullscreen={toggleFullscreen} isFullscreen={isFullscreen}
+      touch={touch} onTouch={() => { touchOverride.current = !touch; setTouch(!touch); }}
+      autoFeet={autoFeet} onAutoFeet={() => { autoFeetRef.current = !autoFeet; setAutoFeet(!autoFeet); }}
       onMenuSound={unlock => { if (unlock) runtime.current.audio?.unlock(); runtime.current.audio?.event('menu'); }}
     />}
   </main>;

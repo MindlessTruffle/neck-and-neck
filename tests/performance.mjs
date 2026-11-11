@@ -1,0 +1,74 @@
+import assert from 'node:assert/strict';
+import { createRenderPerformance } from '../src/performance.js';
+import * as THREE from 'three';
+import { writeShoulderPose, cameraFovForAspect, neckCameraYaw, cameraFollowAlpha } from '../src/art.js';
+
+const neckBase={x:0,y:1.45,z:0};
+assert.equal(neckCameraYaw(.8,neckBase,{x:.01,y:3,z:.01}),.8,'An almost vertical neck must not invent a heading');
+assert.equal(neckCameraYaw(.8,null,null),.8);
+assert.ok(Math.abs(neckCameraYaw(0,neckBase,{x:0,y:3,z:1})-.077)<1e-12,'Extreme physical swings contribute only a small camera angle');
+assert.ok(Math.abs(neckCameraYaw(0,neckBase,{x:0,y:3,z:-1})+.077)<1e-12);
+const wrapped=neckCameraYaw(Math.PI-.01,neckBase,{x:-1,y:3,z:-.01});
+assert.ok(Math.abs(wrapped-(Math.PI-.01))<.01,'Physical bearing must wrap across the angle seam without flipping the camera');
+const oneStep=cameraFollowAlpha(1/60),halfStep=cameraFollowAlpha(1/120);
+assert.ok(Math.abs(oneStep-(1-(1-halfStep)**2))<1e-12,'Camera lag must be independent of refresh rate');
+assert.ok(cameraFollowAlpha(.1)>.79&&cameraFollowAlpha(.1)<.81,'Camera follows roughly eighty percent of a turn within a tenth of a second');
+assert.equal(cameraFollowAlpha(-1),0);
+
+assert.equal(cameraFovForAspect(390 / 844), 85, 'Phone portrait needs enough horizontal field coverage');
+assert.equal(cameraFovForAspect(.75), 85);
+assert.ok(Math.abs(cameraFovForAspect(.975) - 75) < 1e-9);
+assert.equal(cameraFovForAspect(1.2), 65);
+assert.equal(cameraFovForAspect(16 / 9), 65, 'Desktop framing remains unchanged');
+assert.equal(cameraFovForAspect(NaN), 65);
+
+const position = new THREE.Vector3(), target = new THREE.Vector3();
+writeShoulderPose(0, 0, 0, 0, 7.2, position, target);
+assert.deepEqual(position.toArray(), [-7.2, 6.8, .8]);
+assert.deepEqual(target.toArray(), [3, 2.2, 0]);
+for (const pitch of [-100, -.2, 0, .3, 100]) {
+  writeShoulderPose(-4.8, -2.2, Math.PI / 2, pitch, 7.2, position, target);
+  assert.ok(position.y >= 5.5);
+  assert.ok(position.y <= 7.6);
+  assert.ok(target.y >= 1.8 && target.y <= 2.8 + 1e-9);
+  assert.ok(Math.abs(position.x + 5.6) < 1e-9, 'Shoulder offset must rotate with camera yaw');
+}
+writeShoulderPose(0, 0, 0, 0, 1, position, target);
+assert.equal(position.x, -6, 'The camera cannot zoom inside the character');
+writeShoulderPose(0, 0, 0, 0, 100, position, target);
+assert.equal(position.x, -10);
+
+const mobile = createRenderPerformance({ coarse: true, nativeDpr: 3, hardwareConcurrency: 6 });
+assert.equal(mobile.state.pixelRatio, 1.25);
+assert.equal(mobile.budget.shadowSize, 1024);
+assert.ok(mobile.budget.grass < 10000);
+assert.ok(mobile.budget.trees < 30);
+const desktop = createRenderPerformance({ nativeDpr: 3, hardwareConcurrency: 16, deviceMemory: 16 });
+assert.equal(desktop.state.pixelRatio, 1.75);
+assert.equal(desktop.budget.shadowSize, 2048);
+for (let i = 0; i < 1200; i++) desktop.update(1 / 60);
+assert.equal(desktop.state.qualityLevel, 0, 'Stable refresh must retain the original quality');
+for (let i = 0; i < 80; i++) mobile.update(1 / 60);
+mobile.update(.15);
+for (let i = 0; i < 120; i++) mobile.update(1 / 60);
+assert.equal(mobile.state.qualityLevel, 0, 'An isolated hitch must not reduce quality');
+for (let i = 0; i < 240; i++) mobile.update(1 / 25);
+assert.ok(mobile.state.qualityLevel >= 1);
+assert.ok(mobile.state.pixelRatio < 1.25);
+for (let i = 0; i < 6000; i++) mobile.update(1 / 20);
+assert.equal(mobile.state.pixelRatio, .75);
+assert.equal(mobile.state.shadowSize, 512);
+assert.equal(mobile.state.decorationScale, .45);
+assert.ok(mobile.state.qualityLevel <= 7);
+const quality = mobile.state.qualityLevel;
+for (let i = 0; i < 60; i++) mobile.update(10);
+assert.equal(mobile.state.qualityLevel, quality, 'Background-tab delays must be ignored');
+const compact = createRenderPerformance({ nativeDpr: 2, hardwareConcurrency: 2, deviceMemory: 2 });
+assert.equal(compact.state.profile, 'compact');
+assert.equal(compact.budget.shadowSize, 1024);
+assert.equal(compact.state.pixelRatio, 1.4);
+assert.ok(compact.resize(1));
+assert.equal(compact.state.pixelRatio, 1);
+assert.ok(!compact.resize(1));
+assert.ok(!compact.resize(NaN));
+console.log('Performance checks passed: caps, device budgets, sustained adaptation, floors and background-tab safety.');

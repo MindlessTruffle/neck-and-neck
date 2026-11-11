@@ -1,9 +1,18 @@
 import * as THREE from 'three';
+import { BALL_RADIUS } from './physics.js';
 
 const IVORY = '#fff5d4', GOLD = '#ffd35c', TEAL = '#5edbcc', CORAL = '#ff8d70';
 const UP = new THREE.Vector3(0, 1, 0);
 const vector = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const TRAIL_SAMPLES = 24;
+const ACTION_LABELS = { set: 'SET!', spike: 'SPIKE!', block: 'BLOCK!', dive: 'DIVE!' };
+const ABILITIES = {
+  feather: { text: 'FEATHER FLOAT!', color: '#d8f4ee' },
+  spring: { text: 'SPRING STEP!', color: '#ffd56c' },
+  magnet: { text: 'MAGNET HEAD!', color: '#f3a4db' },
+  rocket: { text: 'ROCKET HOOVES!', color: '#ffa574' },
+  shield: { text: 'IRON CANOPY!', color: '#82cbe8' },
+};
 
 /** Reusable, bounded world effects. A missed swing never receives impact feedback. */
 export function createVFX(scene, { camera, reducedMotion = false } = {}) {
@@ -18,7 +27,8 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
     puff: new THREE.IcosahedronGeometry(.11, 0),
   };
   const pool = [], lightning = [];
-  let impulse = 0, clock = 0, disposed = false, volleyCount = 0, lastHitTeam = 0, successPulse = 0;
+  let impulse = 0, clock = 0, disposed = false, volleyCount = 0, lastHitTeam = 0, successPulse = 0, lastAbility = null;
+  const anticipationTimes = new Map();
   // Prepaint every comic label before play. Impacts only switch existing maps.
   const calloutTextures = new Map();
   function comicTexture(text, fill) {
@@ -31,7 +41,7 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
         context.translate(256, 82);
         context.rotate(-.035);
         context.textAlign = 'center'; context.textBaseline = 'middle';
-        context.font = `900 ${text.length > 10 ? 62 : 76}px "Lilita One", Impact, sans-serif`;
+        context.font = `900 ${text.length > 12 ? 50 : text.length > 10 ? 58 : 76}px "Lilita One", Impact, sans-serif`;
         context.lineJoin = 'round'; context.miterLimit = 2;
         context.strokeStyle = '#28241f'; context.lineWidth = 16;
         context.strokeText(text, 0, 0);
@@ -54,20 +64,23 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
   comicTexture('POINT!', IVORY);
   for (let count = 2; count <= 12; count++) comicTexture(`VOLLEY ${count}!`, count % 3 === 0 ? CORAL : count % 3 === 1 ? GOLD : TEAL);
   comicTexture('EPIC RALLY!', GOLD);
+  comicTexture('TOSS!', IVORY);
+  for (const [action, label] of Object.entries(ACTION_LABELS)) comicTexture(label, action === 'spike' ? CORAL : action === 'set' ? TEAL : GOLD);
+  for (const ability of Object.values(ABILITIES)) comicTexture(ability.text, ability.color);
   const callouts = [];
   for (let i = 0; i < 4; i++) {
     const material = new THREE.SpriteMaterial({ map: calloutTextures.get('NICE!'), transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false });
     const object = new THREE.Sprite(material);
     object.name = 'VolleyComicCallout'; object.visible = false; object.renderOrder = 25;
     root.add(object);
-    callouts.push({ object, life: 0, duration: .72, y: 0, width: 3.0 });
+    callouts.push({ object, life: 0, duration: .72, y: 0, width: 3.0, duringServe: false });
   }
-  function announce(text, point, duration = .72) {
+  function announce(text, point, duration = .72, { height = .8, width = 3, duringServe = false } = {}) {
     const label = callouts.find(item => item.life <= 0) || callouts.reduce((oldest, item) => item.life < oldest.life ? item : oldest, callouts[0]);
     label.life = label.duration = duration;
-    label.y = point.y + .8;
+    label.y = point.y + height; label.width = width; label.duringServe = duringServe;
     label.object.position.set(point.x, label.y, point.z);
-    label.object.scale.set(3.0, .9375, 1);
+    label.object.scale.set(width, width / 3.2, 1);
     label.object.material.map = calloutTextures.get(text) || calloutTextures.get('EPIC RALLY!');
     label.object.material.opacity = 1;
     label.object.material.rotation = -.055;
@@ -158,18 +171,42 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
     const point = vector(event.x, event.y ?? .07, event.z);
     const rawPower = Number.isFinite(event.power) ? event.power : Number.isFinite(event.strength) ? event.strength : .6;
     const power = THREE.MathUtils.clamp(rawPower, .15, 1.5);
-    const tint = event.team === 1 ? CORAL : GOLD;
+    const ability = ABILITIES[event.ability];
+    const tint = ability?.color || (event.team === 1 ? CORAL : GOLD);
+    if (type === 'round') {
+      volleyCount = 0; successPulse = 0; lastAbility = null; clearTrail();
+      const kit = event.abilities?.find(entry => entry.player === 0);
+      const identity = ABILITIES[kit?.id];
+      if (identity) announce(identity.text, vector(kit.x ?? -4.8, kit.y ?? 3.2, kit.z ?? 0), 1.1, { height: .7, width: 3.8, duringServe: true });
+      return { hitstop: 0 };
+    }
+    if (type === 'ability') {
+      if (!ability) return { hitstop: 0 };
+      announce(ability.text, point, .95, { width: 3.8, duringServe: true });
+      const forward = vector(event.team === 1 ? -1 : 1, 0, 0);
+      shock(point, event.ability === 'shield' ? forward : UP, ability.color, 1.1);
+      if (event.ability === 'magnet' && !reducedMotion) for (let i = 0; i < 2; i++) bolt(point, ability.color, .7);
+      burst(point, ability.color, 16, .65, event.ability === 'feather');
+      return { hitstop: 0 };
+    }
+    if (type === 'toss') {
+      volleyCount = 0; successPulse = 0; clearTrail();
+      announce('TOSS!', point, .5, { width: 2.1, duringServe: true });
+      shock(point, UP, IVORY, .3);
+      return { hitstop: 0 };
+    }
     if (/score|win|finish/.test(type)) {
-      volleyCount = 0; successPulse = 0;
+      volleyCount = 0; successPulse = 0; lastAbility = null;
       clearTrail();
       burst(point.clone().setY(2.4), event.team === 1 ? CORAL : TEAL, type === 'score' ? 34 : 66, 1.1, true);
       shock(point.clone().setY(.07), UP, GOLD, 1.4);
       if (type === 'score') announce('POINT!', point.clone().setY(2.1), .82);
       return { hitstop: 0 };
     }
-    if (/jump|land|dash/.test(type)) {
+    if (/jump|land|dash|dive/.test(type)) {
       const floor = point.clone().setY(.06);
       shock(floor, UP, type === 'dash' ? TEAL : IVORY, .4);
+      if (type === 'dive') announce('DIVE!', point, .55, { height: 1, width: 2.6 });
       for (let i = 0; i < (reducedMotion ? 2 : 7); i++) {
         const effect = acquire('puff', floor, '#e8daa2', .25 + Math.random() * .15);
         if (!effect) break;
@@ -180,7 +217,16 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
     }
     // The simulation emits smash when a headbutt begins, even if it misses.
     // Show only the anticipation arc; actual contact owns sparks, bolts and shake.
-    if (type === 'smash' || type === 'swing') {
+    if (type === 'smash' || type === 'swing' || type === 'action') {
+      const action = event.action || 'spike';
+      if (action === 'dive') return { hitstop: 0 };
+      const key = event.player ?? 0;
+      if (clock - (anticipationTimes.get(key) ?? -Infinity) < .075) return { hitstop: 0 };
+      anticipationTimes.set(key, clock);
+      if (action === 'set' || action === 'block') {
+        shock(point, action === 'block' ? vector(event.team === 1 ? -1 : 1, 0, 0) : UP, action === 'set' ? TEAL : IVORY, .32);
+        return { hitstop: 0 };
+      }
       if (!reducedMotion) {
         const slash = acquire('slash', point, tint, .18);
         if (slash) {
@@ -198,10 +244,14 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
     }
     volleyCount = Number.isFinite(event.rallyHits) ? Math.max(1, Math.floor(event.rallyHits)) : volleyCount + 1;
     lastHitTeam = event.team ?? 0;
+    lastAbility = ability || null;
     successPulse = 1;
     const callout = volleyCount > 12 ? 'EPIC RALLY!' : volleyCount > 1 ? `VOLLEY ${volleyCount}!` : event.assisted || event.softContact ? 'GOOD SAVE!' : 'NICE!';
-    announce(callout, point);
-    tintTrail(volleyCount >= 5 ? GOLD : lastHitTeam ? CORAL : TEAL);
+    if (ACTION_LABELS[event.action]) {
+      announce(ACTION_LABELS[event.action], point);
+      if (volleyCount >= 3) announce(callout, point, .72, { height: 1.65, width: 2.3 });
+    } else announce(callout, point);
+    tintTrail(ability?.color || (volleyCount >= 5 ? GOLD : lastHitTeam ? CORAL : TEAL));
     const source = event.normal || event.velocity;
     const normal = source ? vector(source.x ?? source[0] ?? 1, source.y ?? source[1] ?? 0, source.z ?? source[2] ?? 0).normalize() : vector(1, .15, .25).normalize();
     const strong = power > .6;
@@ -314,7 +364,7 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
     for (const label of callouts) {
       if (label.life <= 0) continue;
       label.life -= dt;
-      if (label.life <= 0 || game?.paused || game?.phase === 'attract' || game?.phase === 'serve') { label.life = 0; label.object.visible = false; continue; }
+      if (label.life <= 0 || game?.paused || game?.phase === 'attract' || (game?.phase === 'serve' && !label.duringServe)) { label.life = 0; label.object.visible = false; continue; }
       const age = label.duration - label.life, progress = age / label.duration;
       const pop = reducedMotion ? 1 : 1 + Math.sin(Math.min(1, age / .18) * Math.PI) * .12;
       label.object.scale.set(label.width * pop, label.width / 3.2 * pop, 1);
@@ -349,9 +399,9 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
       object.visible = inPlay && (!i || volleyCount >= 3 || ballSpeed > 9);
       if (!object.visible) continue;
       object.position.set(ball.x, ball.y, ball.z);
-      object.scale.setScalar(.34 + i * .055 + successPulse * .12);
+      object.scale.setScalar(BALL_RADIUS * 1.35 + i * .065 + successPulse * .12);
       object.rotation.set(Math.PI / 3 + i * .7, reducedMotion ? i * 1.2 : clock * (i ? -2 : 2.3), i * .7);
-      object.material.color.set(i || volleyCount >= 5 ? GOLD : lastHitTeam ? CORAL : TEAL);
+      object.material.color.set(lastAbility?.color || (i || volleyCount >= 5 ? GOLD : lastHitTeam ? CORAL : TEAL));
       object.material.opacity = .48 + successPulse * .4;
     }
     streakClock += dt;

@@ -1,5 +1,5 @@
 const STEP = 1 / 120;
-const ACTIONS = ['jump', 'dash', 'swing', 'smash', 'serve'];
+const ACTIONS = ['jump', 'dash', 'swing', 'smash', 'serve', 'toss', 'set', 'jumpSet', 'dive', 'ability'];
 const lerp = (a, b, t) => a + (b - a) * t;
 const angle = (a, b, t) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * t;
 
@@ -68,6 +68,8 @@ export class SmoothSimulation {
     const game = this.game, state = this.renderState;
     state.phase = game.phase; state.paused = game.paused;
     state.score = game.score; state.rally = game.rally; state.hits = game.hits;
+    for(const key of ['round','touchTeam','lastAction','serveStage','serveCharge','serveQuality','rallyHits','server'])state[key]=game[key];
+    state.touches=[...game.touches];
     game.players.forEach((p, i) => {
       const out = state.players[i] ||= { head: {}, neckPoints: [] };
       const head = out.head, neckPoints = out.neckPoints;
