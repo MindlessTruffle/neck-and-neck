@@ -60,13 +60,13 @@ export function GameMenu({ menu, mode, difficulty, onMode, onDifficulty, onPlay,
         <dl className="control-scroll">
           <div><dt><ControlArt names={['keyboard_w','keyboard_a','keyboard_s','keyboard_d']} label="WASD"/></dt><dd><b>Move thy hooves</b><span>Walk relative to the camera.</span></dd></div>
           <div><dt><ControlArt names={['mouse_move','mouse_left']} label="Mouse and left click"/></dt><dd><b>Swing & bonk</b><span>Move your neck. Click to headbutt or serve.</span></dd></div>
-          <div><dt><ControlArt names={['mouse_right']} label="Right mouse"/></dt><dd><b>Survey the chaos</b><span>Hold right mouse to orbit. I J K L also work.</span></dd></div>
-          <div><dt><ControlArt names={['keyboard_alt']} label="Alt"/></dt><dd><b>Grab thy mouse</b><span>Alt captures or releases mouse focus.</span></dd></div>
+          <div><dt><ControlArt names={['mouse_right']} label="Right mouse"/></dt><dd><b>Survey the chaos</b><span>Hold right mouse to turn. J / L also work. Camera stays high.</span></dd></div>
+          <div><dt><ControlArt names={['keyboard_alt']} label="Alt"/></dt><dd><b>Grab thy mouse</b><span>Alt locks or releases mouse. A visible cursor stays centered.</span></dd></div>
           <div><dt><ControlArt names={['mouse_scroll','keyboard_q','keyboard_e']} label="Scroll or Q and E"/></dt><dd><b>More neck, please</b><span>Stretch or shorten your reach.</span></dd></div>
           <div><dt><ControlArt names={['keyboard_space','keyboard_shift']} label="Space and Shift"/></dt><dd><b>Leap & dash</b><span>Space jumps. Shift gives a quick burst.</span></dd></div>
           <div><dt><ControlArt names={['keyboard_r','keyboard_c','keyboard_escape']} label="R C and Escape"/></dt><dd><b>Recover thy dignity</b><span>R centers neck. C resets camera. Esc pauses.</span></dd></div>
         </dl>
-        <p className="rules-note">Strike the glowing ball with your head. A fast swing packs a bigger bonk. First to 7, win by 2, cap at 11. Check the wooden scoreboard.</p>
+        <p className="rules-note">Meet the glowing ball with your head. Gentle hits float; a little aim assist helps forward returns. Keep the volley alive! First to 7, win by 2, cap at 11.</p>
         <p className="touch-note">Touch: left drag walks, right drag swings, tap bonks, two fingers jump, three fingers pause.</p>
         <button className="play-button" onClick={soundClick(() => setHelp(false))}>I was born to bonk!<Arrow/></button>
       </div> : <>
@@ -86,7 +86,7 @@ export function GameMenu({ menu, mode, difficulty, onMode, onDifficulty, onPlay,
         </>}
         {error ? <div className="error" role="alert"><p>{error}</p><button className="play-button" onClick={onReload}>Try again<Arrow/></button></div> : <button className="play-button" disabled={!ready} onPointerEnter={() => onMenuSound(false)} onClick={soundClick(onPlay)}>{!ready ? 'Rallying the herd…' : paused ? 'Back to the bonking!' : finished ? 'Demand a rematch!' : 'TO BATTLE!'}<Arrow/></button>}
         <div className="menu-secondary"><button className="back-button" ref={helpButton} onClick={soundClick(() => setHelp(true))}>How to bonk <span>?</span></button>{menu !== 'lobby' && <button className="back-button" onClick={soundClick(onBack)}>Retreat to camp</button>}</div>
-        {captureFailed && <p className="capture-hint">Mouse got away? Alt grabs it again. Hold left-click to swing without capture.</p>}
+        {captureFailed && <p className="capture-hint">Mouse capture was blocked here. Click the field or press Alt to retry. Chrome or Edge supports full capture; left-drag remains available.</p>}
         <div className="sound-options"><button className={`sound-toggle ${!muted ? 'is-on' : ''}`} aria-pressed={!muted} onClick={soundClick(onMuted)}><SoundGlyph/><span>Sound</span><b>{muted ? 'OFF' : 'ON'}</b></button><button className={`sound-toggle ${music ? 'is-on' : ''}`} aria-pressed={music} onClick={soundClick(onMusic)}><SoundGlyph music/><span>Music</span><b>{music ? 'ON' : 'OFF'}</b></button></div>
         <div className="quick-controls"><ControlArt names={['keyboard_arrows_all']} label="Arrow keys"/><span>Browse</span><ControlArt names={['keyboard_enter']} label="Enter"/><span>Choose</span></div>
       </>}

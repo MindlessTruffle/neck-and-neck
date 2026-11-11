@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { createWorld } from './art.js';
 import { VolleyballGame } from './physics.js';
 import { SmoothSimulation } from './motion.js';
+import { requestGameCapture } from './capture.js';
 import { GameAudio } from './audio.js';
 import { GameMenu } from './game-menu.jsx';
 import './style.css';
@@ -12,10 +13,11 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 function App() {
   const canvas = useRef(null);
   const stage = useRef(null);
+  const reticle = useRef(null);
   const runtime = useRef({ game: null, world: null, audio: null, motion: null, keys: new Set(), edges: {}, started: false });
   const neckAim = useRef({ yaw: 0, pitch: .15, extension: .35 });
-  const cameraAim = useRef({ yaw: 0, pitch: -.15, distance: 5.4 });
-  const interaction = useRef({ mouseDown: false, cameraDrag: false, softLocked: false, hadLock: false, explicitUnlock: false, touches: new Map(), walk: { x: 0, z: 0 }, lastTap: 0 });
+  const cameraAim = useRef({ yaw: 0, pitch: 0, distance: 7.2 });
+  const interaction = useRef({ mouseDown: false, cameraDrag: false, hadLock: false, explicitUnlock: false, touches: new Map(), walk: { x: 0, z: 0 }, lastTap: 0 });
   const menuRef = useRef('lobby');
   const panel = useRef(null);
   const [menu, setMenu] = useState('lobby');
@@ -36,7 +38,6 @@ function App() {
     runtime.current.motion?.reset();
     interaction.current.mouseDown = false;
     interaction.current.cameraDrag = false;
-    interaction.current.softLocked = false;
     setMouseFocused(false);
     interaction.current.touches.clear();
     interaction.current.walk = { x: 0, z: 0 };
@@ -51,28 +52,18 @@ function App() {
   };
 
   const captureMouse = () => {
-    canvas.current?.focus();
-    if (document.pointerLockElement === canvas.current) return;
-    const fallback = () => {
-      setCaptureFailed(true);
-      if (menuRef.current) return;
-      interaction.current.softLocked = true;
-      setMouseFocused(true);
-      canvas.current?.focus();
-    };
-    try {
-      if (!canvas.current?.requestPointerLock) { fallback(); return; }
-      const request = canvas.current?.requestPointerLock?.();
-      request?.catch?.(fallback);
-    } catch { fallback(); }
+    requestGameCapture({
+      canvas: canvas.current, stage: stage.current,
+      coarse: window.matchMedia('(pointer: coarse)').matches,
+      onError: error => {
+        const locked = document.pointerLockElement === canvas.current;
+        if (!locked && canvas.current) canvas.current.dataset.captureError = error?.message || 'Pointer capture was refused.';
+        setCaptureFailed(!locked); setMouseFocused(locked);
+      },
+    });
   };
 
   const toggleMouseFocus = () => {
-    if (interaction.current.softLocked) {
-      interaction.current.softLocked = false;
-      setMouseFocused(false);
-      return;
-    }
     if (document.pointerLockElement === canvas.current) {
       interaction.current.explicitUnlock = true;
       document.exitPointerLock();
@@ -85,13 +76,7 @@ function App() {
   };
 
   const immersiveFocus = () => {
-    const focus = () => {
-      canvas.current?.focus();
-      if (!window.matchMedia('(pointer: coarse)').matches) captureMouse();
-    };
-    if (!document.fullscreenElement && stage.current?.requestFullscreen) {
-      stage.current.requestFullscreen().then(focus, focus);
-    } else focus();
+    captureMouse();
   };
 
   useEffect(() => {
@@ -104,6 +89,13 @@ function App() {
         if (!runtime.current.started) return;
         audio.event(event);
         world.impact?.(event);
+        if (event.type === 'hit' && event.player === 0 && reticle.current) {
+          reticle.current.getAnimations().forEach(animation => animation.cancel());
+          reticle.current.animate([
+            { transform: 'translate(-50%, -50%) scale(1.65)', filter: 'drop-shadow(0 0 8px #ffed9b)' },
+            { transform: 'translate(-50%, -50%) scale(1)', filter: 'drop-shadow(0 2px 1px #28241f)' },
+          ], { duration: 320, easing: 'ease-out' });
+        }
         if (event.type === 'win') {
           setResult({ score: [...event.score], winner: event.team });
           showMenu('finished');
@@ -129,7 +121,6 @@ function App() {
         let renderGame;
         if (!menuRef.current) {
           view.yaw += (Number(keys.has('KeyL')) - Number(keys.has('KeyJ'))) * dt * 1.6;
-          view.pitch = clamp(view.pitch + (Number(keys.has('KeyI')) - Number(keys.has('KeyK'))) * dt * .9, -.75, .4);
           aim.extension = clamp(aim.extension + (Number(keys.has('KeyE')) - Number(keys.has('KeyQ'))) * dt * .65, 0, 1);
           const forward = Number(keys.has('KeyW') || keys.has('ArrowUp')) - Number(keys.has('KeyS') || keys.has('ArrowDown')) - interaction.current.walk.z;
           const strafe = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft')) + interaction.current.walk.x;
@@ -156,6 +147,9 @@ function App() {
           canvas.current.dataset.neckAim = `${aim.yaw.toFixed(3)},${aim.pitch.toFixed(3)},${aim.extension.toFixed(3)}`;
           canvas.current.dataset.cameraAim = `${view.yaw.toFixed(3)},${view.pitch.toFixed(3)},${view.distance.toFixed(2)}`;
           canvas.current.dataset.phase = game.phase;
+          canvas.current.dataset.cameraHeight = world.camera.position.y.toFixed(2);
+          canvas.current.dataset.volley = String(game.rallyHits);
+          canvas.current.dataset.ballSpeed = Math.hypot(game.ball.vx, game.ball.vy, game.ball.vz).toFixed(2);
           canvas.current.dataset.physicsHz = '120';
           canvas.current.dataset.renderStats = JSON.stringify({ calls: world.renderer.info.render.calls, triangles: world.renderer.info.render.triangles });
           canvas.current.dataset.head = [game.players[0].head.x, game.players[0].head.y, game.players[0].head.z].map(value => value.toFixed(3)).join(',');
@@ -188,16 +182,15 @@ function App() {
         if (event.code === 'KeyM') setMuted(value => !value);
         if (event.code === 'KeyR') neckAim.current = { yaw: 0, pitch: .15, extension: neckAim.current.extension };
         if (event.code === 'KeyC') {
-          cameraAim.current = { yaw: 0, pitch: -.15, distance: 5.4 };
+          cameraAim.current = { yaw: 0, pitch: 0, distance: 7.2 };
           world.resetCamera();
         }
       };
       const keyup = event => runtime.current.keys.delete(event.code);
       const mousemove = event => {
-        if (menuRef.current || (document.pointerLockElement !== canvas.current && !interaction.current.softLocked && !interaction.current.mouseDown && !interaction.current.cameraDrag)) return;
+        if (menuRef.current || (document.pointerLockElement !== canvas.current && !interaction.current.mouseDown && !interaction.current.cameraDrag)) return;
         if (interaction.current.cameraDrag) {
           cameraAim.current.yaw += event.movementX * .0037;
-          cameraAim.current.pitch = clamp(cameraAim.current.pitch - event.movementY * .0037, -.75, .4);
         } else {
           neckAim.current.yaw = clamp(neckAim.current.yaw + event.movementX * .009, -1.8, 1.8);
           neckAim.current.pitch = clamp(neckAim.current.pitch - event.movementY * .009, -.9, 1.2);
@@ -210,24 +203,22 @@ function App() {
       const wheel = event => {
         if (menuRef.current) return;
         event.preventDefault();
-        if (interaction.current.cameraDrag) cameraAim.current.distance = clamp(cameraAim.current.distance + event.deltaY * .004, 3.3, 8);
+        if (interaction.current.cameraDrag) cameraAim.current.distance = clamp(cameraAim.current.distance + event.deltaY * .004, 6, 10);
         else neckAim.current.extension = clamp(neckAim.current.extension - event.deltaY * .0012, 0, 1);
       };
       const lockchange = () => {
         const locked = document.pointerLockElement === canvas.current;
         setMouseFocused(locked);
-        if (locked) { interaction.current.softLocked = false; setCaptureFailed(false); }
+        if (locked && menuRef.current) { document.exitPointerLock(); return; }
+        if (locked) { setCaptureFailed(false); delete canvas.current.dataset.captureError; }
         if (!locked && interaction.current.hadLock && !menuRef.current && !interaction.current.explicitUnlock) showMenu('pause');
         interaction.current.explicitUnlock = false;
         interaction.current.hadLock = locked;
       };
       const lockerror = () => {
-        setCaptureFailed(true);
-        if (!menuRef.current) {
-          interaction.current.softLocked = true;
-          setMouseFocused(true);
-          canvas.current?.focus();
-        }
+        const locked = document.pointerLockElement === canvas.current;
+        setCaptureFailed(!locked);
+        setMouseFocused(locked);
       };
       const blur = () => {
         if (!menuRef.current && runtime.current.started) showMenu('pause');
@@ -295,7 +286,7 @@ function App() {
     const game = runtime.current.game;
     if (!game) return;
     neckAim.current = { yaw: 0, pitch: .15, extension: .35 };
-    cameraAim.current = { yaw: 0, pitch: -.15, distance: 5.4 };
+    cameraAim.current = { yaw: 0, pitch: 0, distance: 7.2 };
     game.reset({ mode, difficulty });
     game.start();
     runtime.current.started = true;
@@ -315,7 +306,7 @@ function App() {
     runtime.current.started = false;
     runtime.current.game?.reset({ mode, difficulty });
     neckAim.current = { yaw: 0, pitch: .15, extension: .35 };
-    cameraAim.current = { yaw: 0, pitch: -.15, distance: 5.4 };
+    cameraAim.current = { yaw: 0, pitch: 0, distance: 7.2 };
     showMenu('lobby');
   };
 
@@ -337,6 +328,7 @@ function App() {
       }
       if (touches.size >= 3) showMenu('pause');
     } else {
+      if (document.pointerLockElement !== canvas.current) captureMouse();
       if (event.button === 2) interaction.current.cameraDrag = true;
       else if (event.button === 0) { interaction.current.mouseDown = true; bonk(); }
     }
@@ -367,8 +359,17 @@ function App() {
     interaction.current.touches.delete(event.pointerId);
   };
 
-  return <main ref={stage} className="meadow" data-camera="shoulder-follow" data-playing={!menu} data-mouse-focus={mouseFocused}>
-    <canvas ref={canvas} tabIndex={menu ? -1 : 0} aria-label="Shoulder-view giraffe volleyball. Mouse swings your floppy neck independently. Hold right mouse to orbit camera. Alt locks or releases mouse. WASD walks, click headbutts or serves, Q and E stretch, Space jumps, Escape pauses." onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onContextMenu={event => event.preventDefault()} />
+  return <main ref={stage} className="meadow" data-camera="elevated-locked" data-playing={!menu} data-mouse-focus={mouseFocused}>
+    <canvas ref={canvas} tabIndex={menu ? -1 : 0} aria-label="Elevated-view giraffe volleyball. Mouse swings your floppy neck independently. Hold right mouse to turn camera horizontally. Alt locks or releases mouse with a centered cursor. WASD walks, click headbutts or serves, Q and E stretch, Space jumps, Escape pauses." onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onContextMenu={event => event.preventDefault()} />
+    {!menu && <>
+      <div ref={reticle} className="center-cursor" aria-hidden="true" data-locked={mouseFocused}>
+        <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="10"/><path d="M20 3v6m0 22v6M3 20h6m22 0h6"/><circle className="cursor-dot" cx="20" cy="20" r="2.5"/></svg>
+      </div>
+      {!mouseFocused && <button className="capture-prompt" onClick={captureMouse}>
+        {captureFailed ? 'Click to retry mouse lock' : 'Click to lock mouse'}
+        <small>{captureFailed ? 'Capture blocked? Open in Chrome or Edge. Drag still swings.' : 'Centered cursor · Alt releases · Esc pauses'}</small>
+      </button>}
+    </>}
     {menu && <GameMenu
       menu={menu} mode={mode} difficulty={difficulty} onMode={setMode} onDifficulty={setDifficulty}
       onPlay={menu === 'pause' ? resume : begin} onBack={clubhouse} ready={ready} error={error} result={result}

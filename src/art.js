@@ -4,6 +4,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { GiraffeRig } from './rig.js';
 import { createVFX } from './vfx.js';
 import { createToonStyle } from './toon.js';
+import { BALL_GRAVITY } from './physics.js';
 
 const V = (x=0,y=0,z=0) => new THREE.Vector3(x,y,z);
 const UP = V(0,1,0);
@@ -14,7 +15,7 @@ export function createWorld({canvas,onProgress=()=>{},reducedMotion=window.match
   const scene=new THREE.Scene();scene.background=new THREE.Color('#cad8bd');scene.fog=new THREE.Fog('#d2d9b8',45,125);
   const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.65));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.NoToneMapping;renderer.toneMappingExposure=1;
-  const camera=new THREE.PerspectiveCamera(69,1,.08,180);camera.position.set(-10,4,0);camera.lookAt(1,2,0);scene.add(camera);
+  const camera=new THREE.PerspectiveCamera(65,1,.08,180);camera.position.set(-12,6.8,0);camera.lookAt(1,2.2,0);scene.add(camera);
   const hemisphere=new THREE.HemisphereLight('#fff1c9','#6e6849',.9);scene.add(hemisphere);
   const sun=new THREE.DirectionalLight('#fff2cd',2.35);sun.position.set(-15,27,-11);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-24,right:24,top:22,bottom:-22,near:1,far:70});sun.shadow.normalBias=.026;sun.shadow.bias=-.00016;scene.add(sun);
   const fill=new THREE.DirectionalLight('#c4d7bf',.1);fill.position.set(15,9,18);scene.add(fill);
@@ -86,7 +87,7 @@ export function createWorld({canvas,onProgress=()=>{},reducedMotion=window.match
   // Only the thin locator rings ignore depth, so a held ball remains readable
   // when the player's floppy head crosses the line of sight.
   const locator=new THREE.Group();locator.name='BallWorldLocator';scene.add(locator);locator.renderOrder=1000;
-  for(const [inner,outer,color,opacity] of [[.335,.350,'#fff1b2',.98],[.363,.376,'#ad6a24',.78]]){const geometry=new THREE.RingGeometry(inner,outer,64);geometries.push(geometry);const ring=mesh(geometry,new THREE.MeshBasicMaterial({color,transparent:true,opacity,side:THREE.DoubleSide,depthTest:false,depthWrite:false}),locator,false);ring.renderOrder=1000;}
+  for(const [inner,outer,color,opacity] of [[.350,.369,'#fff1b2',.98],[.383,.398,'#ad6a24',.85]]){const geometry=new THREE.RingGeometry(inner,outer,64);geometries.push(geometry);const ring=mesh(geometry,new THREE.MeshBasicMaterial({color,transparent:true,opacity,side:THREE.DoubleSide,depthTest:false,depthWrite:false}),locator,false);ring.renderOrder=1000;}
   const chevronGeometry=new THREE.BufferGeometry().setFromPoints([V(-.075,.58,0),V(0,.515,0),V(.075,.58,0)]);geometries.push(chevronGeometry);const chevron=new THREE.Line(chevronGeometry,new THREE.LineBasicMaterial({color:'#fff1b2',transparent:true,opacity:.9,depthTest:false,depthWrite:false}));chevron.renderOrder=1001;locator.add(chevron);
   const landing=new THREE.Group();scene.add(landing);const ringGeo=new THREE.RingGeometry(.46,.49,64);geometries.push(ringGeo);const landingRing=mesh(ringGeo,new THREE.MeshBasicMaterial({color:'#ffe5a2',transparent:true,opacity:.65,side:THREE.DoubleSide,depthWrite:false}),landing,false);landingRing.rotation.x=-Math.PI/2;
   for(let i=0;i<4;i++){const marker=box(landing,'#ffd775',Math.cos(i*Math.PI/2)*.61,.008,Math.sin(i*Math.PI/2)*.61,.13,.013,.045);marker.rotation.y=-i*Math.PI/2;marker.castShadow=false;}
@@ -117,23 +118,22 @@ export function createWorld({canvas,onProgress=()=>{},reducedMotion=window.match
     for(let side=-1;side<=1;side+=2)for(let i=0;i<24;i++){const x=-10.5+i*.9,z=side*(11.5+random(i+60)*.7);place(nature[i%3?'flower_yellowA':'flower_redA'],x,z,.23+random(i+12)*.22,i);}
     const scenery=[];props.forEach(prop=>prop.traverse(object=>{if(object.isMesh)scenery.push(object);}));toon.batch(scenery,scene);onProgress(1);
   });
-  const orbit={yaw:0,pitch:-.15,distance:5.4},cameraTarget=V(),cameraPosition=V(),lastBodyPosition=V();let cameraInitialized=false,cameraPhase=null;
+  const orbit={yaw:0,pitch:0,distance:7.2},cameraTarget=V(),cameraPosition=V(),lastBodyPosition=V();let cameraInitialized=false,cameraPhase=null;
   function resetCamera(){cameraInitialized=false;}
-  function setCamera(value={}){if(Number.isFinite(value.yaw))orbit.yaw=value.yaw;if(Number.isFinite(value.pitch))orbit.pitch=THREE.MathUtils.clamp(value.pitch,-.75,.8);if(Number.isFinite(value.distance))orbit.distance=THREE.MathUtils.clamp(value.distance,3.1,8);if(value.snap)resetCamera();}
+  function setCamera(value={}){if(Number.isFinite(value.yaw))orbit.yaw=value.yaw;if(Number.isFinite(value.distance))orbit.distance=THREE.MathUtils.clamp(value.distance,6,10);if(value.snap)resetCamera();}
   function resize(w,h){width=w;height=h;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
   function update(dt,game,time){lastGame=game;elapsed=Number.isFinite(time)?time:elapsed+dt;const t=elapsed;grassTime.value=t;const players=game?.players||[];
     if(template)while(rigs.length<players.length)rigs.push(new GiraffeRig(template,scene,rigs.length,toon));rigs.forEach((rig,index)=>rig.update(players[index],dt,t));
     const human=players.find(p=>p.human)||players[0];
     if(human){const forward=V(Math.cos(orbit.yaw),0,Math.sin(orbit.yaw)),right=V(-forward.z,0,forward.x),base=V(human.x,0,human.z);
       if((cameraPhase!==game?.phase&&['serve','attract'].includes(game?.phase))||(cameraInitialized&&base.distanceTo(lastBodyPosition)>4.5))resetCamera();cameraPhase=game?.phase;lastBodyPosition.copy(base);
-      const wanted=base.clone().addScaledVector(forward,-orbit.distance).addScaledVector(right,1.45);wanted.y=base.y+3.35-Math.sin(orbit.pitch)*orbit.distance*.75;
-      const aim=base.clone().addScaledVector(forward,3.0);aim.y=2.25+Math.sin(orbit.pitch)*2.5+(human.y||0)*.18;
+      const wanted=base.clone().addScaledVector(forward,-orbit.distance).addScaledVector(right,1.45);wanted.y=6.8;
+      const aim=base.clone().addScaledVector(forward,3.0);aim.y=2.2;
       if(!cameraInitialized){cameraPosition.copy(wanted);cameraTarget.copy(aim);cameraInitialized=true;}else{const follow=1-Math.exp(-dt*10);cameraPosition.lerp(wanted,follow);cameraTarget.lerp(aim,follow);}
-      camera.position.copy(cameraPosition);const shake=vfx.cameraImpulse();if(shake&&!reducedMotion){camera.position.addScaledVector(right,Math.sin(t*137)*shake);camera.position.y+=Math.cos(t*113)*shake*.65;}camera.lookAt(cameraTarget);
-      const targetFov=reducedMotion?69:69+Math.min(5,Math.hypot(human.vx||0,human.vz||0)*.3),nextFov=reducedMotion?69:THREE.MathUtils.lerp(camera.fov,targetFov,1-Math.exp(-dt*5));if(Math.abs(nextFov-camera.fov)>.005){camera.fov=nextFov;camera.updateProjectionMatrix();}
+      camera.position.copy(cameraPosition);const shake=vfx.cameraImpulse();if(shake&&!reducedMotion)camera.position.addScaledVector(right,Math.sin(t*137)*shake*.5);camera.lookAt(cameraTarget);
     }
     const b=game?.ball||{x:0,y:3,z:0};ball.visible=game?.phase!=='attract';ball.position.set(b.x,Math.max(.23,b.y),b.z);core.rotation.x+=dt*2;ball.rotation.z+=dt*1.8;halo.rotation.y=t*1.6;locator.visible=ball.visible;locator.position.copy(ball.position);locator.quaternion.copy(camera.quaternion);
-    const landingTime=Math.max(0,((b.vy||0)+Math.sqrt((b.vy||0)**2+36*Math.max(0,b.y-.23)))/18);landing.position.set(THREE.MathUtils.clamp(b.x+(b.vx||0)*landingTime,-10,10),.018,THREE.MathUtils.clamp(b.z+(b.vz||0)*landingTime,-6,6));landing.visible=ball.visible;landing.rotation.y=t*.35;landingRing.material.opacity=.43+Math.sin(t*4)*.08;
+    const landingTime=Math.max(0,((b.vy||0)+Math.sqrt((b.vy||0)**2+2*BALL_GRAVITY*Math.max(0,b.y-.23)))/BALL_GRAVITY);landing.position.set(THREE.MathUtils.clamp(b.x+(b.vx||0)*landingTime,-10,10),.018,THREE.MathUtils.clamp(b.z+(b.vz||0)*landingTime,-6,6));landing.visible=ball.visible;landing.rotation.y=t*.35;landingRing.material.opacity=.43+Math.sin(t*4)*.08;
     ballShadow.visible=ball.visible;ballShadow.position.set(b.x,.01,b.z);ballShadow.scale.setScalar(1+b.y*.08);ballShadow.material.opacity=.22/(1+b.y*.2);updateScore(game?.score);
     for(const a of animated){if(a.type==='flag'){a.object.rotation.y=Math.sin(t*4+a.seed*.5)*.2;a.object.rotation.x=Math.cos(t*3+a.seed)*.05;}if(a.type==='fan'){a.object.rotation.z=Math.sin(t*3+a.seed)*.07;a.object.position.y=a.base+Math.max(0,Math.sin(t*2.8+a.seed))*.04;}if(a.type==='cloud')a.object.position.x=a.base+Math.sin(t*.015+a.seed)*5;if(a.type==='bird'){const q=t*.12+a.seed*.85;a.object.position.set(Math.cos(q)*34,11+Math.sin(q*2+a.seed)*1.5,Math.sin(q)*29);a.object.rotation.y=-q;for(let j=0;j<2;j++)a.wings[j].rotation.z=(j?1:-1)*Math.sin(t*5+a.seed)*.5;}}
     vfx.update(dt,game,t);toon.update(camera,width,height);

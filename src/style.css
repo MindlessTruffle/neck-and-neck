@@ -31,3 +31,13 @@
 @media(max-width:540px){.menu-scene{padding-top:145px}.fullscreen-button{top:-19px;right:-12px;width:35px;height:35px;padding:4px}.fullscreen-button>.control-art img{width:23px;height:23px}.help-scroll{width:calc(100vw - 31px)}.menu-secondary .back-button{font-size:14px}.help-scroll .menu-title{font-size:33px}.help-scroll .chapter{margin-right:26px;font-size:9px;letter-spacing:1px}}
 @media(max-width:380px){.menu-scene{padding-top:135px}.fullscreen-button{width:33px;height:33px;top:-18px;right:-11px}.help-scroll .menu-title{font-size:30px}}
 @media(max-height:540px) and (min-width:700px){.menu-scene{padding-top:24px}.fullscreen-button{top:-15px;right:-16px;bottom:auto;left:auto}.menu-panel.is-help{width:0}}
+/* Native pointer lock hides the OS pointer; this drawn cursor stays at screen center. */
+.center-cursor{position:absolute;left:50%;top:50%;width:36px;height:36px;transform:translate(-50%,-50%);z-index:3;pointer-events:none;filter:drop-shadow(0 2px 1px #28241f)}
+.center-cursor svg{width:100%;height:100%;overflow:visible;fill:none;stroke:#fff3c6;stroke-width:2.5;stroke-linecap:round;paint-order:stroke fill}
+.center-cursor svg circle:first-child{stroke:#28241f;stroke-width:5;fill:#fff3c61a}
+.center-cursor .cursor-dot{fill:#fff4ce;stroke:#28241f;stroke-width:1.5}
+.center-cursor[data-locked=false]{opacity:.55}
+.capture-prompt{position:absolute;z-index:4;left:50%;bottom:26px;transform:translateX(-50%);max-width:calc(100% - 28px);padding:10px 20px;border:3px solid #28241f;border-radius:6px;background:#f6dfa8;box-shadow:3px 4px 0 #28241f;color:#28241f;font:400 18px 'Lilita One',sans-serif;white-space:nowrap}
+.capture-prompt small{display:block;margin-top:4px;font:600 11px Outfit,sans-serif;white-space:normal}
+.capture-prompt:hover{background:#ffeec7}
+@media(pointer:coarse){.capture-prompt{display:none}.center-cursor{width:28px;height:28px}}

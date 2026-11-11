@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { VolleyballGame } from '../src/physics.js';
+import { VolleyballGame, BALL_GRAVITY, MAX_BALL_SPEED } from '../src/physics.js';
 const near = (a,b,t=.03) => assert.ok(Math.abs(a-b)<t, `${a} differs from ${b}`);
 function impact(headV=0, zOffset=0) {
  const g=new VolleyballGame({mode:'1v1'});g.start();g.phase='play';g.touchCooldown=0;g.lastHitter=null;
@@ -7,7 +7,7 @@ function impact(headV=0, zOffset=0) {
  Object.assign(g.ball,{x:-3.2,y:3,z:zOffset,vx:-5,vy:0,vz:0});g._ballStep(1/1000);return g.ball;
 }
 const still=impact(), moving=impact(4), angled=impact(0,.35);
-assert(still.vx>0, 'incoming ball must bounce outward');assert(moving.vx>still.vx+3, 'moving head adds momentum');assert(Math.abs(angled.vz)>.5, 'off-center contact changes direction');
+assert(still.vx>0, 'incoming ball must bounce outward');assert(moving.vx>still.vx+.5&&moving.vx<still.vx+2, 'moving head adds gentle, bounded momentum');assert(Math.abs(angled.vz)>.5, 'off-center contact changes direction');
 const g=new VolleyballGame({mode:'1v1'});g.start();g.phase='play';Object.assign(g.ball,{x:8,y:15,z:0,vx:0,vy:0,vz:0});
 for(let i=0;i<60;i++)g.update(1/120,{lookYaw:Math.PI/2,lookPitch:.4,extension:1});
 const p=g.players[0];assert(p.head.z>p.z+.45,'neck yaw moves head sideways');assert(p.head.y>3,'extension raises head');assert.equal(p.neck.extension,1);
@@ -93,3 +93,34 @@ Object.assign(ending.ball,{x:4,y:.231,z:0,vx:0,vy:-5,vz:0});
 let playerSteps=0;const normalStep=ending._stepPlayers.bind(ending);ending._stepPlayers=(...args)=>{playerSteps++;normalStep(...args);};
 ending.update(.05,{x:1});assert.equal(ending.phase,'finished');assert.equal(playerSteps,1,'winning point stops remaining physics substeps');
 console.log('PASS: finished match stops physics immediately');
+
+function paddedHit({offset=1.05,headSpeed=0,swing=0,backward=false,human=true}={}) {
+ let event;
+ const game=new VolleyballGame({mode:'1v1',onEvent:e=>{if(e.type==='hit')event=e}});
+ game.start();game.phase='play';game.lastHitter=null;game.touchCooldown=0;
+ const player=game.players[0];player.human=human;player._swingTime=swing;
+ Object.assign(player.head,{x:-4,y:3,z:0,vx:headSpeed,vy:0,vz:0});
+ Object.assign(game.ball,{x:-4+(backward?-offset:offset),y:3,z:0,vx:backward?5:-5,vy:0,vz:0});
+ game._ballStep(.001);
+ return {game,event};
+}
+const forgiving=paddedHit();assert.equal(forgiving.game.hits,1,'near miss receives a generous human contact');
+assert.equal(forgiving.event.softContact,true);assert.equal(forgiving.event.assisted,true);
+assert.equal(forgiving.event.rallyHits,1);
+assert.equal(paddedHit({human:false}).game.hits,0,'bot hit radius stays physically smaller');
+assert.equal(paddedHit({offset:1.22}).game.hits,0,'idle assistance remains bounded');
+assert.equal(paddedHit({offset:1.22,swing:.2}).game.hits,1,'active swing gives a larger timing window');
+const gentle=paddedHit({offset:.8,headSpeed:4}),hard=paddedHit({offset:.8,headSpeed:24});
+assert(gentle.game.ball.vx<6,'ordinary four m/s head motion does not fire a cannonball');
+assert(hard.event.outgoingSpeed<=MAX_BALL_SPEED+1e-9,'extreme whips obey the post-hit speed cap');
+assert(Math.hypot(fast.ball.vx,fast.ball.vy,fast.ball.vz)<=MAX_BALL_SPEED+1e-9,'extreme incoming speed is absorbed');
+const returned=forgiving.game.ball;
+const landTime=(returned.vy+Math.sqrt(returned.vy**2+2*BALL_GRAVITY*(returned.y-.23)))/BALL_GRAVITY;
+assert(returned.x+returned.vx*landTime>1,'soft front receive reaches opposing court');
+const netTime=-returned.x/returned.vx;
+assert(returned.y+returned.vy*netTime-.5*BALL_GRAVITY*netTime**2>2.6,'assisted arc clears tape');
+const back=paddedHit({offset:.8,backward:true});assert.equal(back.event.assisted,false);assert(back.game.ball.vx<0,'backward contact is not reversed by autoaim');
+assert(BALL_GRAVITY<18&&BALL_GRAVITY>0,'ball floats longer without changing player jump gravity');
+const serveFloat=new VolleyballGame({mode:'1v1'});serveFloat.start();serveFloat.update(1/120,{serve:true});
+assert(Math.hypot(serveFloat.ball.vx,serveFloat.ball.vz)<7,'serve horizontal speed is reduced');
+console.log('PASS: generous bounded contact, active-swing forgiveness, padded momentum, gentle speed cap, forward-only aim help and floating serves');

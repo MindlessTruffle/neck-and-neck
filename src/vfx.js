@@ -18,7 +18,67 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
     puff: new THREE.IcosahedronGeometry(.11, 0),
   };
   const pool = [], lightning = [];
-  let impulse = 0, clock = 0, disposed = false;
+  let impulse = 0, clock = 0, disposed = false, volleyCount = 0, lastHitTeam = 0, successPulse = 0;
+  // Prepaint every comic label before play. Impacts only switch existing maps.
+  const calloutTextures = new Map();
+  function comicTexture(text, fill) {
+    const canvas = globalThis.document?.createElement?.('canvas') || (globalThis.OffscreenCanvas ? new globalThis.OffscreenCanvas(512, 160) : null);
+    let texture;
+    if (canvas) {
+      canvas.width = 512; canvas.height = 160;
+      const context = canvas.getContext('2d');
+      if (context) {
+        context.translate(256, 82);
+        context.rotate(-.035);
+        context.textAlign = 'center'; context.textBaseline = 'middle';
+        context.font = `900 ${text.length > 10 ? 62 : 76}px "Lilita One", Impact, sans-serif`;
+        context.lineJoin = 'round'; context.miterLimit = 2;
+        context.strokeStyle = '#28241f'; context.lineWidth = 16;
+        context.strokeText(text, 0, 0);
+        context.fillStyle = fill; context.fillText(text, 0, 0);
+        texture = new THREE.CanvasTexture(canvas);
+      }
+    }
+    // Headless regression checks still exercise the same pool and texture lifecycle.
+    texture ||= new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+    texture.name = `Comic_${text}`;
+    texture.userData.text = text;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.minFilter = texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false; texture.needsUpdate = true;
+    calloutTextures.set(text, texture);
+    return texture;
+  }
+  comicTexture('NICE!', GOLD);
+  comicTexture('GOOD SAVE!', TEAL);
+  comicTexture('POINT!', IVORY);
+  for (let count = 2; count <= 12; count++) comicTexture(`VOLLEY ${count}!`, count % 3 === 0 ? CORAL : count % 3 === 1 ? GOLD : TEAL);
+  comicTexture('EPIC RALLY!', GOLD);
+  const callouts = [];
+  for (let i = 0; i < 4; i++) {
+    const material = new THREE.SpriteMaterial({ map: calloutTextures.get('NICE!'), transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false });
+    const object = new THREE.Sprite(material);
+    object.name = 'VolleyComicCallout'; object.visible = false; object.renderOrder = 25;
+    root.add(object);
+    callouts.push({ object, life: 0, duration: .72, y: 0, width: 3.0 });
+  }
+  function announce(text, point, duration = .72) {
+    const label = callouts.find(item => item.life <= 0) || callouts.reduce((oldest, item) => item.life < oldest.life ? item : oldest, callouts[0]);
+    label.life = label.duration = duration;
+    label.y = point.y + .8;
+    label.object.position.set(point.x, label.y, point.z);
+    label.object.scale.set(3.0, .9375, 1);
+    label.object.material.map = calloutTextures.get(text) || calloutTextures.get('EPIC RALLY!');
+    label.object.material.opacity = 1;
+    label.object.material.rotation = -.055;
+    label.object.visible = true;
+    label.object.userData.text = text;
+  }
+  const aura = [0, 1].map(index => {
+    const object = new THREE.Mesh(geometries.ring, new THREE.MeshBasicMaterial({ color: index ? GOLD : TEAL, transparent: true, opacity: .75, depthWrite: false }));
+    object.name = `RallyBallAura_${index}`; object.visible = false; root.add(object);
+    return object;
+  });
   function addPool(type, count) {
     for (let i = 0; i < count; i++) {
       // Opaque-looking colors suit the cel world; alpha only fades the effect away.
@@ -100,9 +160,11 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
     const power = THREE.MathUtils.clamp(rawPower, .15, 1.5);
     const tint = event.team === 1 ? CORAL : GOLD;
     if (/score|win|finish/.test(type)) {
+      volleyCount = 0; successPulse = 0;
       clearTrail();
       burst(point.clone().setY(2.4), event.team === 1 ? CORAL : TEAL, type === 'score' ? 34 : 66, 1.1, true);
       shock(point.clone().setY(.07), UP, GOLD, 1.4);
+      if (type === 'score') announce('POINT!', point.clone().setY(2.1), .82);
       return { hitstop: 0 };
     }
     if (/jump|land|dash/.test(type)) {
@@ -130,14 +192,22 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
       return { hitstop: 0 };
     }
     if (type === 'serve' || type === 'net') {
+      if (type === 'serve') { volleyCount = 0; successPulse = 0; lastHitTeam = event.team ?? 0; tintTrail(lastHitTeam ? CORAL : TEAL); }
       shock(point, UP, type === 'net' ? IVORY : tint, .4);
       return { hitstop: 0 };
     }
+    volleyCount = Number.isFinite(event.rallyHits) ? Math.max(1, Math.floor(event.rallyHits)) : volleyCount + 1;
+    lastHitTeam = event.team ?? 0;
+    successPulse = 1;
+    const callout = volleyCount > 12 ? 'EPIC RALLY!' : volleyCount > 1 ? `VOLLEY ${volleyCount}!` : event.assisted || event.softContact ? 'GOOD SAVE!' : 'NICE!';
+    announce(callout, point);
+    tintTrail(volleyCount >= 5 ? GOLD : lastHitTeam ? CORAL : TEAL);
     const source = event.normal || event.velocity;
     const normal = source ? vector(source.x ?? source[0] ?? 1, source.y ?? source[1] ?? 0, source.z ?? source[2] ?? 0).normalize() : vector(1, .15, .25).normalize();
     const strong = power > .6;
-    shock(point, normal, IVORY, .45 + power * .75);
-    if (strong) shock(point, UP, tint, power * .65);
+    // Even a gentle, assisted contact gets an unmistakable success ring and chime.
+    shock(point, normal, IVORY, .7 + power * .55);
+    shock(point, UP, volleyCount >= 3 ? TEAL : tint, .5 + Math.min(volleyCount, 6) * .07);
     burst(point, tint, strong ? 26 : 12, .45 + power * .55);
     if (!reducedMotion && strong) {
       for (let i = 0; i < 2; i++) {
@@ -156,23 +226,29 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
   // vectors per rendered frame. No GPU attributes or materials are rebuilt in play.
   const history = Array.from({ length: TRAIL_SAMPLES }, () => vector());
   const trailPositions = new Float32Array((TRAIL_SAMPLES - 1) * 18);
-  const trailColors = new Float32Array(trailPositions.length);
+  const trailColors = new Float32Array((TRAIL_SAMPLES - 1) * 24);
   const trailGeometry = new THREE.BufferGeometry();
   trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
-  trailGeometry.setAttribute('color', new THREE.BufferAttribute(trailColors, 3));
+  trailGeometry.setAttribute('color', new THREE.BufferAttribute(trailColors, 4));
   trailGeometry.setDrawRange(0, 0);
   const trail = new THREE.Mesh(trailGeometry, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: .45, depthWrite: false, side: THREE.DoubleSide }));
   trail.name = 'BallCometTrail'; trail.frustumCulled = false; root.add(trail);
-  const gold = new THREE.Color(GOLD), ivory = new THREE.Color(IVORY);
-  for (let i = 0; i < TRAIL_SAMPLES - 1; i++) {
-    const fade = Math.pow(1 - i / TRAIL_SAMPLES, 1.8);
-    for (let j = 0; j < 6; j++) {
-      const color = j < 2 ? gold : ivory, offset = i * 18 + j * 3;
-      trailColors[offset] = color.r * fade;
-      trailColors[offset + 1] = color.g * fade;
-      trailColors[offset + 2] = color.b * fade;
+  const trailTint = new THREE.Color(GOLD), ivory = new THREE.Color(IVORY);
+  function tintTrail(tint) {
+    trailTint.set(tint);
+    for (let i = 0; i < TRAIL_SAMPLES - 1; i++) {
+      const fade = Math.pow(1 - i / TRAIL_SAMPLES, 1.6);
+      for (let j = 0; j < 6; j++) {
+        const color = j < 2 ? trailTint : ivory, offset = i * 24 + j * 4;
+        trailColors[offset] = color.r;
+        trailColors[offset + 1] = color.g;
+        trailColors[offset + 2] = color.b;
+        trailColors[offset + 3] = fade;
+      }
     }
+    trailGeometry.attributes.color.needsUpdate = true;
   }
+  tintTrail(GOLD);
   let historyHead = 0, historyCount = 0, trailClock = 0, streakClock = 0;
   let previousGame = null, previousPhase = null, previousPaused = false, previousHits = 0, previousRally = 0;
   const streakPoint = vector(), streakDirection = vector();
@@ -187,10 +263,15 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
   }
   function updateTrail(dt, game) {
     const ball = game?.ball, paused = !!game?.paused;
+    if ((previousGame && game !== previousGame) || (game?.hits ?? 0) < previousHits) {
+      volleyCount = 0; successPulse = 0;
+      for (const label of callouts) { label.life = 0; label.object.visible = false; }
+    }
     const reset = game !== previousGame || game?.phase !== previousPhase || paused !== previousPaused || (game?.hits ?? 0) < previousHits || (game?.rally ?? 0) !== previousRally;
     previousGame = game; previousPhase = game?.phase; previousPaused = paused;
     previousHits = game?.hits ?? 0; previousRally = game?.rally ?? 0;
     if (reset) clearTrail();
+    if (game?.phase === 'serve' || game?.phase === 'attract' || game?.phase === 'point' || game?.phase === 'finished') { volleyCount = 0; successPulse = 0; }
     if (!ball || paused || game.phase !== 'play' || reducedMotion) { clearTrail(); return; }
     const speed = Math.hypot(ball.vx || 0, ball.vy || 0, ball.vz || 0);
     if (speed < .4) { clearTrail(); return; }
@@ -213,7 +294,7 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
       let length = Math.hypot(sx, sy, sz);
       if (length < 1e-8) { sx = 1; sy = 0; sz = 0; length = 1; }
       sx /= length; sy /= length; sz /= length;
-      const width = Math.min(.09, .025 + speed * .0035);
+      const width = Math.min(.13, .035 + speed * .004 + Math.min(volleyCount, 6) * .006);
       const wa = (1 - i / TRAIL_SAMPLES) * width, wb = (1 - (i + 1) / TRAIL_SAMPLES) * width;
       const offset = i * 18;
       writeTrailVertex(offset, a, wa, sx, sy, sz);
@@ -229,6 +310,18 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
   function update(dt, game, time = clock + dt) {
     if (disposed) return;
     clock = time; impulse *= Math.exp(-dt * 22);
+    successPulse *= Math.exp(-dt * 6);
+    for (const label of callouts) {
+      if (label.life <= 0) continue;
+      label.life -= dt;
+      if (label.life <= 0 || game?.paused || game?.phase === 'attract' || game?.phase === 'serve') { label.life = 0; label.object.visible = false; continue; }
+      const age = label.duration - label.life, progress = age / label.duration;
+      const pop = reducedMotion ? 1 : 1 + Math.sin(Math.min(1, age / .18) * Math.PI) * .12;
+      label.object.scale.set(label.width * pop, label.width / 3.2 * pop, 1);
+      label.object.position.y = label.y + (reducedMotion ? 0 : age * .36);
+      label.object.material.opacity = Math.min(1, label.life / .23);
+      label.object.material.rotation = reducedMotion ? 0 : -.055 + Math.sin(progress * Math.PI) * .025;
+    }
     for (const effect of pool) {
       if (effect.life <= 0) continue;
       effect.life -= dt;
@@ -249,6 +342,18 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
       effect.object.material.opacity = Math.max(0, effect.life / effect.duration);
     }
     updateTrail(dt, game);
+    const ball = game?.ball, inPlay = !!ball && game.phase === 'play' && !game.paused && volleyCount > 0;
+    const ballSpeed = ball ? Math.hypot(ball.vx || 0, ball.vy || 0, ball.vz || 0) : 0;
+    for (let i = 0; i < aura.length; i++) {
+      const object = aura[i];
+      object.visible = inPlay && (!i || volleyCount >= 3 || ballSpeed > 9);
+      if (!object.visible) continue;
+      object.position.set(ball.x, ball.y, ball.z);
+      object.scale.setScalar(.34 + i * .055 + successPulse * .12);
+      object.rotation.set(Math.PI / 3 + i * .7, reducedMotion ? i * 1.2 : clock * (i ? -2 : 2.3), i * .7);
+      object.material.color.set(i || volleyCount >= 5 ? GOLD : lastHitTeam ? CORAL : TEAL);
+      object.material.opacity = .48 + successPulse * .4;
+    }
     streakClock += dt;
     if (streakClock > .09 && !reducedMotion && !game?.paused && game?.phase === 'play') {
       streakClock %= .09;
@@ -275,6 +380,7 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
     root.traverse(object => object.material?.dispose());
     Object.values(geometries).forEach(geometry => geometry.dispose());
     lightning.forEach(effect => effect.object.geometry.dispose());
+    calloutTextures.forEach(texture => texture.dispose());
     trailGeometry.dispose();
   }
   return { impact, update, setReducedMotion, cameraImpulse: () => impulse, dispose };

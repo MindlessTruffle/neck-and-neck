@@ -2,7 +2,7 @@
 
 [Play on GitHub Pages](https://mindlesstruffle.github.io/neck-and-neck/) · [Source repository](https://github.com/MindlessTruffle/neck-and-neck)
 
-A cartoon 3D giraffe volleyball game with a close shoulder camera, independently controlled floppy neck, Blender-skinned athletes, an ink-outlined meadow stadium, Kenney assets, and dramatic world-space effects. Both 1v1 and 2v2 use physical bots. No gameplay HUD: only the world, highlighted ball, and physical scoreboard.
+A cartoon 3D giraffe volleyball game with an elevated camera, independently controlled floppy neck, Blender-skinned athletes, an ink-outlined meadow stadium, Kenney assets, and dramatic world-space effects. Both 1v1 and 2v2 use physical bots. Gameplay keeps a centered aiming cursor, world-space feedback, highlighted ball, and physical scoreboard.
 
 ## Start
 
@@ -10,7 +10,7 @@ Double-click **Start Game.cmd**, or run `npm run dev -- --port 5173` in this fol
 
 ## Cartoon game interface
 
-Original hand-inked giraffe illustrations, a chunky title crest, ragged parchment, wooden foe selector, red cloth banners, hard shadows, and tactile game buttons replace the former card interface. Start, pause, victory, defeat, controls, sound and fullscreen screens share the same illustrated style. Arrow keys browse menus; Enter chooses; H opens controls; F toggles fullscreen. Starting or resuming requests fullscreen when supported. Gameplay stays free of interface overlays.
+Original hand-inked giraffe illustrations, a chunky title crest, ragged parchment, wooden foe selector, red cloth banners, hard shadows, and tactile game buttons replace the former card interface. Start, pause, victory, defeat, controls, sound and fullscreen screens share the same illustrated style. Arrow keys browse menus; Enter chooses; H opens controls; F toggles fullscreen. Starting or resuming requests fullscreen when supported. Gameplay keeps a centered cursor and a capture prompt only while mouse capture is released.
 
 Characters and scenery use four-band cel materials, warm flat colors, and dark ink silhouettes. The character outlines follow the actual deformed Blender skin; scenery outlines share geometry and repeated scene pieces are instanced. Outline widths stay legible at different camera distances. The world and menus share the same original cartoon-brawler art direction.
 
@@ -20,30 +20,34 @@ Characters and scenery use four-band cel materials, warm flat colors, and dark i
 | --- | --- |
 | Mouse | Swing and bend your neck independently of the camera |
 | Left click | Headbutt / serve |
-| Right mouse held + move | Orbit the camera without changing neck aim |
-| Alt | Toggle mouse capture / release |
+| Right mouse held + move | Turn the camera horizontally without changing neck aim; height stays locked |
+| Alt | Toggle native mouse capture / release, with a visible centered game cursor |
 | WASD / arrows | Move relative to the camera |
 | Scroll / Q and E | Shorten / extend neck |
 | Right mouse + scroll | Change camera distance |
 | Space / Shift | Jump / dash |
 | R / C | Center neck / reset camera |
-| I J K L | Keyboard camera orbit alternative |
+| J / L | Keyboard camera turn alternative |
 | Esc / P | Pause; P also resumes |
 | M | Toggle audio |
 
-Native pointer lock depends on browser support. Embedded previews may refuse it. In that case Alt toggles a focused mouse fallback: the cursor is hidden over the canvas, keyboard stays in the game, and mouse motion swings the neck while it remains in the preview. Left-drag also swings the neck without capture. Right-drag remains camera-only. Use the launcher to open the game in your desktop browser for native pointer lock.
+Starting, resuming, or pressing Alt requests pointer lock before fullscreen, within the same user gesture. Native capture keeps relative mouse movement inside the game while a drawn cursor stays centered. Escape pauses and releases capture. If an embedded browser rejects capture, the game shows a retry prompt and leaves the real pointer visible; it never claims a fake lock. Left-drag remains available. Open the game in Chrome or Edge for native capture.
+
+Camera height stays fixed at 6.8 units with a 65° field of view. Jumping, mouse pitch, and impacts cannot move it vertically. Horizontal turning and distance adjustment remain available.
 
 Touch stays free of on-screen buttons: left drag moves, right drag swings the neck, tap bonks, two fingers jump, three fingers pause.
 
 ## Physics and play
 
-Nine physical neck joints use damped springs, inertia, and iterative distance constraints. The human neck has low damping, visible overshoot, whip momentum, and contact recoil. The head collides with the ball using the contact normal and relative velocity. Flicking your mouse transfers momentum through the neck; headbutting adds a physical lunge. Camera orbit is independent of all neck controls. There is no target-based shot steering.
+Nine physical neck joints use damped springs, inertia, and iterative distance constraints. The human neck has low damping, visible overshoot, whip momentum, and contact recoil. Head contacts use relative velocity with a padded, softer response and an 11.5 units/second outgoing speed cap. Human contact radius gains .25 units, or .35 during a swing. Forward and top contacts get moderate court-direction assistance and a lifted return arc; backward hits retain their direction. Mouse and headbutts still control the physical neck independently of camera turning.
+
+Ball gravity is 12 rather than 18, and serves travel horizontally at 6.4 rather than 8.5 units/second. Test strikes reduced horizontal return speed by approximately 63% for an ordinary swing and 82% for an extreme whip. Player jump gravity is unchanged.
 
 Physics runs at a fixed 120 Hz. Rendering interpolates body, ball, head, and neck poses between ticks, including on high-refresh displays. Inputs wait for the next physics tick instead of disappearing. Jump, dash, and headbutt also accept a short recovery buffer. Swept head and net contacts catch fast motion between ticks. Visual impact effects never slow movement or physics.
 
 Movement has acceleration, friction, reduced air control, and regenerating dash energy. Dash commits to your movement direction (or neck aim when standing) with an eased boost. Human serves wait for input. Bots predict ball flight, brake into position, cover court lanes, and position their heads to make physical contact. Different bot levels change reaction, movement and error. First to 7, win by 2, cap at 11. Ground contact and out-of-bounds rules apply.
 
-The ball has a highlighted silhouette, world-anchored locator rings visible through the player, a chevron, comet trail, and predicted landing marker. Actual hits produce pooled 3D shock rings, slashes, lightning, sparks, camera impulses, and layered impact sound. Missed swings use a smaller wind-up effect. Dashes, jumps, and points have their own effects. The system respects the operating system's reduced-motion preference for shake and heavy effects.
+The ball has a highlighted silhouette, world-anchored locator rings visible through the player, a chevron, comet trail, and predicted landing marker. Even gentle hits produce clear contact rings and comic callouts such as “GOOD SAVE!” and “VOLLEY 3!” Longer rallies strengthen the ball aura and trail, and return notes rise with the volley count. Four pooled labels reuse prepainted textures. Missed swings use a smaller wind-up effect. Dashes, jumps, and points have their own effects. The system respects the operating system's reduced-motion preference for shake and heavy effects.
 
 ## Blender assets
 
@@ -64,17 +68,17 @@ Runtime armatures follow the nine physical neck points; each leg uses two-bone I
 - `npm test`: ball/head momentum, independent neck input, bounded chain length, overshoot, whip velocity, recoil, serving, buffered abilities, continuous contacts, pause/reset isolation, and identical physics across 30–240 Hz displays.
 - `npm run test:simulation`: 120 complete bot matches across both modes and all difficulties; asserts completion and score validity.
 
-The smooth-motion update was compared against the prior release with the same seeded bot matches. Every match finished and both teams won in each mode/difficulty group:
+The forgiving-ball update was compared against the prior release with the same seeded bot matches. Every match finished and both teams won in each mode/difficulty group:
 
 | Foes | 1v1 hits/point, before → after | 2v2 hits/point, before → after |
 | --- | --- | --- |
-| Chill | 1.70 → 1.92 | 1.88 → 2.21 |
-| Scrappy | 2.54 → 3.04 | 2.55 → 3.07 |
-| Savage | 3.07 → 3.58 | 3.06 → 3.28 |
+| Chill | 1.92 → 4.19 | 2.21 → 4.85 |
+| Scrappy | 3.04 → 4.71 | 3.07 → 5.75 |
+| Savage | 3.58 → 5.26 | 3.28 → 6.21 |
 
-The longest new rally reached 13 hits. Separate regressions check pose interpolation, preserved input edges, pause buffers, audio startup/disposal, bounded VFX resources, and outline geometry integrity.
+The longest new rally reached 25 hits. Separate regressions check contact forgiveness, bounded impact speed, forward-only assistance, pose interpolation, preserved input edges, pause buffers, capture request ordering, audio startup/disposal, bounded VFX resources, and outline geometry integrity.
 
-Production-browser checks confirmed zero gameplay UI, visible full player/neck, independent neck and camera controls, highlighted ball, both modes, pause/rematch flow, and 60 fps on the test machine. The same opening 2v2 view uses 148 render calls versus 562 before; outlined geometry increases rendered triangles from approximately 269k to 495k. These measurements describe this view and machine, not a universal performance guarantee. Alt focus toggling was verified in the embedded browser; native pointer lock remains browser-dependent and has a focus fallback.
+The preceding cel-shading release was measured at 60 fps on the test machine, with 148 render calls versus 562 before batching. The new capture flow has ordering and rejection regression tests. The embedded preview reports “The root document of this element is not valid for pointer lock,” so native capture must be used in a supported desktop browser; no false locked state is displayed.
 
 React + Vite + Three.js. All runtime assets and fonts are local. No online multiplayer, game backend, or remote telemetry. GitHub Pages hosts the static release.
 

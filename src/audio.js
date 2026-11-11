@@ -10,6 +10,7 @@ export class GameAudio {
     this.timer = null;
     this.step = 0;
     this.nextBeat = 0;
+    this._rallyCount = 0;
     this._unlockPromise = null;
     this._disposed = false;
     this._generation = 0;
@@ -88,9 +89,9 @@ export class GameAudio {
     try {
       switch (type.toLowerCase()) {
         case 'jump': case 'boing': this._boing(); break;
-        case 'serve': this._serve(); break;
-        case 'score': case 'point': this._score(); break;
-        case 'win': case 'victory': case 'finish': this._win(); break;
+        case 'serve': this._rallyCount = 0; this._serve(); break;
+        case 'score': case 'point': this._rallyCount = 0; this._score(); break;
+        case 'win': case 'victory': case 'finish': this._rallyCount = 0; this._win(); break;
         case 'menu': case 'click': case 'select': this._menu(); break;
         case 'dash':
           this._noise(.13, .075, 1100);
@@ -99,7 +100,11 @@ export class GameAudio {
         // A swing can miss. Keep its airy anticipation separate from impact bass.
         case 'smash': case 'swing': this._noise(.09, event?.player === 0 ? .045 : .018, 1700); break;
         case 'net': this._tone(180, this.context.currentTime, .21, 'sine', this.master, .065, 65); break;
-        case 'hit': case 'impact': case 'bump': case 'spike': this._impact(event?.power ?? event?.strength); break;
+        case 'hit': case 'impact': case 'bump': case 'spike':
+          this._impact(event?.power ?? event?.strength);
+          this._rallyCount = Number.isFinite(event?.rallyHits) ? Math.max(1, Math.floor(event.rallyHits)) : this._rallyCount + 1;
+          this._rallyNote(this._rallyCount, event?.assisted || event?.softContact);
+          break;
         default: break;
       }
     } catch {
@@ -169,6 +174,14 @@ export class GameAudio {
     this._tone(270, time, .10, 'triangle', this.master, .15 * amount, 75);
     this._tone(85, time, .13, 'sine', this.master, .11 * amount, 38);
     this._noise(.11, .095 * amount, 1200);
+  }
+
+  _rallyNote(count, saved) {
+    const degrees = [0, 2, 4, 5, 7, 9, 11, 12];
+    const note = 65 + degrees[Math.min(degrees.length - 1, Math.max(0, count - 1))];
+    const time = this.context.currentTime + .012;
+    this._tone(this._midi(note), time, saved ? .22 : .17, 'sine', this.master, .095);
+    if (count >= 4) this._tone(this._midi(note - 5), time + .035, .13, 'triangle', this.master, .04);
   }
 
   _noise(duration, volume, cutoff) {

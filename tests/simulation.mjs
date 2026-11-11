@@ -11,7 +11,7 @@ for(const difficulty of ['chill','club','spicy'])for(const mode of ['1v1','2v2']
   assert.equal(g.phase,'finished',`${mode} ${difficulty} game ${k} did not finish`);
   wins[g.score[0]>g.score[1]?0:1]++;rallies+=g.rally;hits+=g.hits;
  }
- const mean=hits/rallies;assert(mean>1.35,`${mode} ${difficulty}: too few returns`);assert(wins[0]>0&&wins[1]>0,`${mode} ${difficulty}: one-sided`);
+ const mean=hits/rallies;assert(mean>3,`${mode} ${difficulty}: too few returns`);assert(mean<15&&max<80,`${mode} ${difficulty}: rallies are too long`);assert(wins[0]>0&&wins[1]>0,`${mode} ${difficulty}: one-sided`);
  console.log(`${difficulty} ${mode} (fixed clock): wins ${wins.join('-')}, ${mean.toFixed(2)} hits/point, longest ${max}, ${rallies} points`);
 }
 

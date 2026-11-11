@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node tests/gameplay.mjs && node tests/motion.mjs && node tests/feedback.mjs && node tests/toon.mjs",
+    "test": "node tests/gameplay.mjs && node tests/motion.mjs && node tests/feedback.mjs && node tests/toon.mjs && node tests/capture.mjs",
     "test:simulation": "node tests/simulation.mjs"
   },
   "dependencies": {

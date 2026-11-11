@@ -19,10 +19,22 @@ assert.equal(effects.cameraImpulse(), 0, 'missed swing must never shake camera')
 
 const game = { phase: 'play', paused: false, hits: 0, rally: 0, players: [], ball: { x: 0, y: 3, z: 0, vx: 5, vy: 2, vz: 0 } };
 effects.update(.4, game);
-effects.impact({ type: 'hit', x: 1, y: 3, z: 0, power: 1, normal: { x: 1, y: 0, z: 0 } });
+effects.impact({ type: 'hit', x: 1, y: 3, z: 0, power: .1, rallyHits: 1, assisted: true });
+assert.equal(effects.cameraImpulse(), 0, 'gentle returns need confirmation, not camera shake');
+assert.equal(visible('Effect_ring'), 2, 'gentle contacts still get clear success rings');
+let callout = root.children.find(object => object.name === 'VolleyComicCallout' && object.visible);
+assert.equal(callout.userData.text, 'GOOD SAVE!');
+assert.equal(callout.material.map.userData.text, 'GOOD SAVE!');
+const saveTexture = callout.material.map;
+effects.update(.8, game);
+effects.impact({ type: 'hit', x: 1, y: 3, z: 0, power: 1, rallyHits: 3, normal: { x: 1, y: 0, z: 0 } });
 assert(effects.cameraImpulse() > 0);
 assert.equal(visible('Effect_spark'), 26);
 assert.equal(visible('Effect_lightning'), 3);
+callout = root.children.find(object => object.name === 'VolleyComicCallout' && object.visible);
+assert.equal(callout.userData.text, 'VOLLEY 3!');
+const volleyTexture = callout.material.map;
+assert.equal(trail.geometry.attributes.color.itemSize, 4, 'the comet trail fades alpha instead of turning black');
 const trailArray = trail.geometry.attributes.position.array;
 for (let i = 0; i < 12; i++) { game.ball.x += .1; effects.update(1 / 60, game); }
 assert(trail.geometry.drawRange.count > 0);
@@ -43,15 +55,29 @@ assert.equal(trail.geometry.drawRange.count, 0, 'same-phase match reset must cle
 for (let i = 0; i < 100; i++) { effects.impact({ type: 'hit', power: 1 }); effects.update(.5, game); }
 assert.deepEqual(root.children, objects);
 assert.deepEqual(root.children.map(object => object.material.uuid), materialIds);
+effects.update(1, game);
+effects.impact({ type: 'hit', rallyHits: 3, power: .1 });
+callout = root.children.find(object => object.name === 'VolleyComicCallout' && object.visible);
+assert.equal(callout.material.map, volleyTexture, 'comic textures must be reused across impacts');
+effects.update(.1, game);
+assert(root.getObjectByName('RallyBallAura_1').visible, 'longer volleys gain a second ball ring');
+game.paused = true; effects.update(.01, game);
+assert.equal(visible('VolleyComicCallout'), 0, 'pause clears stale callouts');
+assert.equal(root.getObjectByName('RallyBallAura_0').visible, false);
+game.paused = false;
 effects.setReducedMotion(true);
 assert.equal(effects.cameraImpulse(), 0);
 assert.equal(trail.geometry.drawRange.count, 0);
 let geometryDisposals = 0;
+let textureDisposals = 0;
+saveTexture.addEventListener('dispose', () => textureDisposals++);
+volleyTexture.addEventListener('dispose', () => textureDisposals++);
 trail.geometry.addEventListener('dispose', () => geometryDisposals++);
 effects.dispose(); effects.dispose();
 assert.equal(scene.children.length, 0);
 assert.equal(geometryDisposals, 1);
-console.log('PASS VFX: missed-swing feedback, actual-contact feedback, pause/point/reset trail isolation, finite reusable trail buffers, bounded GPU resources, reduced motion, idempotent disposal.');
+assert.equal(textureDisposals, 2);
+console.log('PASS VFX: low-power success callouts, escalating volleys, pooled label textures, missed-swing isolation, clean pause/reset trails, bounded GPU resources and disposal.');
 
 class Parameter {
   constructor(value = 0) { this.value = value; }
@@ -97,9 +123,13 @@ try {
   await audio.unlock(); assert.equal(MockContext.contexts.length, 1); assert.equal(intervals.size, 1);
   audio.event({ type: 'smash', player: 0 });
   assert.equal(context.nodes.filter(node => node.kind === 'oscillator').length, 0, 'empty swing must not play impact bass');
-  audio.event({ type: 'hit', power: 1 }); audio.event({ type: 'hit', power: .7 });
+  audio.event({ type: 'hit', power: .1, rallyHits: 1, assisted: true });
+  const firstNote = context.nodes.filter(node => node.kind === 'oscillator').at(-1).frequency.value;
+  audio.event({ type: 'hit', power: .3, rallyHits: 2 });
+  const secondNote = context.nodes.filter(node => node.kind === 'oscillator').at(-1).frequency.value;
+  assert(secondNote > firstNote, 'success notes rise with the volley count');
   assert.equal(context.buffers, 2, 'noise buffers must be reused, not generated on every hit');
-  assert.equal(context.nodes.filter(node => node.kind === 'oscillator').length, 4);
+  assert.equal(context.nodes.filter(node => node.kind === 'oscillator').length, 6);
   const voices = context.nodes.filter(node => ['oscillator', 'source'].includes(node.kind));
   for (const voice of voices) voice.finish();
   assert.equal(audio._liveNodes.size, 0);

@@ -1,5 +1,7 @@
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const G = 18;
+export const BALL_GRAVITY = 12;
+export const MAX_BALL_SPEED = 11.5;
+const G = BALL_GRAVITY;
 const BALL_R = .23;
 const HEAD_R = .68;
 const SKILL = {
@@ -27,7 +29,7 @@ export class VolleyballGame {
       this.players.push({ id: team * count + i, team, human: !team && !i, x, z, y: 0, vx: 0, vz: 0, heading: team ? -1 : 1, jump: 0, action: '', energy: 1,
         bodyYaw: yaw, neckPoints: [], head: { x, y: 3.2, z, vx: 0, vy: 0, vz: 0 }, neck: { yaw, pitch: team === 0 && i === 0 ? -.12 : .1, extension: .35 }, swing: 0,
         _jumpV: 0, _jumpBuffer: 0, _dash: 0, _dashCooldown: 0, _dashBuffer: 0, _dashX: 0, _dashZ: 0,
-        _swingTime: 0, _swingCooldown: 0, _swingBuffer: 0, _reaction: 0, _tx: x, _tz: z });
+        _swingTime: 0, _swingCooldown: 0, _swingBuffer: 0, _shotYaw: 0, _reaction: 0, _tx: x, _tz: z });
     }
     for (const p of this.players) this._initNeck(p);
     this.ball = { x: -5, y: 3.2, z: 0, vx: 0, vy: 0, vz: 0, spin: 0 };
@@ -59,7 +61,7 @@ export class VolleyballGame {
     const p = this.players.find(q => q.team === team); const yaw = p.human && team === 0 && !attract ? p.neck.yaw : (team ? Math.PI : 0);
     const pitch = p.human && team === 0 && !attract ? clamp(p.neck.pitch, -.15, .7) : .25;
     Object.assign(this.ball, { x: p.head.x + Math.cos(yaw) * 1.2, y: p.head.y + .3, z: p.head.z + Math.sin(yaw) * 1.2,
-      vx: Math.cos(yaw) * 8.5, vy: 6.4 + pitch * 2, vz: Math.sin(yaw) * 8.5, spin: 0 });
+      vx: Math.cos(yaw) * 6.4, vy: 5.5 + pitch * 1.2, vz: Math.sin(yaw) * 6.4, spin: 0 });
     this.lastTeam = team; this.lastHitter = p.id; this.touchCooldown = .3; this.rallyHits = 0;
     if (!attract) { this.phase = 'play'; this.message = 'PLAY'; this.emit('serve', { team, x: this.ball.x, y: this.ball.y, z: this.ball.z }); }
   }
@@ -71,11 +73,12 @@ export class VolleyballGame {
   }
   _predict(height = 3.2) {
     const b = this.ball, disc = Math.max(0, b.vy*b.vy + 2*G*(b.y-height));
-    const t = clamp((b.vy + Math.sqrt(disc)) / G, .02, 1.35);
+    const t = clamp((b.vy + Math.sqrt(disc)) / G, .02, 1.8);
     return { x: b.x + b.vx*t, z: b.z + b.vz*t, t };
   }
   _swing(p) {
     if (p._swingCooldown > 0) return;
+    if(!p.human||this.phase==='attract')p._shotYaw=(this.random()-.5)*.6;
     p._swingTime = .5; p._swingCooldown = .75; p.action = 'smash';
     this.emit('smash', { player: p.id, team: p.team, x: p.head.x, y: p.head.y, z: p.head.z });
   }
@@ -122,7 +125,7 @@ export class VolleyballGame {
         dx=p._tx-p.x; dz=p._tz-p.z; const len=Math.hypot(dx,dz);
         // Ease into the receive position instead of repeatedly braking at full speed.
         if(len>.08){const arrival=Math.min(1,len/.7);dx=dx/len*arrival;dz=dz/len*arrival;}else{dx=dz=0;}
-        p.neck.yaw = p.team ? Math.PI : 0; p.neck.pitch = -.3; p.neck.extension = 0;
+        p.neck.yaw = (p.team ? Math.PI : 0)+(p._swingTime>0?p._shotYaw:0); p.neck.pitch = -.3; p.neck.extension = 0;
         const d=Math.hypot(b.x-p.head.x,b.z-p.head.z);
         if (this.phase !== 'serve' && this.phase !== 'point' && d < 2.1 && b.y > p.head.y-.5 && b.y < p.head.y+1.6 && b.vy < 2 && p._swingCooldown<=0) this._swing(p);
         if (p.y===0 && d<1.4 && b.y>4.15 && b.y<5.2 && b.vy<0 && this.random()<dt*.9) { p._jumpV=7.8; this.emit('jump',{player:p.id,x:p.x,z:p.z}); }
@@ -205,7 +208,9 @@ export class VolleyballGame {
     const floorTime=b.y<=BALL_R?clamp((oldY-BALL_R)/(oldY-b.y||1e-8),0,1):1;
     if(this.touchCooldown<=0)for(const p of this.players){
       if(p.id===this.lastHitter)continue;
-      const h=p.head, min=BALL_R+HEAD_R;
+      const h=p.head, human=p.human&&this.phase!=='attract';
+      const physicalRadius=BALL_R+HEAD_R, forgiveness=human ? (p._swingTime>0?.35:.25) : 0;
+      const min=physicalRadius+forgiveness;
       // Sweep the ball against the moving head so a fast whip cannot tunnel through it.
       const sx=oldX-(h.x-h.vx*dt),sy=oldY-(h.y-h.vy*dt),sz=oldZ-(h.z-h.vz*dt);
       const ex=b.x-h.x,ey=b.y-h.y,ez=b.z-h.z;
@@ -222,13 +227,33 @@ export class VolleyballGame {
       if(d<.0001)continue;
       const nx=dx/d,ny=dy/d,nz=dz/d, relative=(b.vx-h.vx)*nx+(b.vy-h.vy)*ny+(b.vz-h.vz)*nz;
       if(relative>=0)continue;
-      const impulse=-(1+.95)*relative;
+      // A padded volleyball absorbs most whip speed instead of becoming a cannonball.
+      const paddedRelative=(b.vx-h.vx*.38)*nx+(b.vy-h.vy*.38)*ny+(b.vz-h.vz*.38)*nz;
+      const impulse=Math.max(0,-(1+.42)*paddedRelative);
       b.vx+=impulse*nx;b.vy+=impulse*ny;b.vz+=impulse*nz;
       b.x=h.x+nx*(min+.01);b.y=h.y+ny*(min+.01);b.z=h.z+nz*(min+.01);
+      const forward=p.team?-1:1;
+      const forwardFace=Math.cos(p.neck.yaw)*forward>.15;
+      // Help front/top receives clear the tape. Back-of-head shots retain their direction.
+      const assisted=forwardFace && nx*forward>-.08 && (b.vx*forward>-.7 || ny>.35);
+      if(assisted){
+        const distance=Math.abs(forward*4.8-b.x),flight=1.2+distance*.045;
+        const targetX=(forward*4.8-b.x)/flight;
+        const targetZ=(clamp(b.z+Math.sin(p.neck.yaw)*2,-2.8,2.8)-b.z)/flight;
+        const targetY=(BALL_R-b.y+.5*G*flight*flight)/flight;
+        const correction=human?.55:.2;
+        b.vx+=(targetX-b.vx)*correction;b.vz+=(targetZ-b.vz)*correction;
+        b.vy=Math.max(b.vy,clamp(targetY,5.8,8.4)*(human?1:.83));
+        const airtime=(b.vy+Math.sqrt(b.vy*b.vy+2*G*Math.max(0,b.y-BALL_R)))/G;
+        const minimumForward=(Math.abs(b.x)+1.5)/airtime;
+        b.vx=forward*Math.max(b.vx*forward,Math.min(7,minimumForward));
+      }
+      const speed=Math.hypot(b.vx,b.vy,b.vz);
+      if(speed>MAX_BALL_SPEED){const scale=MAX_BALL_SPEED/speed;b.vx*=scale;b.vy*=scale;b.vz*=scale;}
       b.spin=clamp((h.vz-b.vz)*nx-(h.vx-b.vx)*nz,-15,15);
       this.lastTeam=p.team;this.lastHitter=p.id;this.touchCooldown=.08;this.hits++;this.rallyHits++;
-      const tip=p.neckPoints[8]; tip.vx-=nx*impulse*.16;tip.vy-=ny*impulse*.16;tip.vz-=nz*impulse*.16;
-      this.emit('hit',{player:p.id,team:p.team,x:b.x,y:b.y,z:b.z,power:clamp(impulse/14,0,1),incomingSpeed:-relative,impact:impulse,normal:{x:nx,y:ny,z:nz},velocity:{x:b.vx,y:b.vy,z:b.vz}});break;
+      const tip=p.neckPoints[8],recoil=Math.min(2.5,impulse*.09);tip.vx-=nx*recoil;tip.vy-=ny*recoil;tip.vz-=nz*recoil;
+      this.emit('hit',{player:p.id,team:p.team,x:b.x,y:b.y,z:b.z,power:clamp(.18+impulse/18,0,1),incomingSpeed:-relative,impact:impulse,rallyHits:this.rallyHits,assisted,softContact:d>physicalRadius,outgoingSpeed:Math.hypot(b.vx,b.vy,b.vz),normal:{x:nx,y:ny,z:nz},velocity:{x:b.vx,y:b.vy,z:b.vz}});break;
     }
     if(b.y<=BALL_R){const out=Math.abs(b.x)>9 || Math.abs(b.z)>5;const side=b.x<0?0:1;this._point(out?(this.lastTeam===null?1-side:1-this.lastTeam):1-side,out?'out':'floor');return;}
     if(Math.abs(b.x)>13||Math.abs(b.z)>9||b.y>22){this._point(this.lastTeam===null?0:1-this.lastTeam,'out');}
