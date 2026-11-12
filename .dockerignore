@@ -2,7 +2,8 @@ node_modules
 dist
 .git
 Blender
-public
+public/*
+!public/serverhealth/
 tests
 work
 outputs

@@ -145,3 +145,9 @@ For an idle deployment, run `SMOKE_SERVER_URL=wss://your-host node tests/deploy-
 The E2 cap is now two simultaneous matches (up to eight active players), with sixteen total connections for lobby headroom. Physics remains 120 Hz and snapshots remain 20 Hz. The server serializes each shared snapshot once per court, wakes its fixed-step loop every 8 ms instead of 4 ms, and scans session expiry every 100 ms.
 
 A 180-second on-host test with continuous rematches, eight clients and 30 Hz input achieved 120 Hz physics per court, 20 Hz snapshots per client, 11.39 ms p95 event-loop delay, and zero dropped simulation time. Combined server plus synthetic clients averaged 9.7% of one CPU core and used 92.4 MB RSS; maximum individual server tick was 67.1 ms. This is measured headroom, not a guarantee against shared-host pauses or WAN latency. Do not increase capacity beyond two without another sustained test.
+
+### Server health dashboard
+
+Open `/serverhealth` on the Oracle hostname, or `/neck-and-neck/serverhealth/` on GitHub Pages. It refreshes cached aggregate telemetry every five seconds: active courts, players, queue, connections, host CPU/available RAM, process CPU/RSS, uptime and event-loop delay. It monitors this deployed game service, not other Oracle instances. CPU percentage is sampled usage, not burst-credit balance or guaranteed capacity. Stale and unreachable samples are explicitly marked.
+
+Native deployments must include `server/resource-monitor.mjs` and `public/serverhealth/index.html` along with the game server. `/api/serverhealth` exposes only aggregate operational data; `/health` remains minimal. Cross-origin dashboard reads allow the configured game origin. Local preview: `npm run dev:online`, then `http://127.0.0.1:5173/serverhealth/`.

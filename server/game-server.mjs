@@ -1,4 +1,7 @@
 import http from 'node:http';
+import { readFileSync } from 'node:fs';
+import { createResourceMonitor } from './resource-monitor.mjs';
+const healthPage=readFileSync(new URL('../public/serverhealth/index.html',import.meta.url));
 import { randomBytes, randomUUID, randomInt } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { isIP } from 'node:net';
@@ -28,7 +31,18 @@ export function createGameServer(options={}) {
   const stats={ticks:0,physicsSteps:0,snapshots:0,messages:0,rejected:0,tickMs:0,maxTickMs:0,droppedTimeMs:0};
   let timer=null,heartbeat=null,closing=false,started=false,lastTick=performance.now(),accumulator=0,snapshotElapsed=0,lastHousekeeping=0;
 
+  const resources=createResourceMonitor();
   const server=http.createServer((request,response)=>{
+    const path=request.url?.split('?')[0];
+    if(request.method==='GET'&&(path==='/serverhealth'||path==='/serverhealth/')){
+      response.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-cache','x-content-type-options':'nosniff'});response.end(healthPage);return;
+    }
+    if(request.method==='GET'&&path==='/api/serverhealth'){
+      const headers={'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff','vary':'Origin'};
+      if(origins.has(request.headers.origin)||(!config.production&&/^http:\/\/(localhost|127\.0\.0\.1)(?::\d+)?$/.test(request.headers.origin||'')))headers['access-control-allow-origin']=request.headers.origin;
+      response.writeHead(200,headers);
+      response.end(JSON.stringify({ok:!closing,servers:[{name:'Neck & Neck game server',status:closing?'stopping':'running',matches:matches.size,rooms:rooms.size,connections:connections.size,activePlayers:[...matches.values()].reduce((n,m)=>n+m.members.filter(s=>s.ws).length,0),queued:queues.reduce((n,g)=>n+g.members.length,0),maxMatches:config.maxRooms,maxConnections:config.maxConnections,physicsTargetHz:TICK_RATE,snapshotTargetHz:SNAPSHOT_RATE,resources:resources.read()}]}));return;
+    }
     if(request.method==='GET'&&request.url==='/health'){
       response.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});
       response.end(JSON.stringify({ok:!closing,protocol:PROTOCOL_VERSION,rooms:rooms.size,matches:matches.size,connections:connections.size}));
@@ -285,6 +299,6 @@ export function createGameServer(options={}) {
     async start(){if(started)return this.address();started=true;await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(config.port,config.host,()=>{server.off('error',reject);resolve();});});lastTick=performance.now();timer=setInterval(tick,8);heartbeat=setInterval(()=>{for(const ws of connections){if(!ws.session&&Date.now()-ws.connectedAt>config.helloTimeoutMs){ws.close(1008,'Hello timeout');continue;}if(!ws.alive){ws.terminate();continue;}ws.alive=false;ws.ping();}},Math.min(config.heartbeatMs,config.helloTimeoutMs));return this.address();},
     address(){const address=server.address();return typeof address==='object'&&address?{host:address.address,port:address.port,url:`ws://${address.family==='IPv6'?'['+address.address+']':address.address}:${address.port}`} :null;},
     metrics(){return{...stats,averageTickMs:stats.ticks?stats.tickMs/stats.ticks:0,rooms:rooms.size,matches:matches.size,sessions:sessions.size,connections:connections.size,queued:queues.reduce((n,g)=>n+g.members.length,0)};},
-    async close(){closing=true;clearInterval(timer);clearInterval(heartbeat);for(const ws of connections)ws.terminate();await new Promise(resolve=>wss.close(resolve));if(server.listening)await new Promise(resolve=>server.close(resolve));sessions.clear();rooms.clear();matches.clear();queues.length=0;},
+    async close(){closing=true;resources.close();clearInterval(timer);clearInterval(heartbeat);for(const ws of connections)ws.terminate();await new Promise(resolve=>wss.close(resolve));if(server.listening)await new Promise(resolve=>server.close(resolve));sessions.clear();rooms.clear();matches.clear();queues.length=0;},
   };
 }

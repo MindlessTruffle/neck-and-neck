@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>Server health · Neck & Neck</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101b20;color:#e5eee9;font:15px/1.5 system-ui,sans-serif}main{max-width:1000px;margin:auto;padding:48px 24px}a{color:#92e6bc;text-decoration:none}header{display:flex;justify-content:space-between;gap:24px;align-items:center;border-bottom:1px solid #34504b;padding-bottom:24px}h1{font-size:clamp(30px,6vw,48px);letter-spacing:-2px;line-height:1.1;margin:12px 0}h2{font-size:22px;margin:0}small,.muted{color:#9fb8af}#connection{display:inline-flex;gap:8px;align-items:center;font-size:13px}#connection:before{content:'';width:8px;height:8px;border-radius:50%;background:#f3c270}#connection[data-live=true]:before{background:#8fe6b9}.summary{display:flex;flex-wrap:wrap;gap:36px;margin:28px 0}.summary b{font-size:32px;display:block;line-height:1.2}.summary span{color:#9fb8af;font-size:12px}section{border:1px solid #34504b;border-radius:14px;padding:24px;margin:22px 0}.server-head{display:flex;gap:12px;justify-content:space-between;align-items:center}.badge{border:1px solid #54816b;color:#98e9bf;padding:4px 10px;border-radius:20px;font-size:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:28px}.metric label{display:flex;justify-content:space-between;gap:12px;font-size:13px}.metric b{font-variant-numeric:tabular-nums}.bar{height:6px;border-radius:8px;overflow:hidden;background:#2b403e;margin:10px 0 6px}.bar i{display:block;height:100%;background:#8fe6b9;width:0;transition:width .4s}.metric small{font-size:11px}.facts{display:flex;flex-wrap:wrap;gap:20px;border-top:1px solid #34504b;margin-top:28px;padding-top:18px;font-size:12px}.note{max-width:720px;font-size:12px;color:#9fb8af}button{color:#e5eee9;background:transparent;border:1px solid #54816b;padding:10px 16px;border-radius:8px;cursor:pointer}#error{color:#ffca9e}footer{display:flex;justify-content:space-between;gap:15px;font-size:12px;color:#9fb8af}@media(max-width:600px){main{padding:24px 16px}.grid{grid-template-columns:1fr;gap:22px}section{padding:20px}header{align-items:flex-start}.server-head{align-items:flex-start;flex-direction:column}.summary{gap:24px}h2{font-size:19px}footer{flex-direction:column}}
+</style></head><body><main>
+<header><div><a href="https://mindlesstruffle.github.io/neck-and-neck/">↖ Back to the clouds</a><h1>Server health</h1><div id="connection" role="status">Connecting to live telemetry</div></div><button id="refresh">Refresh</button></header>
+<p id="error" role="alert" hidden></p>
+<div class="summary"><div><b id="servers">—</b><span>RUNNING SERVERS</span></div><div><b id="matches">—</b><span>ACTIVE MATCHES</span></div><div><b id="players">—</b><span>PLAYERS ON COURT</span></div><div><b id="queued">—</b><span>IN QUEUE</span></div></div>
+<section><div class="server-head"><div><small id="host-label">GAME HOST</small><h2>Neck & Neck</h2></div><span id="state" class="badge">Waiting for sample</span></div>
+<div class="grid">
+<div class="metric"><label>Host CPU <b id="host-cpu">—</b></label><div class="bar"><i id="host-cpu-bar"></i></div><small>Usage across exposed host vCPUs; not Oracle burst-credit balance.</small></div>
+<div class="metric"><label>Game process CPU <b id="game-cpu">—</b></label><div class="bar"><i id="game-cpu-bar"></i></div><small>Percent of one CPU core, sampled every 2 seconds.</small></div>
+<div class="metric"><label>Host RAM occupied <b id="host-ram">—</b></label><div class="bar"><i id="host-ram-bar"></i></div><small id="host-ram-note">Uses available memory, allowing for reclaimable cache.</small></div>
+<div class="metric"><label>Game process RAM <b id="game-ram">—</b></label><div class="bar"><i id="game-ram-bar"></i></div><small>Resident memory as a share of host RAM.</small></div>
+</div><div class="facts"><span id="capacity">Courts —</span><span id="connections">Connections —</span><span id="uptime">Uptime —</span><span id="loop">Event loop p95 —</span></div></section>
+<p class="note">One deployed game server can run multiple courts. Numbers describe this host, not an inventory of your Oracle account. CPU and RAM include other host services where indicated. Refresh pauses while this tab is hidden. Unreachable samples are marked stale.</p>
+<footer><span id="updated">No sample yet</span><span>Updates every 5 seconds · aggregate telemetry only</span></footer>
+<script>
+const $=id=>document.getElementById(id);
+const local=['localhost','127.0.0.1'].includes(location.hostname);
+const endpoint=local?(location.port==='5173'||location.port==='4173'?'http://127.0.0.1:8787/api/serverhealth':'/api/serverhealth'):location.hostname.endsWith('github.io')?'https://neck-club.147.5.119.55.sslip.io/api/serverhealth':'/api/serverhealth';
+const mb=n=>(n/1048576).toFixed(1)+' MB';
+$('host-label').textContent=local?'LOCAL · GAME HOST':'ORACLE · GAME HOST';
+let busy=false,lastSuccess=0;
+function metric(id,value,label){$(id).textContent=label;$(id+'-bar').style.width=Math.max(0,Math.min(100,value||0))+'%';}
+async function refresh(){if(busy||document.hidden)return;busy=true;$('refresh').disabled=true;try{
+const response=await fetch(endpoint,{cache:'no-store',signal:AbortSignal.timeout(5000)});if(!response.ok)throw new Error('Server returned '+response.status);
+const data=await response.json(),s=data.servers?.[0],r=s?.resources;if(!s||!r)throw new Error('Telemetry unavailable');
+const age=r.sampledAt?Date.now()-Date.parse(r.sampledAt):Infinity;if(age>15000)throw new Error('Waiting for a fresh resource sample');
+lastSuccess=Date.now();$('error').hidden=true;$('connection').dataset.live='true';$('connection').textContent='Live · connected';$('state').textContent=s.status;
+$('servers').textContent=data.servers.filter(x=>x.status==='running').length;$('matches').textContent=s.matches+' / '+s.maxMatches;$('players').textContent=s.activePlayers;$('queued').textContent=s.queued;
+metric('host-cpu',r.hostCpuPercent,r.hostCpuPercent+'%');metric('game-cpu',r.processCpuCorePercent,r.processCpuCorePercent+'%');
+const used=r.hostMemoryTotalBytes-r.hostMemoryAvailableBytes;metric('host-ram',used/r.hostMemoryTotalBytes*100,Math.round(used/r.hostMemoryTotalBytes*100)+'%');$('host-ram-note').textContent=mb(used)+' occupied / '+mb(r.hostMemoryTotalBytes)+' total';metric('game-ram',r.processMemoryBytes/r.hostMemoryTotalBytes*100,mb(r.processMemoryBytes));
+$('capacity').textContent='Rooms '+s.rooms+' · courts '+s.matches+'/'+s.maxMatches;$('connections').textContent='Connections '+s.connections+'/'+s.maxConnections;$('uptime').textContent='Uptime '+Math.floor(r.uptimeSeconds/3600)+'h '+Math.floor(r.uptimeSeconds%3600/60)+'m';$('loop').textContent='Event loop p95 '+r.eventLoopP95Ms+' ms';$('updated').textContent='Sampled '+new Date(r.sampledAt).toLocaleTimeString();
+}catch(error){$('connection').dataset.live='false';$('connection').textContent=lastSuccess?'Stale · connection lost':'Server unreachable';$('state').textContent='Unknown';$('error').hidden=false;$('error').textContent=error.message+'. Last values are not live. Retry shortly.';}finally{busy=false;$('refresh').disabled=false;}}
+$('refresh').onclick=refresh;document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});refresh();setInterval(refresh,5000);
+</script></main></body></html>

@@ -4,6 +4,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY src/physics.js src/net-protocol.js ./src/
 COPY server/ ./server/
+COPY public/serverhealth/ ./public/serverhealth/
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=8787
 USER node
 EXPOSE 8787

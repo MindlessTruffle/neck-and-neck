@@ -34,3 +34,43 @@
 .power-track em{left:75%;width:14%}
 .footwork-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;padding:10px 0;margin:0 0 8px;border:0;border-top:1px solid #68828a55;background:none;font-size:9px;font-weight:800;letter-spacing:.6px}.footwork-toggle small{display:block;color:#bbcccf;font-size:9px;font-weight:400;letter-spacing:0;margin-top:3px}.footwork-toggle b{color:#77ecc1;border:1px solid #4e847a;border-radius:3px;padding:4px 7px}.footwork-toggle[aria-pressed=false] b{color:#ced1cd;border-color:#627579}
 @media(min-width:701px) and (min-height:541px) and (max-height:740px){.menu-panel{padding-block:14px}.formation,.foes{margin-bottom:10px}.menu-links{margin:10px 0 5px}.footwork-toggle{padding-block:7px;margin-bottom:5px}.menu-intro{margin-bottom:10px}.round-feature{padding-bottom:7px}}
+
+/* Compact touch layout: fixed thumb targets, never scaled desktop cards. */
+.touch-action-icon{display:none}
+.match-ui[data-touch=true] .match-top{top:max(6px,env(safe-area-inset-top));gap:0}
+.match-ui[data-touch=true] .scoreboard-ui{background:none;border:0;box-shadow:none;overflow:visible;margin:0;max-width:calc(100% - 100px);text-shadow:0 1px 3px #102129,0 0 6px #102129}
+.match-ui[data-touch=true] .scoreboard-ui>b{font-size:26px;padding:0 8px}
+.match-ui[data-touch=true] .team-name{font-size:8px;padding:0 5px;letter-spacing:.4px}
+.match-ui[data-touch=true] .round-pill{padding:0 4px}
+.match-ui[data-touch=true] .round-pill>span{font-size:12px}
+.match-ui[data-touch=true] .round-pill small{display:none}
+.match-ui[data-touch=true] .rally-info{font-size:9px;margin-top:3px;gap:6px;letter-spacing:.3px}
+.match-ui[data-touch=true] .pause-game{width:44px;height:44px;top:-5px;background:none;border:0;box-shadow:none;text-shadow:0 1px 4px #102129;right:max(4px,env(safe-area-inset-right))}
+.match-ui[data-touch=true] .action-deck{width:180px;height:174px;display:block;right:max(12px,env(safe-area-inset-right));bottom:max(14px,calc(env(safe-area-inset-bottom) + 8px));left:auto;transform:none;pointer-events:none}
+.match-ui[data-touch=true] .action-buttons,.match-ui[data-touch=true] .movement-actions{display:contents}
+.match-ui[data-touch=true] .action-button,.match-ui[data-touch=true] .movement-actions button,.match-ui[data-touch=true] .ability-button{position:absolute;width:48px;height:48px;min-height:0;padding:0;border-radius:50%;border:1.5px solid #ffffffa8;background:#162f3b66;box-shadow:0 1px 5px #071d3344;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;touch-action:none;pointer-events:auto;text-shadow:0 1px 2px #102129;backdrop-filter:none}
+.match-ui[data-touch=true] .action-button:active,.match-ui[data-touch=true] .movement-actions button:active,.match-ui[data-touch=true] .ability-button:active{background:#ffffff66;transform:scale(.94)}
+.match-ui[data-touch=true] .action-button strong{font:700 9px/1.2 Outfit,sans-serif;letter-spacing:.2px}
+.match-ui[data-touch=true] .touch-action-icon{display:block;font:24px/1 sans-serif}
+.match-ui[data-touch=true] .action-swing{width:66px;height:66px;right:0;bottom:17px;background:#7ce1bd55;border:2px solid #b2ffe4}
+.match-ui[data-touch=true] .action-swing .touch-action-icon{font-size:29px}
+.match-ui[data-touch=true] .action-set{right:71px;bottom:55px}
+.match-ui[data-touch=true] .action-jumpSet{right:58px;bottom:111px}
+.match-ui[data-touch=true] .action-dive{right:118px;bottom:20px}
+.match-ui[data-touch=true] .movement-actions button{font:700 9px/1 Outfit,sans-serif}
+.match-ui[data-touch=true] .movement-actions button:first-child{right:0;bottom:95px}
+.match-ui[data-touch=true] .movement-actions button:last-child{right:114px;bottom:76px}
+.match-ui[data-touch=true] .ability-button{right:4px;bottom:151px;width:44px;height:44px;border-color:var(--ability-color);color:var(--ability-color)}
+.match-ui[data-touch=true] .ability-button div,.match-ui[data-touch=true] .ability-key{display:none}
+.match-ui[data-touch=true] .ability-symbol{display:block;margin:0;font-size:25px}
+.match-ui[data-touch=true] .energy-track{left:auto;right:4px;width:60px;bottom:4px;height:3px;background:#ffffff33}
+.match-ui[data-touch=true] .touch-stick{left:max(18px,env(safe-area-inset-left));bottom:max(25px,calc(env(safe-area-inset-bottom) + 14px));width:96px;height:96px;border:1.5px solid #ffffff66;background:#16314422}
+.match-ui[data-touch=true] .touch-stick>span{width:40px;height:40px;margin:-20px;background:#ffffff55;border:1.5px solid #ffffffaa}
+.match-ui[data-touch=true] .touch-stick>small,.match-ui[data-touch=true] .look-hint{display:none}
+.match-ui[data-touch=true] .serve-meter{top:65px;width:135px;padding:0;background:none;border:0;text-shadow:0 1px 3px #102129}
+.match-ui[data-touch=true] .serve-meter>div:first-child{font-size:9px}
+.match-ui[data-touch=true] .power-track{height:5px;margin-top:4px}
+.match-ui[data-touch=true] .serve-meter small{font-size:8px;margin-top:4px}
+.match-ui[data-touch=true] .ability-reveal{top:100px;background:none;box-shadow:none;border:0;padding:0;text-shadow:0 1px 4px #102129}
+@media(max-width:360px){.match-ui[data-touch=true] .team-name{display:none}.match-ui[data-touch=true] .touch-stick{left:12px;width:82px;height:82px}.match-ui[data-touch=true] .action-deck{right:8px}}
+@media(max-height:400px){.match-ui[data-touch=true] .action-deck{bottom:max(8px,env(safe-area-inset-bottom))}.match-ui[data-touch=true] .ability-button{right:117px;bottom:130px}}
