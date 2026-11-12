@@ -26,7 +26,7 @@ export function createGameServer(options={}) {
   for(const key of ['maxRooms','maxConnections','maxConnectionsPerIP','maxSessions'])if(!Number.isInteger(config[key])||config[key]<1)throw new Error(`Invalid ${key}`);
   const sessions=new Map(),rooms=new Map(),matches=new Map(),connections=new Set(),queues=[];
   const stats={ticks:0,physicsSteps:0,snapshots:0,messages:0,rejected:0,tickMs:0,maxTickMs:0,droppedTimeMs:0};
-  let timer=null,heartbeat=null,closing=false,started=false,lastTick=performance.now(),accumulator=0,snapshotElapsed=0;
+  let timer=null,heartbeat=null,closing=false,started=false,lastTick=performance.now(),accumulator=0,snapshotElapsed=0,lastHousekeeping=0;
 
   const server=http.createServer((request,response)=>{
     if(request.method==='GET'&&request.url==='/health'){
@@ -67,8 +67,11 @@ export function createGameServer(options={}) {
   function defaultControls(player) {return{x:0,z:0,aimYaw:player.aimYaw,neckYaw:player.neck.yaw,neckPitch:player.neck.pitch,extension:player.neck.extension};}
   function matchNotice(match,s) {return{type:'match',matchId:match.id,playerId:s.playerId,team:s.team,localTeam:s.team,mode:match.game.mode,roomCode:match.room.code};}
   function publishSnapshot(match,one=null) {
-    const state=snapshotState(match.game),seq=++match.snapshotSeq,time=Date.now();stats.snapshots++;
-    for(const s of one?[one]:match.members)tell(s,{type:'snapshot',matchId:match.id,seq,time,ack:s.ack,state});
+    // The large render state is identical for every player. Encode it once;
+    // only the acknowledgement differs. Keep the existing JSON wire format.
+    const state=JSON.stringify(snapshotState(match.game)),seq=++match.snapshotSeq,time=Date.now();stats.snapshots++;
+    const prefix=JSON.stringify({type:'snapshot',matchId:match.id,seq,time}).slice(0,-1);
+    for(const s of one?[one]:match.members)send(s.ws,`${prefix},"ack":${s.ack},"state":${state}}`);
   }
   function flushEvents(match) {
     if(!match.events.length)return;
@@ -259,7 +262,8 @@ export function createGameServer(options={}) {
   function tick() {
     if(closing)return;const before=performance.now(),now=Date.now(),elapsed=(before-lastTick)/1000;lastTick=before;
     stats.droppedTimeMs+=Math.max(0,elapsed-.1)*1000;accumulator+=Math.min(.1,Math.max(0,elapsed));snapshotElapsed+=Math.min(.1,elapsed);
-    housekeeping(now);
+    // Session expiry needs a 100 ms cadence, not a scan on every physics tick.
+    if(now-lastHousekeeping>=100){housekeeping(now);lastHousekeeping=now;}
     while(accumulator>=STEP){
       for(const match of matches.values()){
         const inputs={};for(const s of match.members){
@@ -278,7 +282,7 @@ export function createGameServer(options={}) {
   }
   return {
     server,
-    async start(){if(started)return this.address();started=true;await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(config.port,config.host,()=>{server.off('error',reject);resolve();});});lastTick=performance.now();timer=setInterval(tick,4);heartbeat=setInterval(()=>{for(const ws of connections){if(!ws.session&&Date.now()-ws.connectedAt>config.helloTimeoutMs){ws.close(1008,'Hello timeout');continue;}if(!ws.alive){ws.terminate();continue;}ws.alive=false;ws.ping();}},Math.min(config.heartbeatMs,config.helloTimeoutMs));return this.address();},
+    async start(){if(started)return this.address();started=true;await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(config.port,config.host,()=>{server.off('error',reject);resolve();});});lastTick=performance.now();timer=setInterval(tick,8);heartbeat=setInterval(()=>{for(const ws of connections){if(!ws.session&&Date.now()-ws.connectedAt>config.helloTimeoutMs){ws.close(1008,'Hello timeout');continue;}if(!ws.alive){ws.terminate();continue;}ws.alive=false;ws.ping();}},Math.min(config.heartbeatMs,config.helloTimeoutMs));return this.address();},
     address(){const address=server.address();return typeof address==='object'&&address?{host:address.address,port:address.port,url:`ws://${address.family==='IPv6'?'['+address.address+']':address.address}:${address.port}`} :null;},
     metrics(){return{...stats,averageTickMs:stats.ticks?stats.tickMs/stats.ticks:0,rooms:rooms.size,matches:matches.size,sessions:sessions.size,connections:connections.size,queued:queues.reduce((n,g)=>n+g.members.length,0)};},
     async close(){closing=true;clearInterval(timer);clearInterval(heartbeat);for(const ws of connections)ws.terminate();await new Promise(resolve=>wss.close(resolve));if(server.listening)await new Promise(resolve=>server.close(resolve));sessions.clear();rooms.clear();matches.clear();queues.length=0;},

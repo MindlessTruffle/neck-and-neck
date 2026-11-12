@@ -48,8 +48,19 @@ try {
   await sleep(3500);
   console.log(`PASS public TLS queue ${mode}`);
  }
+ if(process.env.SMOKE_TWO_COURTS==='1') {
+  for(let i=4;i<8;i++)peers.push(await connect(process.env.SMOKE_SERVER_URL,{name:`Deploy check ${i}`,origin:'https://mindlesstruffle.github.io'}));
+  for(const p of peers)p.messages=[];
+  const matches=await Promise.all([privateMatch(peers.slice(0,4),'2v2'),privateMatch(peers.slice(4),'2v2')]);
+  assert.notEqual(matches[0][0].matchId,matches[1][0].matchId);
+  const counts=peers.map(()=>0),listeners=peers.map((p,i)=>data=>{const m=JSON.parse(data);if(m.type==='snapshot'){allFinite(m.state);counts[i]++;}});
+  peers.forEach((p,i)=>p.ws.on('message',listeners[i]));
+  await sleep(5000);
+  peers.forEach((p,i)=>p.ws.off('message',listeners[i]));
+  assert.ok(counts.every(n=>n>=80),'both public courts must deliver at least 16 snapshots/sec');
+  for(const p of peers)p.send('room.leave');
+  await Promise.all(peers.map(p=>p.next('room',m=>m.room===null)));
+  await sleep(3500);
+  console.log('PASS two simultaneous public 2v2 courts:',counts.map(n=>n/5),'snapshots/sec');
+ }
 } finally { for(const p of peers)p.close(); }
-
-
-
-

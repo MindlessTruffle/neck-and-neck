@@ -62,6 +62,7 @@ try {
   const matches=await privateMatch(group,'2v2');assert.deepEqual(matches.map(m=>m.playerId),[0,1,2,3]);
   const doubles=await group[0].next('snapshot');assert.equal(doubles.state.players.length,4);assert.ok(doubles.state.players.every(p=>p.human));assert.equal(doubles.state.players[0].ability.id,'spring');assert.equal(doubles.state.players[0].skin.body,'#abcdef');assert.equal(doubles.state.players[0].name,'Captain');
   group[3].send('input',{seq:1,controls:{x:-1,jump:true}});const remote=await group[3].next('snapshot',m=>m.ack===1);assert.ok(remote.state.players[3]._jumpV>0);assert.equal(remote.state.players[0]._jumpV,0);
+  const shared=await group[0].next('snapshot',m=>m.seq===remote.seq);assert.deepEqual(shared.state,remote.state);assert.equal(shared.ack,-1,'shared snapshots retain each player acknowledgement');assert.equal(remote.ack,1);
   group[0].send('room.leave');await group[1].next('match.end',()=>true,4000);for(const p of group){p.send('room.leave');await p.next('room',m=>m.room===null);}
   console.log('PASS server: four real human slots, loadout/profile transfer, isolated remote actions and host leave forfeit.');
 

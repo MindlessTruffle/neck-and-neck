@@ -91,7 +91,7 @@ For a baked-in default address, add a GitHub repository **Actions variable** nam
 
 ### Temporary E2.1.Micro profile
 
-For a 1 GB Oracle E2.1.Micro, append `-f deploy/compose.micro.yaml` to every Compose command after the base file. This limits the server to one court and eight connections, caps the Node heap at 192 MB, and reduces container memory limits. It does not establish that the shared CPU can sustain play; run a one-court load test on the VM before opening queues. E2 uses an x86 image. Oracle Linux uses the `opc` SSH user and its own package manager; the Ubuntu installation commands above do not apply to it.
+For a 1 GB Oracle E2.1.Micro, append `-f deploy/compose.micro.yaml` to every Compose command after the base file. This limits the server to two courts and sixteen connections, caps the Node heap at 192 MB, and reduces container memory limits. It does not establish that the shared CPU can sustain play; run a one-court load test on the VM before opening queues. E2 uses an x86 image. Oracle Linux uses the `opc` SSH user and its own package manager; the Ubuntu installation commands above do not apply to it.
 
 ```sh
 sudo docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.micro.yaml up -d --build
@@ -132,10 +132,16 @@ Provisioning handoff: once your VM exists, have its public IP, chosen DNS hostna
 
 The live client defaults to `wss://neck-club.147.5.119.55.sslip.io` through the repository Actions variable `VITE_SERVER_URL`. HTTPS `/health` exposes minimal status. The game itself is served by GitHub Pages.
 
-This Oracle Linux E2 VM uses native systemd services, not Docker: `neck-club` runs Node 24 from `/opt/neck-node/bin/node` with application files in `/opt/neck-club`; `caddy` provides automatic HTTPS. Both start on boot. The game binds only to `127.0.0.1:8787`, allows the Pages origin, and caps capacity at one court/eight connections with a 128 MB Node heap. Caddy configuration lives at `/etc/caddy/Caddyfile`. SSH is restricted to the administrator IP in both Oracle and firewalld; update both if that IP changes. Private keys remain outside this repository.
+This Oracle Linux E2 VM uses native systemd services, not Docker: `neck-club` runs Node 24 from `/opt/neck-node/bin/node` with application files in `/opt/neck-club`; `caddy` provides automatic HTTPS. Both start on boot. The game binds only to `127.0.0.1:8787`, allows the Pages origin, and caps capacity at two courts/sixteen connections with a 128 MB Node heap. Caddy configuration lives at `/etc/caddy/Caddyfile`. SSH is restricted to the administrator IP in both Oracle and firewalld; update both if that IP changes. Private keys remain outside this repository.
 
 Check services with `sudo systemctl status neck-club caddy`; inspect logs with `sudo journalctl -u neck-club -u caddy --since '10 minutes ago'`. Restarting `neck-club` ends matches. Copy reviewed server/physics/protocol updates to `/opt/neck-club` before restarting. Do not use Docker commands above on this native deployment.
 
-Validation: four-player host test sustained approximately 120 Hz physics and 20 Hz snapshots for 20 seconds; public TLS checks passed private 1v1/2v2 and both queues. These short tests do not guarantee sustained performance on shared E2 CPU. Keep one court until longer real-player sessions justify more.
+Validation: four-player host test sustained approximately 120 Hz physics and 20 Hz snapshots for 20 seconds; public TLS checks passed private 1v1/2v2 and both queues. These short tests do not guarantee sustained performance on shared E2 CPU. Keep the current measured cap until longer real-player sessions justify more.
 
-For an idle deployment, run `SMOKE_SERVER_URL=wss://your-host node tests/deploy-smoke.mjs`. It creates test rooms and matches, then leaves them. Never run against a busy one-court server.
+For an idle deployment, run `SMOKE_SERVER_URL=wss://your-host node tests/deploy-smoke.mjs`. It creates test rooms and matches, then leaves them. Never run against a busy server. Set `SMOKE_TWO_COURTS=1` to also test eight clients across two concurrent 2v2 matches.
+
+### Two-court optimization validation
+
+The E2 cap is now two simultaneous matches (up to eight active players), with sixteen total connections for lobby headroom. Physics remains 120 Hz and snapshots remain 20 Hz. The server serializes each shared snapshot once per court, wakes its fixed-step loop every 8 ms instead of 4 ms, and scans session expiry every 100 ms.
+
+A 180-second on-host test with continuous rematches, eight clients and 30 Hz input achieved 120 Hz physics per court, 20 Hz snapshots per client, 11.39 ms p95 event-loop delay, and zero dropped simulation time. Combined server plus synthetic clients averaged 9.7% of one CPU core and used 92.4 MB RSS; maximum individual server tick was 67.1 ms. This is measured headroom, not a guarantee against shared-host pauses or WAN latency. Do not increase capacity beyond two without another sustained test.
