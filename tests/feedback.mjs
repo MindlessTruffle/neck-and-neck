@@ -87,6 +87,18 @@ for (const [ability, label] of [['feather', 'FEATHER FLOAT!'], ['spring', 'SPRIN
   effects.update(2, game);
 }
 assert.deepEqual(root.children, objects, 'new actions and all random kits must reuse the same pools');
+effects.setReducedMotion(false);
+game.phase = 'point'; effects.impact({ type: 'score', team: 0 });
+const debris = root.getObjectByName('ScoreExplosionDebris'), debrisArray = debris.instanceMatrix.array;
+assert(debris.isInstancedMesh); assert.equal(debris.count, 58); assert(debris.visible);
+effects.update(.3, game);
+assert([...debrisArray].every(Number.isFinite));
+effects.impact({ type: 'win', team: 0 }); assert.equal(debris.count, 88);
+assert.equal(debris.instanceMatrix.array, debrisArray, 'score explosion never recreates instance storage');
+game.paused = true; effects.update(.01, game); assert.equal(debris.visible, false);
+game.paused = false; effects.setReducedMotion(true); effects.impact({ type: 'score' }); assert.equal(debris.count, 8);
+const mobileScene = new THREE.Scene(), mobileEffects = createVFX(mobileScene, { mobile: true });
+mobileEffects.impact({ type: 'win' }); assert.equal(mobileScene.getObjectByName('ScoreExplosionDebris').count, 36); mobileEffects.dispose();
 let geometryDisposals = 0;
 let textureDisposals = 0;
 saveTexture.addEventListener('dispose', () => textureDisposals++);
@@ -119,6 +131,7 @@ class Parameter {
   linearRampToValueAtTime(value) { this.value = value; }
   exponentialRampToValueAtTime(value) { this.value = value; }
   setTargetAtTime(value) { this.value = value; }
+  cancelScheduledValues() {}
 }
 class AudioNode {
   constructor(kind) { this.kind = kind; this.gain = new Parameter(); this.frequency = new Parameter(); this.playbackRate = new Parameter(1); this.disconnected = 0; this.stopped = false; this.onended = null; }
@@ -169,6 +182,8 @@ try {
   for (const voice of voices) voice.finish();
   assert.equal(audio._liveNodes.size, 0);
   assert(voices.every(node => node.disconnected === 1));
+  for (let i = 0; i < 300; i++) audio.event({ type: 'hit', power: 1, rallyHits: i + 1 });
+  assert(audio._liveNodes.size <= 64, 'procedural feedback has a strict node ceiling even during a large event burst');
   audio.dispose(); assert.equal(intervals.size, 0); assert(context.closed > 0);
   assert.equal(await audio.unlock(), false); assert.equal(MockContext.contexts.length, 1);
 
@@ -191,12 +206,12 @@ try {
   const requests = [];
   const fakeFetch = async (url, { signal }) => {
     requests.push({ url, signal });
-    return { ok: true, arrayBuffer: async () => new Uint8Array([url.includes('adventure') ? 1 : 0]).buffer };
+    return { ok: true, arrayBuffer: async () => new Uint8Array([url.includes('music-') || url.includes('adventure') ? 1 : 0]).buffer };
   };
   const stockAudio = new GameAudio({ fetcher: fakeFetch, resolveAsset: path => path });
   const stockUnlocked = stockAudio.unlock(), stockContext = MockContext.contexts.at(-1);
   stockContext.resolveResume(); await stockUnlocked; await stockAudio._assetsReady;
-  assert.equal(requests.length, 9, 'eight WAV samples and one loop load once');
+  assert.equal(requests.length, 13, 'twelve generated samples and one scene loop load once');
   assert.equal(stockAudio._stockMusicSource.loop, true);
   const loop = stockAudio._stockMusicSource;
   assert.equal(loop.buffer.duration, 41.14);
@@ -206,7 +221,18 @@ try {
   stockAudio.setMusic(true); stockAudio.setMuted(true);
   assert.equal(stockAudio.master.gain.value, 0); stockAudio.setMuted(false);
   assert.equal(stockAudio._stockMusicSource, loop);
-  assert.equal(requests.length, 9, 'resuming and toggling music do not refetch assets');
+  assert.equal(requests.length, 13, 'resuming and toggling music do not refetch assets');
+  await stockAudio.setScene('shop');
+  const shopLoop = stockAudio._stockMusicSource;
+  assert.notEqual(shopLoop, loop); assert(loop.stopped, 'previous music fades and receives a bounded stop');
+  assert.equal(stockAudio._musicVoice.scene, 'shop');
+  await stockAudio.setScene('abilities'); await stockAudio.setScene('match'); await stockAudio.setScene('results');
+  assert.equal(stockAudio._musicVoice.scene, 'results');
+  assert.equal(stockAudio.musicStatus, 'ready');
+  const loadedScenes = requests.length;
+  await stockAudio.setScene('shop');
+  assert.equal(requests.length, loadedScenes, 'returning to a scene reuses decoded music');
+  assert.equal(await stockAudio.setScene('invalid'), false);
   stockAudio.event('menu');
   assert(stockContext.nodes.some(node => node.kind === 'source' && node.buffer === stockAudio._stockBuffers.get('click')));
   stockAudio.event({ type: 'hit', action: 'spike', power: .2, rallyHits: 2 });
@@ -220,9 +246,22 @@ try {
   stockAudio.dispose(); assert(requests.every(request => request.signal.aborted)); assert.equal(intervals.size, 0);
   assert.equal(stockAudio._assetsReady, null, 'dispose releases decoded buffers retained by readiness promises');
 
+  // Fast menu changes may finish downloading out of order. Only the latest wins.
+  const sceneDownloads = [];
+  const switching = new GameAudio({ resolveAsset: path => path, fetcher: (url, options) => url.includes('music-') ? new Promise(resolve => sceneDownloads.push({ url, resolve })) : fakeFetch(url, options) });
+  switching.setMusic(false);
+  const switchUnlock = switching.unlock(), switchContext = MockContext.contexts.at(-1);
+  switchContext.resolveResume(); await switchUnlock; await switching._assetsReady;
+  const oldScene = switching.setScene('shop'), newScene = switching.setScene('abilities');
+  sceneDownloads[1].resolve({ ok: true, arrayBuffer: async () => new Uint8Array([2]).buffer }); await newScene;
+  const activeLoop = switching._stockMusicSource;
+  sceneDownloads[0].resolve({ ok: true, arrayBuffer: async () => new Uint8Array([1]).buffer }); await oldScene;
+  assert.equal(switching._stockMusicSource, activeLoop); assert.equal(switching._musicVoice.scene, 'abilities');
+  switching.dispose(); assert.equal(switching.musicStatus, 'disposed'); assert.equal(intervals.size, 0);
+
   // Unsupported Ogg falls back to the bundled MP3, not a remote request.
   const codecRequests = [];
-  const codecAudio = new GameAudio({ resolveAsset: path => path, fetcher: async url => { codecRequests.push(url); return { ok: true, arrayBuffer: async () => new Uint8Array([url.endsWith('.ogg') ? 255 : url.endsWith('.mp3') ? 1 : 0]).buffer }; } });
+  const codecAudio = new GameAudio({ resolveAsset: path => path, fetcher: async url => { codecRequests.push(url); return { ok: !url.includes('elevenlabs'), arrayBuffer: async () => new Uint8Array([url.endsWith('.ogg') ? 255 : url.endsWith('.mp3') ? 1 : 0]).buffer }; } });
   const codecUnlocked = codecAudio.unlock(), codecContext = MockContext.contexts.at(-1);
   codecContext.resolveResume(); await codecUnlocked; await codecAudio._assetsReady;
   assert(codecRequests.includes('audio/adventure-stage1.mp3'));
@@ -234,7 +273,7 @@ try {
   const lateUnlocked = lateAudio.unlock(), lateContext = MockContext.contexts.at(-1);
   lateContext.resolveResume(); await lateUnlocked;
   const lateReady = lateAudio._assetsReady;
-  assert.equal(pendingDownloads.length, 9); lateAudio.dispose();
+  assert.equal(pendingDownloads.length, 13); lateAudio.dispose();
   for (const download of pendingDownloads) download.resolve({ ok: true, arrayBuffer: async () => new Uint8Array([1]).buffer });
   await lateReady;
   assert(pendingDownloads.every(download => download.options.signal.aborted));
@@ -249,7 +288,7 @@ try {
   decodingContext.decodeAudioData = () => new Promise(resolve => decodeResolvers.push(resolve));
   decodingContext.resolveResume(); await decodingUnlocked;
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(decodeResolvers.length, 9);
+  assert.equal(decodeResolvers.length, 13);
   const decodingReady = decodingAudio._assetsReady; decodingAudio.dispose();
   for (const resolve of decodeResolvers) resolve({ duration: 41.14 });
   await decodingReady;
@@ -284,4 +323,20 @@ for (const name of ['click', 'bump', 'set', 'spike', 'block', 'dive', 'point', '
 assert.equal(fs.readFileSync(new URL('adventure-stage1.ogg', audioFolder)).toString('ascii', 0, 4), 'OggS');
 for (const license of ['Juhani-Junkala-CC0.txt', 'Kenney-Impact-CC0.txt', 'Kenney-Interface-CC0.txt', 'Kenney-Jingles-CC0.txt']) assert(fs.readFileSync(new URL(`licenses/${license}`, audioFolder), 'utf8').includes('CC0'));
 console.log('PASS Bundled audio: eight browser-compatible WAV samples, Ogg/MP3 music, included CC0 license files, total audio under 4 MiB.');
+const generatedFolder = new URL('elevenlabs/', audioFolder), manifest = JSON.parse(fs.readFileSync(new URL('manifest.json', generatedFolder), 'utf8'));
+assert.equal(manifest.length, 17);
+assert.equal(new Set(manifest.map(entry => entry.file)).size, 17);
+assert.equal(manifest.filter(entry => entry.type === 'music').length, 5);
+assert.equal(manifest.filter(entry => entry.type === 'sfx').length, 12);
+let generatedBytes = 0;
+for (const entry of manifest) {
+  assert.equal(entry.provider, 'ElevenLabs');
+  assert(/^(music|sfx)-[a-z]+\.mp3$/.test(entry.file));
+  const bytes = fs.readFileSync(new URL(entry.file, generatedFolder)); generatedBytes += bytes.length;
+  assert.equal(bytes.length, entry.bytes); assert(bytes.length > 8000);
+  assert(bytes.toString('ascii', 0, 3) === 'ID3' || (bytes[0] === 255 && (bytes[1] & 224) === 224), 'valid MP3 container');
+}
+assert(generatedBytes < 3 * 1024 * 1024);
+assert(fs.readFileSync(new URL('../CREDITS.md', import.meta.url), 'utf8').includes('not labelled CC0'));
+console.log('PASS Generated audio: five distinct music scenes, twelve original SFX, authenticated generation manifest, valid local MP3 files under 3 MiB.');
 

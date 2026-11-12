@@ -76,9 +76,9 @@ for(const id of ABILITIES.map(a=>a.id)){
 }
 const narrow=live();hit(narrow.g,narrow.p,1.9);assert.equal(narrow.g.hits,0,'Magnet Head adds meaningful rescue reach');
 const round=live('2v2');const oldIds=round.g.players.map(p=>p.ability.id);round.g._point(0,'test');
-for(let i=0;i<190;i++)round.g.update(tick);
+for(let i=0;i<240;i++)round.g.update(tick);
 assert.equal(round.g.round,2);assert.equal(round.g.serveStage,'ready');
-round.g.players.forEach((p,i)=>{assert.notEqual(p.ability.id,oldIds[i]);assert.equal(p.ability.charges,1);assert.equal(p.ability.active,0);});
+round.g.players.forEach((p,i)=>{assert.equal(p.ability.id,oldIds[i],'equipped powers stay fixed each match');assert.equal(p.ability.charges,1);assert.equal(p.ability.active,0);});
 assert.equal(round.g.players[0].role,'striker');assert.equal(round.g.players[1].role,'receiver');
 
 // High-refresh frame buffering also covers every new action and public UI state.
@@ -89,30 +89,47 @@ for(const input of ['set','jumpSet','dive','ability']){
   assert.equal(motion.renderState.round,1);assert.equal(motion.renderState.players[0].ability.id,'magnet');assert.deepEqual(motion.renderState.touches,[0,0]);
 }
 assert.equal(BALL_RADIUS,.34);assert.equal(BALL_GRAVITY,10.8);
-console.log('PASS mechanics: timed/toss/fallback serves, bump/set/spike/block/dive, solo/team touch rules, every ability and fresh round rolls, role rotation, buffered controls and UI state');
+console.log('PASS mechanics: timed/toss/fallback serves, bump/set/spike/block/dive, solo/team touch rules, equipped power refill, role rotation, buffered controls and UI state');
 
-// Mouse-only footwork approaches a receive, but never chooses an attack for the player.
-const assisted=live();Object.assign(assisted.g.ball,{x:-3,y:9,z:3,vx:0,vy:0,vz:0});
-const startZ=assisted.p.z;for(let i=0;i<30;i++)assisted.g.update(tick);
-assert(assisted.p.assisting);assert(assisted.p.z>startZ+.2);assert(assisted.p.autoTarget.x<assisted.g.ball.x,'assistance approaches from behind the ball');
-assert.equal(assisted.events.filter(e=>e.player===0&&['action','jump','ability'].includes(e.type)).length,0,'footwork never auto-attacks, jumps, or spends powers');
-assert.equal(assisted.p.ability.charges,1);
-const manual=live();Object.assign(manual.g.ball,{x:-3,y:9,z:3,vx:0,vy:0,vz:0});
-for(let i=0;i<20;i++)manual.g.update(tick,{autoMove:true,z:-1});
-assert.equal(manual.p.assisting,false);assert(manual.p.z<-.2,'manual movement overrides the predicted receive lane');
-const disabled=live();Object.assign(disabled.g.ball,{x:-3,y:9,z:3,vx:0,vy:0,vz:0});
-for(let i=0;i<30;i++)disabled.g.update(tick,{autoMove:false});assert.equal(disabled.p.z,0);
-assisted.g.togglePause();const pausedPosition=[assisted.p.x,assisted.p.y,assisted.p.z];
-for(let i=0;i<120;i++)assisted.g.update(tick,{autoMove:true});assert.deepEqual([assisted.p.x,assisted.p.y,assisted.p.z],pausedPosition);
-const home=new VolleyballGame({mode:'1v1'});home.start();const homeX=home.players[0].x;
-for(let i=0;i<120;i++)home.update(tick,{autoMove:true});assert.equal(home.phase,'serve');assert.equal(home.players[0].x,homeX);assert.equal(home.players[0].assisting,false);
-const bounds=live();for(let i=0;i<180;i++){Object.assign(bounds.g.ball,{x:-.1,y:9,z:8,vx:0,vy:0,vz:0});bounds.g.update(tick);assert(bounds.p.x<=-.7&&bounds.p.z<=4.6);}
-assert(bounds.p.autoTarget.x<=-.9&&bounds.p.autoTarget.z<=4.3,'auto targets stay within safe court lanes');
-const noClick=live();Object.assign(noClick.g.ball,{x:noClick.p.head.x+.5,y:noClick.p.head.y+1.1,z:noClick.p.head.z,vx:0,vy:-.5,vz:0});
-noClick.g.update(tick);assert.equal(noClick.p._jumpV,0);
-const clickJump=live();Object.assign(clickJump.g.ball,{x:clickJump.p.head.x+.5,y:clickJump.p.head.y+1.1,z:clickJump.p.head.z,vx:0,vy:-.5,vz:0});
-clickJump.g.update(tick,{swing:true});assert(clickJump.p._jumpV>6);assert.equal(clickJump.p._contactAction,'spike');
-assert(clickJump.events.some(e=>e.type==='jump'&&e.player===0&&e.assisted));
-const manualJump=live();Object.assign(manualJump.g.ball,{x:manualJump.p.head.x+.5,y:manualJump.p.head.y+1.1,z:manualJump.p.head.z,vx:0,vy:-.5,vz:0});
-manualJump.g.update(tick,{swing:true,autoMove:false});assert.equal(manualJump.p._jumpV,0);assert.equal(manualJump.p._contactAction,'bump');
-console.log('PASS mouse-only assists: delayed receive footwork, manual/disabled overrides, own-side bounds, pause/serve isolation, click-only approach jump and preserved attack/ability agency');
+// Footwork is entirely manual, including compatibility with old autoMove inputs.
+const stationary=live();Object.assign(stationary.g.ball,{x:-3,y:9,z:3,vx:0,vy:0,vz:0});
+const startPosition=[stationary.p.x,stationary.p.z];for(let i=0;i<30;i++)stationary.g.update(tick,{autoMove:true});
+assert.deepEqual([stationary.p.x,stationary.p.z],startPosition);assert.equal(stationary.p._jumpV,0);
+stationary.g.update(.05,{z:-1});assert(stationary.p.z<startPosition[1]);
+const standingClick=live();Object.assign(standingClick.g.ball,{x:standingClick.p.head.x+.5,y:standingClick.p.head.y+1.1,z:standingClick.p.head.z,vx:0,vy:-.5,vz:0});
+standingClick.g.update(tick,{swing:true});assert.equal(standingClick.p._jumpV,0,'click no longer moves feet or jumps');
+
+// New movement is expressive, without changing the gentle ball speed limit.
+const longDive=live();longDive.p.x=-8;longDive.g._initNeck(longDive.p);const diveStart=longDive.p.x;
+longDive.g.update(tick,{dive:true,x:1});for(let i=0;i<86;i++)longDive.g.update(tick);
+assert(longDive.p.x-diveStart>4&&longDive.p.x-diveStart<5.3,'full flop dive travels about four units');
+const bouncySet=live();bouncySet.g.update(tick,{set:true});for(let i=0;i<20;i++)bouncySet.g.update(tick);
+assert(bouncySet.p.setBounce>.5,'set has a visible squash/rebound envelope');
+const longNeck=live();longNeck.g.phase='serve';for(let i=0;i<180;i++)longNeck.g.update(tick,{extension:1,neckYaw:0});
+assert(longNeck.p.head.y>4.3,'extended physical neck reaches much farther');
+let whipPeak=0;longNeck.g.phase='play';Object.assign(longNeck.g.ball,{x:11,y:15,z:8,vx:0,vy:0,vz:0});
+for(let i=0;i<55;i++){longNeck.g.update(tick,{extension:1,neckYaw:Math.PI/2,swing:i===0});whipPeak=Math.max(whipPeak,Math.abs(longNeck.p.head.vz));}
+assert(whipPeak>3);assert(longNeck.p.neckPoints.every(p=>[p.x,p.y,p.z,p.vx,p.vy,p.vz].every(Number.isFinite)));
+const guided=live();Object.assign(guided.g.ball,{x:-3,y:3,z:3.5,vx:10,vy:5,vz:9});
+guided.g._guideReturn(guided.p,'bump',true);const flight=(guided.g.ball.vy+Math.sqrt(guided.g.ball.vy**2+2*BALL_GRAVITY*(guided.g.ball.y-BALL_RADIUS)))/BALL_GRAVITY;
+assert(guided.g.ball.z+guided.g.ball.vz*flight<6,'court assistance steers wide balls substantially inward');
+
+// Equipped powers persist and refill; network humans receive isolated, one-shot inputs.
+const equipped=new VolleyballGame({equippedAbility:'feather'});equipped.start();assert.equal(equipped.players[0].ability.id,'feather');
+equipped.setPlayerLoadout(0,{ability:'shield',skin:{body:'#123456'}});equipped._newRound();assert.equal(equipped.players[0].ability.id,'shield');assert.equal(equipped.players[0].skin.body,'#123456');
+const network=live('2v2');network.g.players.forEach(p=>{p.human=true;});network.g.setPlayerLoadout(2,{ability:'spring'});network.g._newRound();network.g.phase='play';
+network.g.setNetworkInputs({0:{z:1},1:{z:-1},2:{jump:true,neckYaw:2},3:{set:true}});network.g.update(.05);
+assert(network.g.players[0].vz>0&&network.g.players[1].vz<0);assert(network.g.players[2]._jumpV>0);assert.equal(network.g.players[2].neck.yaw,2);assert.equal(network.g.players[3]._contactAction,'set');
+assert.equal(network.g.networkInputs[2].jump,false,'network edges consumed after one update');
+const remoteServe=new VolleyballGame({mode:'2v2'});remoteServe.start();remoteServe.players.forEach(p=>p.human=true);remoteServe.server=1;remoteServe._hold();
+remoteServe.update(.05,{2:{serve:true,aimYaw:Math.PI}});assert.equal(remoteServe.serveStage,'toss');
+remoteServe.update(.05,{2:{serve:true,aimYaw:Math.PI,power:.7}});assert.equal(remoteServe.phase,'play');assert(remoteServe.ball.vx<0);
+
+// Every point blasts bodies; a final point continues bounded physics under the result screen.
+const blast=live('2v2');const beforeBlast=blast.g.players.map(p=>({x:p.x,z:p.z}));blast.g._point(0,'test');
+assert(blast.events.some(e=>e.type==='score'&&e.explosion));blast.g.update(.05);
+blast.g.players.forEach((p,i)=>assert(Math.hypot(p.x-beforeBlast[i].x,p.z-beforeBlast[i].z)>.1&&p.y>0));
+const final=live();final.g.score=[6,0];final.g._point(0,'test');const finalMotion=new SmoothSimulation(final.g);const finalX=final.p.x;
+for(let i=0;i<30;i++)finalMotion.advance(tick);assert.notEqual(final.p.x,finalX);assert.equal(final.g.phase,'finished');
+for(let i=0;i<400;i++)finalMotion.advance(tick);assert.equal(final.g.celebrationRemaining,0);assert(final.p.neckPoints.every(p=>[p.x,p.y,p.z].every(Number.isFinite)));assert(Math.abs(final.p.x)<=23);
+console.log('PASS overhaul: manual-only feet, long flop dives, set bounce, extreme bounded neck, court guidance, persistent loadouts, isolated network inputs and final-point knockback');

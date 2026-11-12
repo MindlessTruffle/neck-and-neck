@@ -15,7 +15,7 @@ const ABILITIES = {
 };
 
 /** Reusable, bounded world effects. A missed swing never receives impact feedback. */
-export function createVFX(scene, { camera, reducedMotion = false } = {}) {
+export function createVFX(scene, { camera, reducedMotion = false, mobile = globalThis.matchMedia?.('(pointer: coarse)')?.matches ?? false } = {}) {
   const root = new THREE.Group();
   root.name = 'AnimeSportsEffects';
   scene.add(root);
@@ -62,6 +62,7 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
   comicTexture('NICE!', GOLD);
   comicTexture('GOOD SAVE!', TEAL);
   comicTexture('POINT!', IVORY);
+  comicTexture('VICTORY!', GOLD);
   for (let count = 2; count <= 12; count++) comicTexture(`VOLLEY ${count}!`, count % 3 === 0 ? CORAL : count % 3 === 1 ? GOLD : TEAL);
   comicTexture('EPIC RALLY!', GOLD);
   comicTexture('TOSS!', IVORY);
@@ -105,6 +106,36 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
     }
   }
   addPool('ring', 24); addPool('slash', 18); addPool('spark', 130); addPool('petal', 90); addPool('puff', 40);
+  // One draw call for the entire score explosion. Every piece is allocated once.
+  const debrisGeometry = new THREE.IcosahedronGeometry(.16, 0);
+  const debrisMaterial = new THREE.MeshBasicMaterial({ color: IVORY, transparent: true, opacity: 1 });
+  const debris = new THREE.InstancedMesh(debrisGeometry, debrisMaterial, mobile ? 36 : 88);
+  debris.name = 'ScoreExplosionDebris'; debris.frustumCulled = false; debris.visible = false; debris.count = 0;
+  debris.instanceMatrix.setUsage(THREE.DynamicDrawUsage); root.add(debris);
+  const fragments = Array.from({ length: debris.instanceMatrix.count }, () => ({ x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 1, spin: 0 }));
+  const debrisTransform = new THREE.Object3D(), debrisColor = new THREE.Color();
+  let debrisLife = 0, debrisDuration = 1;
+  function scoreExplosion(team, final) {
+    const count = reducedMotion ? 8 : mobile ? (final ? 36 : 24) : final ? 88 : 58;
+    debris.count = count; debris.visible = true; debrisLife = debrisDuration = final ? 2.25 : 1.65;
+    for (let i = 0; i < count; i++) {
+      const fragment = fragments[i], angle = i * 2.39996, speed = reducedMotion ? 1.2 : (final ? 8 : 6) + Math.random() * 8;
+      fragment.x = Math.cos(angle) * .4; fragment.y = 1.6; fragment.z = Math.sin(angle) * .4;
+      fragment.vx = Math.cos(angle) * speed; fragment.vz = Math.sin(angle) * speed * .72; fragment.vy = reducedMotion ? .6 : 3 + Math.random() * 7;
+      fragment.size = reducedMotion ? .4 : .5 + Math.random() * 1.4; fragment.spin = Math.random() * 8 - 4;
+      debrisColor.set(i % 3 ? team ? CORAL : TEAL : GOLD); debris.setColorAt(i, debrisColor);
+      debrisTransform.position.set(fragment.x, fragment.y, fragment.z); debrisTransform.scale.setScalar(fragment.size); debrisTransform.rotation.set(0, 0, 0); debrisTransform.updateMatrix(); debris.setMatrixAt(i, debrisTransform.matrix);
+    }
+    debris.instanceMatrix.needsUpdate = true; debris.instanceColor.needsUpdate = true;
+    const center = vector(0, .12, 0);
+    for (let i = 0; i < (reducedMotion ? 1 : mobile ? final ? 3 : 2 : final ? 6 : 4); i++) {
+      const wave = acquire('ring', center, i % 2 ? IVORY : team ? CORAL : TEAL, .72 + i * .09);
+      if (!wave) break;
+      wave.object.rotation.x = Math.PI / 2 + (i % 3 === 2 ? .45 : 0);
+      wave.initialScale = .6 + i * .28; wave.growth = reducedMotion ? 4 : 15 + i * 2;
+      wave.object.scale.setScalar(wave.initialScale);
+    }
+  }
   for (let i = 0; i < 14; i++) {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(27), 3));
@@ -137,7 +168,7 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
     item.object.scale.setScalar(.18);
   }
   function burst(point, tint, count, power = 1, confetti = false) {
-    count = Math.round(count * (reducedMotion ? .22 : 1));
+    count = Math.round(count * (reducedMotion ? .22 : mobile ? .5 : 1));
     for (let i = 0; i < count; i++) {
       const direction = vector(Math.random() - .5, Math.random() - .2, Math.random() - .5).normalize();
       const effect = acquire(confetti ? 'petal' : 'spark', point, i % 3 ? tint : IVORY, confetti ? 1.6 + Math.random() : .22 + Math.random() * .15);
@@ -198,9 +229,10 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
     if (/score|win|finish/.test(type)) {
       volleyCount = 0; successPulse = 0; lastAbility = null;
       clearTrail();
+      scoreExplosion(event.team, type !== 'score');
       burst(point.clone().setY(2.4), event.team === 1 ? CORAL : TEAL, type === 'score' ? 34 : 66, 1.1, true);
       shock(point.clone().setY(.07), UP, GOLD, 1.4);
-      if (type === 'score') announce('POINT!', point.clone().setY(2.1), .82);
+      announce(type === 'score' ? 'POINT!' : 'VICTORY!', vector(0, 2.1, 0), type === 'score' ? .82 : 1.3, { width: type === 'score' ? 3 : 4.8 });
       return { hitstop: 0 };
     }
     if (/jump|land|dash|dive/.test(type)) {
@@ -361,6 +393,23 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
     if (disposed) return;
     clock = time; impulse *= Math.exp(-dt * 22);
     successPulse *= Math.exp(-dt * 6);
+    if (debrisLife > 0) {
+      debrisLife -= dt;
+      if (debrisLife <= 0 || game?.paused || game?.phase === 'serve' || game?.phase === 'attract') { debrisLife = 0; debris.visible = false; }
+      else {
+        const age = debrisDuration - debrisLife;
+        debrisMaterial.opacity = Math.min(1, debrisLife / .5);
+        for (let i = 0; i < debris.count; i++) {
+          const fragment = fragments[i];
+          fragment.vy -= dt * 10; fragment.x += fragment.vx * dt; fragment.y += fragment.vy * dt; fragment.z += fragment.vz * dt;
+          if (fragment.y < .08) { fragment.y = .08; fragment.vy = Math.abs(fragment.vy) * .3; fragment.vx *= .86; fragment.vz *= .86; }
+          debrisTransform.position.set(fragment.x, fragment.y, fragment.z);
+          debrisTransform.rotation.set(age * fragment.spin, age * fragment.spin * .7, age * 1.4);
+          debrisTransform.scale.setScalar(fragment.size * Math.min(1, debrisLife * 3)); debrisTransform.updateMatrix(); debris.setMatrixAt(i, debrisTransform.matrix);
+        }
+        debris.instanceMatrix.needsUpdate = true;
+      }
+    }
     for (const label of callouts) {
       if (label.life <= 0) continue;
       label.life -= dt;
@@ -432,6 +481,8 @@ export function createVFX(scene, { camera, reducedMotion = false } = {}) {
     lightning.forEach(effect => effect.object.geometry.dispose());
     calloutTextures.forEach(texture => texture.dispose());
     trailGeometry.dispose();
+    debrisGeometry.dispose();
+    debris.dispose();
   }
   return { impact, update, setReducedMotion, cameraImpulse: () => impulse, dispose };
 }

@@ -1,0 +1,121 @@
+# Put your club online
+
+The game client, authoritative server, private parties, and 1v1/2v2 queues are implemented. This guide leaves account creation, billing verification, and VM creation to you. No Oracle resources have been created.
+
+## Try multiplayer locally first
+
+Requires Node.js 24 LTS. From this repository:
+
+```sh
+npm ci
+npm run dev:online
+```
+
+Or double-click `Start Online.cmd` on Windows. Open http://127.0.0.1:5173 in two separate tabs. Choose **Party Post**, give each tab a different court name, and connect to `ws://127.0.0.1:8787`. One player creates a 1v1 party; the other joins with its invite code. The host starts when both teams are occupied. Use four tabs for a private 2v2 match. A two-person 2v2 party can queue together; solo queues work without a party.
+
+If ports 5173 or 8787 already have this game running, use the existing preview or stop that process before starting another copy. Local development binds only to localhost.
+
+## 1. Create your Oracle VM
+
+1. Create/sign in to your Oracle Cloud account yourself and complete its verification/terms steps.
+2. In your home region, create an **Ubuntu 24.04 LTS Arm64** instance using **VM.Standard.A1.Flex**, ideally **2 OCPUs / 6 GB RAM**, and a roughly **50 GB boot volume**. Save its SSH private key somewhere private.
+3. Confirm the console marks your allocation **Always Free eligible** before creating it. Avoid paid shapes or resources merely covered by trial credit.
+4. Use a public subnet with a public IPv4 address. Add network ingress TCP **80 and 443** from the internet and TCP **22 only from your own public IP /32**. Keep raw game port **8787 closed**.
+
+Oracle's current documented A1 allowance is 1,500 OCPU-hours and 9,000 GB-hours monthly, equivalent to **2 OCPUs / 12 GB** continuously. Capacity can be unavailable; idle free instances can be reclaimed. Check the current console and [Oracle's official limits](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm) when provisioning. The application does not require a paid account upgrade.
+
+## 2. Give the server a hostname
+
+Point a DNS **A record** such as `club.your-domain.com` to the VM's public IPv4 address. Use a hostname you control. A hostname and publicly reachable ports 80/443 let Caddy obtain and renew a trusted TLS certificate. The Pages client uses **wss://**, not an unencrypted public WebSocket.
+
+If you do not have a domain yet, finish the local test first. DNS/hostname configuration remains necessary for this supplied public TLS setup; do not bypass certificate warnings.
+
+## 3. Install Docker on the VM
+
+From Windows PowerShell, connect using your actual key path and VM address:
+
+```powershell
+ssh -i "C:\path\to\your-private-key" ubuntu@YOUR_VM_PUBLIC_IP
+```
+
+Install Docker Engine and its Compose plugin using [Docker's official Ubuntu instructions](https://docs.docker.com/engine/install/ubuntu/), choosing the apt repository method. Then verify:
+
+```sh
+sudo docker version
+sudo docker compose version
+```
+
+The supplied images support Arm64. Docker-published ports can bypass UFW rules, so retain the Oracle network ingress restrictions above. The Compose configuration exposes only Caddy's 80/443; the game port stays on its private container network.
+
+## 4. Start the club
+
+On the VM:
+
+```sh
+sudo apt update
+sudo apt install -y git
+git clone https://github.com/MindlessTruffle/neck-and-neck.git
+cd neck-and-neck
+cp deploy/.env.example deploy/.env
+nano deploy/.env
+```
+
+Set these values, using your real hostname:
+
+```dotenv
+CLUB_HOST=club.your-domain.com
+ALLOWED_ORIGINS=https://mindlesstruffle.github.io
+MAX_ROOMS=8
+MAX_CONNECTIONS=64
+```
+
+An origin is scheme + hostname + optional port, with **no path or trailing slash**. To admit another client site, explicitly add its origin, separated by a comma. Never use a wildcard. This file contains deployment settings, not an ElevenLabs key. Audio is already bundled; the server needs no audio credentials.
+
+```sh
+sudo docker compose --env-file deploy/.env -f deploy/compose.yaml config --quiet
+sudo docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --build
+sudo docker compose --env-file deploy/.env -f deploy/compose.yaml ps
+sudo docker compose --env-file deploy/.env -f deploy/compose.yaml logs --tail=60 game caddy
+curl --fail https://club.your-domain.com/health
+```
+
+The health response should report `ok: true`. Caddy handles TLS and WebSocket forwarding using its [documented Compose/reverse-proxy deployment](https://caddyserver.com/docs/running#docker-compose). Its certificate data persists in Docker volumes. Containers restart after a VM reboot. `TRUST_PROXY` is enabled only because Caddy is the sole ingress to the private game container; do not expose 8787 or enable that flag on a directly exposed standalone server.
+
+## 5. Connect the published game
+
+Open [Neck & Neck](https://mindlesstruffle.github.io/neck-and-neck/), choose **Party Post**, enter `wss://club.your-domain.com`, and connect. The address saves on that browser. Friends enter the same server address, then use an invite code or the same queue. Share the public hostname and invite code; never share SSH keys.
+
+For a baked-in default address, add a GitHub repository **Actions variable** named `VITE_SERVER_URL` containing that public `wss://` URL, then rerun the Pages workflow. The build reads that variable. It is configuration, not a secret. Until a server is provisioned, the published game's online panel deliberately requires an endpoint instead of pretending players are online.
+
+## Operations and limits
+
+- Run `npm test`, `npm run test:network`, `npm run test:simulation`, and `npm run test:load` before updates. The load test runs locally; actual Oracle CPU, region, network and phone performance still need measurement after provisioning.
+- Physics runs at 120 Hz, snapshots at 20 Hz, and client inputs at 30 Hz. Clients predict only their own movement/neck, interpolate remote poses, and accept server ball contacts and scores. Internet latency still affects competitive hits; choose a region close to your players.
+- The initial eight-room cap is conservative, not a promise of capacity on every VM. Start with two rooms if the VM is busy, monitor health/CPU and player latency, then increase only after measurement.
+- Dropped connections have a 15-second rejoin window before forfeit. Restarting the server ends active rooms and matches; notify players before updating.
+- Rooms and sessions live in memory. This version uses guest names and device-local cosmetics/clovers, with no accounts, payments, cloud inventory, public chat, or ranked economy. Clearing browser storage clears local progress.
+- Rate, origin, message-size, session, connection, room, and input limits are enforced. Keep dependencies updated and the host patched. A public game can still need stronger abuse protection as its audience grows.
+
+To update after pulling a reviewed release:
+
+```sh
+git pull --ff-only
+sudo docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --build
+```
+
+To stop the club while retaining certificates:
+
+```sh
+sudo docker compose --env-file deploy/.env -f deploy/compose.yaml down
+```
+
+## Troubleshooting
+
+- **Cannot connect locally:** run `npm run server`, check port 8787, and use `ws://127.0.0.1:8787` from the local HTTP preview.
+- **TLS/health fails:** check DNS points to the current VM IP, Oracle ingress permits 80/443, and Caddy logs show certificate issuance. Do not ignore TLS errors.
+- **Origin refused:** use the exact client origin in `ALLOWED_ORIGINS`, then recreate containers. The repository path `/neck-and-neck/` is not part of the origin.
+- **Queue waits:** it needs real connected humans. 1v1 needs two; 2v2 needs four. A duo queues as a unit on one team.
+- **Private start disabled/refused:** connect exactly two or four players, select balanced teams, and start from the host.
+- **Choppy online play:** check round-trip latency, close competing tabs/downloads, lower room capacity, and inspect VM CPU. Native pointer capture works best in direct Chrome/Edge; embedded previews may reject it.
+
+Provisioning handoff: once your VM exists, have its public IP, chosen DNS hostname and SSH connection ready. The remaining work is applying the commands above and testing the public endpoint with real remote players.

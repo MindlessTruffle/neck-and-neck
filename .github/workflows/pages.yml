@@ -34,7 +34,11 @@ jobs:
         run: npm test
       - name: Complete simulated matches
         run: npm run test:simulation
+      - name: Verify multiplayer rooms and prediction
+        run: npm run test:network
       - name: Build game
+        env:
+          VITE_SERVER_URL: ${{ vars.VITE_SERVER_URL }}
         run: npm run build
       - name: Configure Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0

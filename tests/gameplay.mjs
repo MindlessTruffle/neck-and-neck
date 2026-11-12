@@ -41,7 +41,7 @@ for(let i=0;i<120;i++)neckGame.update(1/120,{neckYaw:0,neckPitch:0,extension:.3,
 let samples=[];for(let i=0;i<360;i++){neckGame.update(1/120,{neckYaw:Math.PI/2,neckPitch:0,extension:.3,cameraYaw:-1});samples.push(neckPlayer.head.z-neckPlayer.z);}
 assert.equal(neckPlayer.neckPoints.length,9);assert.equal(neckPlayer.neck.yaw,Math.PI/2);
 assert(Math.max(...samples)>samples.at(-1)+.1,'head overshoots and settles');
-for(let i=1;i<9;i++){const a=neckPlayer.neckPoints[i-1],b=neckPlayer.neckPoints[i];assert([b.x,b.y,b.z,b.vx,b.vy,b.vz].every(Number.isFinite));assert(Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z)<.31,'neck segment length remains bounded');}
+for(let i=1;i<9;i++){const a=neckPlayer.neckPoints[i-1],b=neckPlayer.neckPoints[i];assert([b.x,b.y,b.z,b.vx,b.vy,b.vz].every(Number.isFinite));assert(Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z)<.34,'longer neck segment length remains bounded');}
 near(neckPlayer.head.x,neckPlayer.neckPoints[8].x,.00001);near(neckPlayer.head.y,neckPlayer.neckPoints[8].y,.00001);
 const whip=new VolleyballGame({mode:'1v1'});whip.start();whip.phase='play';Object.assign(whip.ball,{x:10,y:12,z:8,vx:0,vy:0,vz:0});for(let i=0;i<120;i++)whip.update(1/120,{neckYaw:0,extension:.3});whip.phase='play';let maxWhip=0;
 for(let i=0;i<60;i++){whip.update(1/120,{neckYaw:0,extension:.3,swing:i===0});maxWhip=Math.max(maxWhip,whip.players[0].head.vx);}assert(maxWhip>2,'swing physically moves the head');
@@ -92,7 +92,7 @@ const ending=new VolleyballGame({mode:'1v1'});ending.start();ending.phase='play'
 Object.assign(ending.ball,{x:4,y:.231,z:0,vx:0,vy:-5,vz:0});
 let playerSteps=0;const normalStep=ending._stepPlayers.bind(ending);ending._stepPlayers=(...args)=>{playerSteps++;normalStep(...args);};
 ending.update(.05,{x:1});assert.equal(ending.phase,'finished');assert.equal(playerSteps,1,'winning point stops remaining physics substeps');
-console.log('PASS: finished match stops physics immediately');
+console.log('PASS: winning contact stops rally physics before celebration');
 
 function paddedHit({offset=1.05,headSpeed=0,swing=0,backward=false,human=true}={}) {
  let event;

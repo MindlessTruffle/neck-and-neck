@@ -62,3 +62,12 @@ const physicalX = game.players[0].head.x;
 motion.renderState.players[0].head.x = 100;
 assert.equal(game.players[0].head.x, physicalX);
 console.log('Motion checks passed: identical physics at 30/60/90/120/144/240 Hz, buffered inputs, interpolated poses, pause/reset isolation.');
+
+const remoteEvents=[];const remote=new VolleyballGame({mode:'2v2',onEvent:e=>remoteEvents.push(e)});remote.start();remote.phase='play';remote.players.forEach(p=>p.human=true);
+const remoteMotion=new SmoothSimulation(remote);
+remoteMotion.advance(1/480,{players:{2:{jump:true}}});for(let i=0;i<3;i++)remoteMotion.advance(1/480);
+assert.equal(remoteEvents.filter(e=>e.type==='jump'&&e.player===2).length,1,'remote edge survives a frame without a physics tick');
+assert.equal(remote.players[0].y,0,'remote edge never leaks to player zero');
+remote.reset();remote.start();remote.players.forEach(p=>p.human=true);remote.server=1;remoteMotion.reset();
+remoteMotion.advance(1/30,{players:{2:{serve:true}}});assert.equal(remote.serveStage,'toss','remote click is consumed only once across substeps');
+console.log('Motion checks passed: per-player network buffering and one-click serve isolation.');

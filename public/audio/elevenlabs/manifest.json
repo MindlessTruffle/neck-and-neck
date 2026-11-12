@@ -1,0 +1,155 @@
+[
+  {
+    "file": "sfx-bump.mp3",
+    "type": "sfx",
+    "prompt": "One isolated soft inflated volleyball bonk with a charming hollow rubber plop, punchy clean game sound, no voice, no background.",
+    "seconds": 0.6,
+    "provider": "ElevenLabs",
+    "model": "eleven_text_to_sound_v2",
+    "bytes": 10492
+  },
+  {
+    "file": "sfx-set.mp3",
+    "type": "sfx",
+    "prompt": "One cheerful elastic spring boing and soft volleyball pop, gentle ascending bounce, cartoon game set action, clean isolated sound.",
+    "seconds": 0.8,
+    "provider": "ElevenLabs",
+    "model": "eleven_text_to_sound_v2",
+    "bytes": 13835
+  },
+  {
+    "file": "sfx-spike.mp3",
+    "type": "sfx",
+    "prompt": "One snappy volleyball smash with short airy whip swish and satisfying rubber thwack, powerful but friendly, isolated game effect.",
+    "seconds": 0.7,
+    "provider": "ElevenLabs",
+    "model": "eleven_text_to_sound_v2",
+    "bytes": 12163
+  },
+  {
+    "file": "music-lobby.mp3",
+    "type": "music",
+    "prompt": "Instrumental seamless game menu loop, whimsical sky garden full of sleepy giraffes, warm wooden marimba, pizzicato strings, airy flute, gentle brushed percussion, pastoral floating-island wonder, cozy playful melody, 96 bpm, clear small arrangement, no dramatic intro or ending, no voices.",
+    "seconds": 32,
+    "provider": "ElevenLabs",
+    "model": "music_v2",
+    "bytes": 512461
+  },
+  {
+    "file": "sfx-block.mp3",
+    "type": "sfx",
+    "prompt": "One comic shield-like volleyball block: hollow rubber thunk and bright metallic tick, crisp isolated arcade sports sound.",
+    "seconds": 0.7,
+    "provider": "ElevenLabs",
+    "model": "eleven_text_to_sound_v2",
+    "bytes": 12163
+  },
+  {
+    "file": "sfx-dive.mp3",
+    "type": "sfx",
+    "prompt": "One cartoon giraffe belly flop on soft grass: quick wind swoosh, soft padded whomp, tiny squeak and grassy skid, funny isolated game effect.",
+    "seconds": 1.1,
+    "provider": "ElevenLabs",
+    "model": "eleven_text_to_sound_v2",
+    "bytes": 18433
+  },
+  {
+    "file": "sfx-jump.mp3",
+    "type": "sfx",
+    "prompt": "One springy cartoon jump: soft rubber stretch release and airy rising whoop, no voice, clean game effect.",
+    "seconds": 0.6,
+    "provider": "ElevenLabs",
+    "model": "eleven_text_to_sound_v2",
+    "bytes": 10492
+  },
+  {
+    "file": "music-shop.mp3",
+    "type": "music",
+    "prompt": "Instrumental looping boutique game shop music, cheeky giraffe tailor in fluffy clouds, upright bass, plucky nylon guitar, vibraphone, brushed jazzy drums, bright memorable motif, 112 bpm, cheerful swing, restrained mix, seamless repeating phrase, no voices.",
+    "seconds": 28,
+    "provider": "ElevenLabs",
+    "model": "music_v2",
+    "bytes": 448514
+  },
+  {
+    "file": "sfx-dash.mp3",
+    "type": "sfx",
+    "prompt": "One brief whimsical speed dash, close airy whoosh with tiny light footstep taps, isolated clean game effect.",
+    "seconds": 0.6,
+    "provider": "ElevenLabs",
+    "model": "eleven_text_to_sound_v2",
+    "bytes": 10492
+  },
+  {
+    "file": "sfx-ability.mp3",
+    "type": "sfx",
+    "prompt": "One magical power activation, quick shimmering chime rise into warm sparkling pop, friendly fantasy sports game, isolated no music bed.",
+    "seconds": 1,
+    "provider": "ElevenLabs",
+    "model": "eleven_text_to_sound_v2",
+    "bytes": 17179
+  },
+  {
+    "file": "music-abilities.mp3",
+    "type": "music",
+    "prompt": "Instrumental seamless fantasy ability selection game menu, magical floating observatory, crystalline celesta arpeggios, gentle handpan, breathy flute and bouncing pizzicato bass, curious sparkling optimistic energy, 104 bpm, no voices, clean loop without long intro or final cadence.",
+    "seconds": 28,
+    "provider": "ElevenLabs",
+    "model": "music_v2",
+    "bytes": 448514
+  },
+  {
+    "file": "sfx-click.mp3",
+    "type": "sfx",
+    "prompt": "One tiny tactile wooden menu click with a soft bubbly pop, crisp cute interface feedback, isolated.",
+    "seconds": 0.5,
+    "provider": "ElevenLabs",
+    "model": "eleven_text_to_sound_v2",
+    "bytes": 8820
+  },
+  {
+    "file": "sfx-roll.mp3",
+    "type": "sfx",
+    "prompt": "Short playful magical prize reveal, rapid tiny wooden ticks slowing down into one sparkling bell flourish, isolated game interface reward effect.",
+    "seconds": 1.8,
+    "provider": "ElevenLabs",
+    "model": "eleven_text_to_sound_v2",
+    "bytes": 29300
+  },
+  {
+    "file": "sfx-score.mp3",
+    "type": "sfx",
+    "prompt": "One huge colorful cartoon confetti explosion, deep soft boom, rubbery shockwave and bright paper sparkles, celebratory sports point, no voices, clean isolated.",
+    "seconds": 1.7,
+    "provider": "ElevenLabs",
+    "model": "eleven_text_to_sound_v2",
+    "bytes": 28046
+  },
+  {
+    "file": "music-match.mp3",
+    "type": "music",
+    "prompt": "Instrumental upbeat cartoon volleyball game loop, buoyant acoustic drums, playful brass stabs, marimba melody, rhythmic strings and bouncy bass, summer sky-island sports energy, 138 bpm, exciting but light friendly mix, clear impact space, repeating seamless loop, no voices.",
+    "seconds": 40,
+    "provider": "ElevenLabs",
+    "model": "music_v2",
+    "bytes": 640775
+  },
+  {
+    "file": "sfx-win.mp3",
+    "type": "sfx",
+    "prompt": "One spectacular friendly cartoon island explosion, deep padded boom cascading wooden clatters, airy debris whooshes and sparkling magical finish, triumphant game match end, no voices.",
+    "seconds": 3,
+    "provider": "ElevenLabs",
+    "model": "eleven_text_to_sound_v2",
+    "bytes": 48944
+  },
+  {
+    "file": "music-results.mp3",
+    "type": "music",
+    "prompt": "Instrumental playful victory results screen loop, warm brass fanfare turning into bouncy marimba and pizzicato groove, celebratory confetti in clouds, cheerful short motif, 116 bpm, looping phrase, no voices.",
+    "seconds": 20,
+    "provider": "ElevenLabs",
+    "model": "music_v2",
+    "bytes": 320618
+  }
+]

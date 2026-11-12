@@ -7,6 +7,11 @@ import { requestGameCapture } from './capture.js';
 import { GameAudio } from './audio.js';
 import { GameMenu } from './game-menu.jsx';
 import { MatchUI } from './match-ui.jsx';
+import { CloudLobby } from './cloud-lobby.jsx';
+import { Shop } from './shop.jsx';
+import { NetworkClient } from './network-client.js';
+import { OnlinePanel } from './online-panel.jsx';
+import { loadProfile, saveProfile, getSkin, award, ABILITY_CATALOG } from './profile.js';
 import { steerLook, cameraRelativeMovement, stickMovement, applyWalk } from './controls.js';
 import './style.css';
 
@@ -24,8 +29,10 @@ function App() {
   const panel = useRef(null);
   const touchOverride = useRef(null);
   const fullscreenPreference = useRef(true);
-  const autoFeetRef = useRef(true);
-  const [autoFeet, setAutoFeet] = useState(true);
+  const [profile, setProfile] = useState(loadProfile);
+  const [menuTab, setMenuTab] = useState('home');
+  const [hotspots, setHotspots] = useState(null);
+  const [onlineStatus, setOnlineStatus] = useState({ connection: 'offline' });
   const [menu, setMenu] = useState('lobby');
   const [mode, setMode] = useState('2v2');
   const [difficulty, setDifficulty] = useState('club');
@@ -56,7 +63,8 @@ function App() {
     menuRef.current = next;
     setMenu(next);
     clearInput();
-    if (runtime.current.game) runtime.current.game.paused = Boolean(next);
+    if (runtime.current.game) runtime.current.game.paused = Boolean(next) && next !== 'finished';
+    if (runtime.current.onlineActive) runtime.current.online?.setPaused(Boolean(next) && next !== 'finished');
     if (next && document.pointerLockElement) document.exitPointerLock();
   };
 
@@ -94,11 +102,17 @@ function App() {
     let frame, observer, cleanup, disposed = false;
     try {
       const world = createWorld({ canvas: canvas.current });
-      const game = new VolleyballGame({ mode, difficulty, onEvent: event => {
+      const game = new VolleyballGame({ mode, difficulty, onEvent: runtime.current.handleGameEvent = event => {
         if (!runtime.current.started) return;
         audio.event(event);
         world.impact?.(event);
-        if (event.type === 'hit' && event.player === 0 && reticle.current) {
+        if (event.type === 'score' || event.type === 'win') {
+          setProfile(previous => {
+            const transaction = award(previous, { type: event.type, team: runtime.current.onlineActive ? (event.team === runtime.current.localTeam ? 0 : 1) : event.team, rewardId: `${runtime.current.matchId}:${event.type}:${event.score?.join('-')}` });
+            return saveProfile(transaction.profile);
+          });
+        }
+        if (event.type === 'hit' && event.player === (runtime.current.onlineActive ? runtime.current.localPlayerId : 0) && reticle.current) {
           reticle.current.getAnimations().forEach(animation => animation.cancel());
           reticle.current.animate([
             { transform: 'translate(-50%, -50%) scale(1.65)', filter: 'drop-shadow(0 0 8px #ffed9b)' },
@@ -106,12 +120,39 @@ function App() {
           ], { duration: 320, easing: 'ease-out' });
         }
         if (event.type === 'win') {
-          setResult({ score: [...event.score], winner: event.team });
+          setResult({ score: runtime.current.onlineActive && runtime.current.localTeam === 1 ? [...event.score].reverse() : [...event.score], winner: runtime.current.onlineActive ? (event.team === runtime.current.localTeam ? 0 : 1) : event.team });
           showMenu('finished');
         }
       } });
       runtime.current.world = world;
       runtime.current.game = game;
+      const online = new NetworkClient();
+      runtime.current.online = online;
+      online.subscribe(setOnlineStatus);
+      online.onMatch(info => {
+        const resuming = runtime.current.onlineActive && runtime.current.matchId === info.matchId;
+        runtime.current.onlineActive = true;
+        runtime.current.localPlayerId = info.playerId;
+        runtime.current.localTeam = info.localTeam ?? info.team;
+        runtime.current.matchId = info.matchId;
+        if (resuming) return;
+        runtime.current.started = true;
+        const yaw = runtime.current.localTeam === 1 ? Math.PI : 0;
+        neckAim.current = { yaw, pitch: .15, extension: .35 };
+        cameraAim.current = { yaw, pitch: 0, distance: 7.2 };
+        runtime.current.world?.resetCamera();
+        setResult(null); showMenu(null);
+      });
+      online.onEvent(event => {
+        if (!runtime.current.onlineActive) return;
+        if (event.type === 'match.end') {
+          if (menuRef.current !== 'finished') {
+            const localTeam = runtime.current.localTeam;
+            setResult({ score: localTeam === 1 ? [...event.score].reverse() : [...event.score], winner: event.winner == null ? null : event.winner === localTeam ? 0 : 1, reason: event.reason });
+            showMenu('finished');
+          }
+        } else runtime.current.handleGameEvent(event);
+      });
       game.paused = true;
       const motion = new SmoothSimulation(game);
       runtime.current.motion = motion;
@@ -127,9 +168,10 @@ function App() {
         const { keys, edges } = runtime.current;
         const aim = neckAim.current;
         const view = cameraAim.current;
-        let renderGame;
+        let renderGame, frameInput = {};
+        const activeGame = runtime.current.onlineActive ? runtime.current.onlineView || game : game;
         if (!menuRef.current) {
-          if (interaction.current.mouseDown && !interaction.current.powerSpent && now - interaction.current.pressStarted > 450 && game.phase === 'play') {
+          if (interaction.current.mouseDown && !interaction.current.powerSpent && now - interaction.current.pressStarted > 450 && activeGame.phase === 'play') {
             edges.ability = true; interaction.current.powerSpent = true;
           }
           const turn = (Number(keys.has('KeyL')) - Number(keys.has('KeyJ'))) * dt * 1.6;
@@ -137,17 +179,25 @@ function App() {
           aim.extension = clamp(aim.extension + (Number(keys.has('BracketRight')) - Number(keys.has('BracketLeft'))) * dt * .65, 0, 1);
           const forward = Number(keys.has('KeyW') || keys.has('ArrowUp')) - Number(keys.has('KeyS') || keys.has('ArrowDown')) - interaction.current.walk.z;
           const strafe = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft')) + interaction.current.walk.x;
-          renderGame = motion.advance(dt, {
+          frameInput = {
             ...cameraRelativeMovement(forward, strafe, view.yaw),
             aimYaw: view.yaw,
-            autoMove: autoFeetRef.current,
             neckYaw: aim.yaw,
             neckPitch: aim.pitch,
             extension: aim.extension,
             ...edges,
-          });
-        } else renderGame = motion.reset();
+          };
+        }
+        if (runtime.current.onlineActive) {
+          renderGame = online.sample(dt, frameInput, now) || runtime.current.onlineView || motion.reset();
+          runtime.current.onlineView = renderGame;
+        } else if (!menuRef.current) renderGame = motion.advance(dt, frameInput);
+        else if (menuRef.current === 'finished' && game.celebrationRemaining > 0) renderGame = motion.advance(dt, {});
+        else renderGame = motion.reset();
         runtime.current.edges = {};
+        const displayGame = renderGame || game;
+        const localId = runtime.current.onlineActive ? runtime.current.localPlayerId : 0;
+        const localPlayer = displayGame.players.find(player => player.id === localId) || displayGame.players[0];
         world.setCamera?.(view);
         world.update(Math.min(dt, .05), renderGame, now / 1000);
         world.renderer.render(world.scene, world.camera);
@@ -160,25 +210,28 @@ function App() {
           telemetryAt = now;
           canvas.current.dataset.neckAim = `${aim.yaw.toFixed(3)},${aim.pitch.toFixed(3)},${aim.extension.toFixed(3)}`;
           canvas.current.dataset.cameraAim = `${view.yaw.toFixed(3)},${view.pitch.toFixed(3)},${view.distance.toFixed(2)}`;
-          canvas.current.dataset.phase = game.phase;
+          canvas.current.dataset.phase = displayGame.phase;
           canvas.current.dataset.cameraHeight = world.camera.position.y.toFixed(2);
-          canvas.current.dataset.volley = String(game.rallyHits);
-          canvas.current.dataset.ballSpeed = Math.hypot(game.ball.vx, game.ball.vy, game.ball.vz).toFixed(2);
+          canvas.current.dataset.volley = String(displayGame.rallyHits);
+          canvas.current.dataset.ballSpeed = Math.hypot(displayGame.ball.vx, displayGame.ball.vy, displayGame.ball.vz).toFixed(2);
           canvas.current.dataset.physicsHz = '120';
           canvas.current.dataset.renderStats = JSON.stringify({ calls: world.renderer.info.render.calls, triangles: world.renderer.info.render.triangles });
-          canvas.current.dataset.head = [game.players[0].head.x, game.players[0].head.y, game.players[0].head.z].map(value => value.toFixed(3)).join(',');
-          canvas.current.dataset.round = String(game.round || 1);
-          canvas.current.dataset.ability = game.players[0].ability?.id || '';
-          canvas.current.dataset.footwork = game.players[0].assisting ? 'assisted' : 'manual';
-          canvas.current.dataset.body = [game.players[0].x, game.players[0].y, game.players[0].z].map(value => value.toFixed(3)).join(',');
-          if (game.round !== lastRound) { lastRound = game.round; revealUntil = now + 3500; }
+          canvas.current.dataset.head = [localPlayer.head.x, localPlayer.head.y, localPlayer.head.z].map(value => value.toFixed(3)).join(',');
+          canvas.current.dataset.round = String(displayGame.round || 1);
+          canvas.current.dataset.ability = localPlayer.ability?.id || '';
+          canvas.current.dataset.footwork = 'manual';
+          canvas.current.dataset.audioScene = audio.scene;
+          canvas.current.dataset.musicStatus = audio.musicStatus;
+          canvas.current.dataset.body = [localPlayer.x, localPlayer.y, localPlayer.z].map(value => value.toFixed(3)).join(',');
+          if (displayGame.round !== lastRound) { lastRound = displayGame.round; revealUntil = now + 3500; }
+          if (menuRef.current === 'lobby') setHotspots(world.projectMenuHotspots?.() || null);
           if (!menuRef.current) {
-            const player = game.players[0];
-            setMatch({ score: [...game.score], mode: game.mode, phase: game.phase, server: game.server,
-              round: game.round, touches: [...(game.touches || [0, 0])], touchTeam: game.touchTeam,
-              rallyHits: game.rallyHits, message: game.message, serveStage: game.serveStage, serveCharge: game.serveCharge,
+            const player = localPlayer;
+            setMatch({ score: [...displayGame.score], mode: displayGame.mode, phase: displayGame.phase, server: displayGame.server,
+              playerTeam: player.team, isServer: displayGame.players.find(p => p.team === displayGame.server)?.id === player.id, round: displayGame.round, touches: [...(displayGame.touches || [0, 0])], touchTeam: displayGame.touchTeam,
+              rallyHits: displayGame.rallyHits, message: displayGame.message, serveStage: displayGame.serveStage, serveCharge: displayGame.serveCharge,
               airborne: player.y > .2, energy: player.energy, ability: player.ability ? { ...player.ability } : null,
-              reveal: now < Math.max(revealUntil, runtime.current.revealUntil || 0), lastAction: game.lastAction, autoFeet: autoFeetRef.current });
+              reveal: false, lastAction: displayGame.lastAction });
           }
         }
         frame = requestAnimationFrame(loop);
@@ -190,6 +243,7 @@ function App() {
       });
 
       const keydown = event => {
+        if (event.target?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target?.tagName)) return;
         if (event.code === 'KeyF' && !event.repeat) { event.preventDefault(); toggleFullscreen(); return; }
         if (menuRef.current) {
           if (event.code === 'KeyP' && menuRef.current === 'pause' && !document.querySelector('.help-scroll')) resume();
@@ -274,6 +328,7 @@ function App() {
         cancelAnimationFrame(frame);
         observer.disconnect();
         world.dispose();
+        online.dispose();
         audio.dispose();
         window.removeEventListener('keydown', keydown);
         window.removeEventListener('keyup', keyup);
@@ -295,6 +350,7 @@ function App() {
       cancelAnimationFrame(frame);
       observer?.disconnect();
       runtime.current.world?.dispose();
+      runtime.current.online?.dispose();
       audio.dispose();
     }
   }, []);
@@ -302,34 +358,48 @@ function App() {
   useEffect(() => { runtime.current.audio?.setMuted(muted); }, [muted]);
   useEffect(() => { runtime.current.audio?.setMusic(music); }, [music]);
   useEffect(() => {
+    const world = runtime.current.world;
+    world?.setMenuScene?.(menu === 'lobby');
+    world?.setMenuFocus?.(menuTab === 'home' || menuTab === 'controls' ? 'play' : menuTab);
+    runtime.current.audio?.setScene?.(!menu ? 'match' : menu === 'finished' ? 'results' : menuTab === 'shop' ? 'shop' : menuTab === 'abilities' ? 'abilities' : 'lobby');
+  }, [menu, menuTab, ready]);
+  useEffect(() => {
+    runtime.current.world?.setPlayerSkin?.(0, getSkin(profile.equippedSkin).palette);
+    if (onlineStatus.connection === 'connected' && !runtime.current.onlineActive) runtime.current.online?.setLoadout({ ability: profile.equippedAbility, skin: getSkin(profile.equippedSkin).palette });
+  }, [profile.equippedSkin, profile.equippedAbility, ready, onlineStatus.connection]);
+  useEffect(() => {
     const media = window.matchMedia('(pointer: coarse), (max-width: 699px)');
     const change = () => { if (touchOverride.current === null) setTouch(media.matches); };
     media.addEventListener('change', change);
     return () => media.removeEventListener('change', change);
   }, []);
   useEffect(() => {
-    if (!menu) return;
-    const button = panel.current?.querySelector('.play-button:not(:disabled)') || panel.current?.querySelector('button:not(:disabled)');
+    if (!menu || (menu === 'lobby' && ['shop', 'abilities'].includes(menuTab))) return;
+    const focusRoot = panel.current?.querySelector('[role="dialog"]') || panel.current;
+    const button = focusRoot?.querySelector('.play-button:not(:disabled)') || focusRoot?.querySelector('input,button:not(:disabled)');
     button?.focus({ preventScroll: true });
     const trap = event => {
-      if (event.key !== 'Tab') return;
-      const controls = [...panel.current.querySelectorAll('button:not(:disabled),select,input,summary')].filter(element => element.getClientRects().length);
+      if (event.defaultPrevented || event.key !== 'Tab') return;
+      const controls = [...(focusRoot || stage.current).querySelectorAll('button:not(:disabled),select,input,summary')].filter(element => element.getClientRects().length);
       const first = controls[0], last = controls[controls.length - 1];
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     };
     document.addEventListener('keydown', trap);
     return () => document.removeEventListener('keydown', trap);
-  }, [menu, ready]);
+  }, [menu, menuTab, ready]);
 
   function begin() {
+    if (runtime.current.onlineActive) { clubhouse(); return; }
+    if (runtime.current.online?.getState().connection === 'connected') { runtime.current.online.cancelQueue(); runtime.current.online.leaveRoom(); }
     const game = runtime.current.game;
     if (!game) return;
     neckAim.current = { yaw: 0, pitch: .15, extension: .35 };
     cameraAim.current = { yaw: 0, pitch: 0, distance: 7.2 };
-    game.reset({ mode, difficulty });
+    game.reset({ mode, difficulty, equippedAbility: profile.equippedAbility });
     game.seed = crypto.getRandomValues(new Uint32Array(1))[0];
     runtime.current.started = true;
+    runtime.current.matchId = crypto.randomUUID();
     runtime.current.revealUntil = performance.now() + 3500;
     runtime.current.audio.unlock();
     game.start();
@@ -345,7 +415,12 @@ function App() {
   }
 
   const clubhouse = () => {
+    const wasOnline = runtime.current.onlineActive;
+    runtime.current.online?.setPaused(true);
+    if (wasOnline && menuRef.current !== 'finished') runtime.current.online?.leaveRoom();
+    runtime.current.onlineActive = false; runtime.current.onlineView = null;
     runtime.current.started = false;
+    setMenuTab(wasOnline ? 'online' : 'home');
     runtime.current.game?.reset({ mode, difficulty });
     neckAim.current = { yaw: 0, pitch: .15, extension: .35 };
     cameraAim.current = { yaw: 0, pitch: 0, distance: 7.2 };
@@ -404,7 +479,7 @@ function App() {
   };
 
   return <main ref={stage} className="meadow" data-camera="mouse-shoulder" data-playing={!menu} data-mouse-focus={mouseFocused} data-touch={touch}>
-    <canvas ref={canvas} tabIndex={menu ? -1 : 0} aria-label="Mouse swings physical giraffe neck; high shoulder camera gently follows. Click returns ball or serves. Hold click for round power. Assisted footwork moves toward the ball. Optional WASD movement, Q set, E jump set, Ctrl dive, X ability, Space jump, Escape pause." onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onLostPointerCapture={pointerUp} onContextMenu={event => event.preventDefault()} />
+    <canvas ref={canvas} tabIndex={menu ? -1 : 0} aria-label="Mouse swings physical giraffe neck; high shoulder camera gently follows. WASD moves. Click returns ball or serves. Hold click for equipped power. Q set, E jump set, Ctrl flop dive, X ability, Space jump, Escape pause." onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onLostPointerCapture={pointerUp} onContextMenu={event => event.preventDefault()} />
     {!menu && <>
       <div ref={reticle} className="center-cursor" aria-hidden="true" data-locked={mouseFocused}>
         <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="10"/><path d="M20 3v6m0 22v6M3 20h6m22 0h6"/><circle className="cursor-dot" cx="20" cy="20" r="2.5"/></svg>
@@ -413,16 +488,24 @@ function App() {
         {captureFailed ? 'LOCK MOUSE · ALT' : 'CLICK TO LOCK MOUSE'}
         <small>{captureFailed ? 'Embedded preview? Drag to swing, or open in Chrome / Edge.' : 'Swing neck · camera follows'}</small>
       </button>}
+      {runtime.current.onlineActive && <div className="online-match-status" role="status">{onlineStatus.connection === 'connected' ? `ONLINE / ${runtime.current.localTeam === 0 ? 'MEADOW' : 'EMBER'} / ${Math.round(onlineStatus.rtt || 0)} ms` : onlineStatus.connection === 'reconnecting' || onlineStatus.connection === 'connecting' ? 'CONNECTION LOST / REJOINING CLUB...' : `OFFLINE / ${onlineStatus.error?.message || 'Return to Party Post to reconnect.'}`}</div>}
       <MatchUI state={match} onAction={action} onPause={() => showMenu('pause')} onWalk={(walk, id) => applyWalk(interaction.current, walk, `stick:${id}`)} touch={touch}/>
     </>}
-    {menu && <GameMenu
-      menu={menu} mode={mode} difficulty={difficulty} onMode={setMode} onDifficulty={setDifficulty}
+    {menu === 'lobby' && <CloudLobby error={error} onReload={() => location.reload()} profile={profile} skinName={getSkin(profile.equippedSkin).name} abilityName={ABILITY_CATALOG.find(item => item.id === profile.equippedAbility)?.name || profile.equippedAbility} hotspots={hotspots}
+      onSelect={view => { runtime.current.audio?.unlock(); runtime.current.audio?.event('menu'); setMenuTab(view); }} view={menuTab} onClose={() => setMenuTab('home')}
+      muted={muted} music={music} touch={touch} onMuted={() => setMuted(value => !value)} onMusic={() => setMusic(value => !value)}
+      onTouch={() => { touchOverride.current = !touch; setTouch(!touch); }} onFullscreen={toggleFullscreen} ready={ready} panelRef={panel}>
+      {(menuTab === 'shop' || menuTab === 'abilities') && <Shop view={menuTab === 'shop' ? 'skins' : 'abilities'} profile={profile} onChange={next => setProfile(saveProfile(next))} onClose={() => setMenuTab('home')} onSound={event => runtime.current.audio?.event(event || 'menu')}/>}
+      {menuTab === 'online' && <OnlinePanel client={runtime.current.online} state={onlineStatus} profile={profile} onClose={() => setMenuTab('home')}/>}
+      {(menuTab === 'play' || menuTab === 'controls') && <GameMenu key={menuTab} startHelp={menuTab === 'controls'} menu={menu} mode={mode} difficulty={difficulty} onMode={setMode} onDifficulty={setDifficulty} onPlay={begin} onBack={() => setMenuTab('home')} ready={ready} error={error} result={result} muted={muted} music={music} onMuted={() => setMuted(value => !value)} onMusic={() => setMusic(value => !value)} captureFailed={captureFailed} onReload={() => location.reload()} panelRef={panel} onFullscreen={toggleFullscreen} isFullscreen={isFullscreen} touch={touch} onTouch={() => { touchOverride.current = !touch; setTouch(!touch); }} onMenuSound={unlock => { if (unlock) runtime.current.audio?.unlock(); runtime.current.audio?.event('menu'); }}/> }
+    </CloudLobby>}
+    {menu && menu !== 'lobby' && <GameMenu
+      online={Boolean(runtime.current.onlineActive)} menu={menu} mode={mode} difficulty={difficulty} onMode={setMode} onDifficulty={setDifficulty}
       onPlay={menu === 'pause' ? resume : begin} onBack={clubhouse} ready={ready} error={error} result={result}
       muted={muted} music={music} onMuted={() => setMuted(value => !value)} onMusic={() => setMusic(value => !value)}
       captureFailed={captureFailed} onReload={() => location.reload()} panelRef={panel}
       onFullscreen={toggleFullscreen} isFullscreen={isFullscreen}
       touch={touch} onTouch={() => { touchOverride.current = !touch; setTouch(!touch); }}
-      autoFeet={autoFeet} onAutoFeet={() => { autoFeetRef.current = !autoFeet; setAutoFeet(!autoFeet); }}
       onMenuSound={unlock => { if (unlock) runtime.current.audio?.unlock(); runtime.current.audio?.event('menu'); }}
     />}
   </main>;

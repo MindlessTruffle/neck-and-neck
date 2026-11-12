@@ -1,0 +1,9 @@
+{$CLUB_HOST} {
+  encode zstd gzip
+  header {
+    -Server
+    X-Content-Type-Options nosniff
+    Referrer-Policy no-referrer
+  }
+  reverse_proxy game:8787
+}

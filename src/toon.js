@@ -21,6 +21,13 @@ export function createToonStyle() {
       gradientMap: ramp,
       map: source?.map || null,
       alphaMap: source?.alphaMap || null,
+      normalMap: source?.normalMap || null,
+      normalScale: source?.normalScale?.clone() || new THREE.Vector2(1,1),
+      bumpMap: source?.bumpMap || null,
+      bumpScale: source?.bumpScale ?? 1,
+      aoMap: source?.aoMap || null,
+      aoMapIntensity: source?.aoMapIntensity ?? 1,
+      emissiveMap: source?.emissiveMap || null,
       alphaTest: source?.alphaTest || 0,
       opacity: source?.opacity ?? 1,
       transparent: source?.transparent || false,
@@ -34,6 +41,15 @@ export function createToonStyle() {
     if (pigment.h > .17 && pigment.h < .47) result.color.setHSL(pigment.h - .025, pigment.s * .86, Math.min(.8, pigment.l + .015));
     if (pigment.s < .12 && pigment.l > .6) result.color.lerp(new THREE.Color('#f5e7c3'), .2);
     result.name = source?.name || `Cel_${source}`;
+    if(/GoldenCoat|WarmMuzzle|TeamScarf|CaramelPatches/.test(result.name)&&!result.map){
+      result.onBeforeCompile=shader=>{
+        shader.vertexShader='varying vec3 vPaintPosition;\n'+shader.vertexShader;
+        shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n vPaintPosition = position;');
+        shader.fragmentShader='varying vec3 vPaintPosition;\n'+shader.fragmentShader;
+        shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\n float paintWash=sin(dot(vPaintPosition,vec3(6.0,3.0,5.0)))*sin(dot(vPaintPosition,vec3(-4.0,7.0,2.0)));\n float paintStroke=sin(vPaintPosition.y*47.0+sin(vPaintPosition.x*12.0)*1.8);\n diffuseColor.rgb *= .98 + paintWash*.035 + paintStroke*.012;');
+      };
+      result.customProgramCacheKey=()=> 'painterly-athlete-v1';
+    }
     result.userData.cel = true;
     ownedMaterials.add(result); if (!unique) materialCache.set(key, result); return result;
   }
@@ -82,7 +98,7 @@ export function createToonStyle() {
 
   function ink(root, { width = 1.6, skinned = false, predicate = () => true } = {}) {
     const sources = [];
-    root.traverse(object => { if (object.isMesh && !object.userData.isInk && !!object.isSkinnedMesh === skinned && predicate(object)) sources.push(object); });
+    root.traverse(object => { const mats=object.material?(Array.isArray(object.material)?object.material:[object.material]):[];if (object.isMesh && !object.userData.isInk && !!object.isSkinnedMesh === skinned && !mats.some(mat=>mat.alphaTest>.01||(mat.transparent&&mat.opacity<.99)) && predicate(object)) sources.push(object); });
     if (!sources.length) return null;
     const geometry = hullGeometry(sources, root, skinned); if (!geometry) return null;
     let outline;
@@ -132,5 +148,6 @@ export function createToonStyle() {
   }
   function stats() { return { celMaterials: ownedMaterials.size - inkCache.size, inkHulls: outlineCount, batchDraws: batches.length, batchedMeshes }; }
   function dispose() { ramp.dispose(); ownedMaterials.forEach(item => item.dispose()); ownedGeometry.forEach(item => item.dispose()); batches.forEach(({ instance }) => { instance.removeFromParent(); instance.dispose(); }); batches.length = 0; }
-  return { material, ink, stylize, batch, update, stats, dispose };
+  function setInkWidth(object,width){if(object?.userData.isInk)object.material=inkMaterial(width);}
+  return { material, ink, stylize, batch, update, stats, dispose, setInkWidth };
 }

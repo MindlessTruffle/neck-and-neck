@@ -8,6 +8,20 @@ import { GiraffeRig } from '../src/rig.js';
 const finite = values => values.every(Number.isFinite);
 const close = (a, b, epsilon = 1e-5) => assert.ok(a.distanceTo(b) < epsilon, `${a.toArray()} differs from ${b.toArray()}`);
 
+// Licensed painted models must retain every supported surface texture channel.
+{
+  const toon=createToonStyle(),map=new THREE.Texture(),normal=new THREE.Texture(),ao=new THREE.Texture(),emissive=new THREE.Texture();
+  const source=new THREE.MeshStandardMaterial({map,normalMap:normal,aoMap:ao,emissiveMap:emissive,alphaTest:.4});
+  source.normalScale.set(.4,.7);const painted=toon.material(source);
+  assert.ok(painted.map===map&&painted.normalMap===normal&&painted.aoMap===ao&&painted.emissiveMap===emissive);
+  assert.deepEqual(painted.normalScale.toArray(),[.4,.7]);assert.equal(painted.alphaTest,.4);
+  const leaf=new THREE.Mesh(new THREE.PlaneGeometry(1,1),painted),group=new THREE.Group();group.add(leaf);
+  assert.equal(toon.ink(group),null,'Alpha-cut foliage must not acquire opaque rectangular ink hulls');
+  const coat=toon.material(new THREE.MeshStandardMaterial({name:'GoldenCoat'})),shader={uniforms:{},vertexShader:THREE.ShaderLib.toon.vertexShader,fragmentShader:THREE.ShaderLib.toon.fragmentShader};
+  coat.onBeforeCompile(shader);assert.ok(shader.vertexShader.includes('vPaintPosition = position'));assert.ok(shader.fragmentShader.includes('paintStroke'));
+  toon.dispose();source.dispose();leaf.geometry.dispose();for(const texture of [map,normal,ao,emissive])texture.dispose();
+}
+
 // A hull may bake local transforms, but must never mutate shared source data.
 {
   const toon = createToonStyle(), root = new THREE.Group();
@@ -68,7 +82,18 @@ const close = (a, b, epsilon = 1e-5) => assert.ok(a.distanceTo(b) < epsilon, `${
   }
   assert.equal(offset, rig.ink.geometry.attributes.position.count);
   rig.ink.computeBoundingBox(); assert.ok(finite([...rig.ink.boundingBox.min.toArray(), ...rig.ink.boundingBox.max.toArray()]));
+  const palette={body:'#63bfc9',spots:'#293951',muzzle:'#fff1c4',scarf:'#e46d96',accent:'#ffe45e'};
+  rig.setSkin(palette);rig.update(player,1/60,3);
+  assert.equal(rig.materials.find(m=>m.name==='GoldenCoat').color.getHexString(),'63bfc9');
+  assert.equal(rig.materials.find(m=>m.name==='CaramelPatches').color.getHexString(),'293951');
+  player.dive=1;player._diveX=1;player._diveZ=0;rig.update(player,1/60,3.2);
+  assert(rig.root.rotation.z>1.4,'full dive flops the body sideways');
+  player.dive=0;player.setBounce=1;player._setBounceTime=.29;rig.update(player,1/60,3.4);
+  assert(rig.bones.get('Body').bone.scale.y<.9,'set visibly squashes the body bone');
+  player.setBounce=0;player._setBounceTime=0;player.knockback=1;player.tumble=8;rig.update(player,1/60,3.6);
+  for(const record of rig.bones.values())assert(finite(record.bone.matrixWorld.elements),'flop/set/tumble transforms remain finite');
+  rig.neck.forEach((record,i)=>close(record.bone.getWorldPosition(new THREE.Vector3()),new THREE.Vector3(points[i].x,points[i].y,points[i].z)));
   rig.dispose(); toon.dispose();
 }
 
-console.log('Toon checks passed: shared geometry, finite hulls, batching, skinned alignment.');
+console.log('Toon checks passed: shared geometry, finite hulls, batching, skinned alignment, skin palettes, full flop/set squash and explosion tumble.');

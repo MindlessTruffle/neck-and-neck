@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import { createRenderPerformance } from '../src/performance.js';
 import * as THREE from 'three';
-import { writeShoulderPose, cameraFovForAspect, neckCameraYaw, cameraFollowAlpha } from '../src/art.js';
+import { writeShoulderPose, cameraFovForAspect, neckCameraYaw, cameraFollowAlpha, selectRenderPlayer, resolveRenderSkin } from '../src/art.js';
+
+const onlinePlayers=[{id:0,human:true},{id:2,human:true},{id:3,human:true}];
+assert.equal(selectRenderPlayer({players:onlinePlayers,localPlayerId:3}).id,3,'An online camera must follow the explicitly assigned local slot');
+assert.equal(selectRenderPlayer({players:[{id:0},{id:1,human:true}]}).id,1);
+assert.equal(selectRenderPlayer({players:[]}),null);
+const equipped={body:'#aabbcc'},remote={body:'#dd8844'};
+assert.ok(resolveRenderSkin({network:true},{skin:remote},equipped)===remote,'Authoritative online palettes take precedence');
+assert.ok(resolveRenderSkin({}, {skin:null},equipped)===equipped,'Returning offline must restore the local equipped palette');
+assert.equal(resolveRenderSkin({network:true},{skin:null},equipped),null,'A remote default skin must not inherit a cached local palette');
 
 const neckBase={x:0,y:1.45,z:0};
 assert.equal(neckCameraYaw(.8,neckBase,{x:.01,y:3,z:.01}),.8,'An almost vertical neck must not invent a heading');

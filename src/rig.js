@@ -13,7 +13,7 @@ export class GiraffeRig {
     this.root.add(this.model); scene.add(this.root);
     this.index = index; this.yaw = Math.PI / 2; this.team = -1;
     this.gaitPhase = index * 1.7; this.moving = 0; this.headOrientation = null;
-    this.bones = new Map(); this.materials = [];
+    this.bones = new Map(); this.materials = [];this.baseColors=new Map();this.skin=null;this.skinKey='';
     this.root.updateMatrixWorld(true);
     this.model.traverse(object => {
       if (object.isBone) {
@@ -23,7 +23,7 @@ export class GiraffeRig {
       }
       if (object.isMesh) {
         object.castShadow = true; object.receiveShadow = true; object.frustumCulled = false;
-        const copyMaterial = material => { const copy = toon ? toon.material(material, { unique: true }) : material.clone(); this.materials.push(copy); return copy; };
+        const copyMaterial = material => { const copy = toon ? toon.material(material, { unique: true }) : material.clone(); this.materials.push(copy);if(copy.color)this.baseColors.set(copy,copy.color.clone());return copy; };
         object.material = Array.isArray(object.material) ? object.material.map(copyMaterial) : copyMaterial(object.material);
       }
     });
@@ -42,6 +42,19 @@ export class GiraffeRig {
       leg.lower.axis.copy(leg.restFoot).sub(leg.lower.restPosition).normalize().applyQuaternion(leg.lower.restQuaternion.clone().invert());
     });
     this.ink = toon?.ink(this.model, { width: index === 0 ? 3.6 : 2.7, skinned: true });
+  }
+  setSkin(palette=null) {
+    if(palette&&typeof palette!=='object')return;
+    const key=JSON.stringify(palette||{})+this.team;if(key===this.skinKey)return;
+    this.skin=palette;this.skinKey=key;
+    for(const material of this.materials){
+      if(!material.color)continue;
+      material.color.copy(this.baseColors.get(material));
+      const name=material.name;
+      const field=/GoldenCoat/i.test(name)?'body':/CaramelPatches/i.test(name)?'spots':/WarmMuzzle|Cream/i.test(name)?'muzzle':/TeamScarf/i.test(name)?'scarf':/TeamTrim/i.test(name)?'accent':null;
+      if(field&&palette?.[field])material.color.set(palette[field]);
+      else if(/TeamScarf|TeamTrim/i.test(name)&&this.team!==-1)material.color.set(this.team===0?'#238d8c':'#e3684f');
+    }
   }
 
   poseSegment(record, start, end, stretch = false) {
@@ -65,19 +78,28 @@ export class GiraffeRig {
     this.root.visible = !!player; if (!player) return;
     if (this.team !== player.team) {
       this.team = player.team;
-      this.materials.forEach(material => {
-        if (/team|scarf|jersey|band|sport/i.test(material.name)) material.color.set(player.team === 0 ? '#238d8c' : '#e3684f');
-      });
+      this.skinKey='';
     }
+    this.setSkin(player.skin&&typeof player.skin==='object'?player.skin:this.skin);
     // Restore the bind pose before posing children in hierarchy order.
     for (const r of this.bones.values()) { r.bone.position.copy(r.position); r.bone.quaternion.copy(r.quaternion); r.bone.scale.copy(r.scale); }
+    const dive=THREE.MathUtils.clamp(player.dive||0,0,1),bounce=THREE.MathUtils.clamp(player.setBounce||0,0,1),knock=THREE.MathUtils.clamp(player.knockback||0,0,1),tumble=player.tumble||0;
     const speed = Math.hypot(player.vx || 0, player.vz || 0);
     this.moving = THREE.MathUtils.lerp(this.moving, Math.min(1, speed / 5), 1 - Math.exp(-dt * 13));
     const moving = this.moving;
-    const targetYaw = player.team === 0 ? Math.PI / 2 : -Math.PI / 2;
-    const turn = targetYaw + THREE.MathUtils.clamp((player.vz || 0) * (player.team ? .08 : -.08), -.4, .4);
+    const targetYaw = Number.isFinite(player.bodyYaw)?Math.PI/2-player.bodyYaw:(player.team===0?Math.PI/2:-Math.PI/2);
+    const normalTurn = targetYaw + THREE.MathUtils.clamp((player.vz || 0) * (player.team ? .08 : -.08), -.4, .4);
+    const diveYaw=Math.atan2(player._diveX??0,player._diveZ??1);
+    const turn=normalTurn+Math.atan2(Math.sin(diveYaw-normalTurn),Math.cos(diveYaw-normalTurn))*dive;
     this.yaw += Math.atan2(Math.sin(turn - this.yaw), Math.cos(turn - this.yaw)) * (1 - Math.exp(-dt * 8));
-    this.root.position.set(player.x, player.y || 0, player.z); this.root.rotation.y = this.yaw;
+    this.root.position.set(player.x,(player.y||0)+dive*.38,player.z);
+    this.root.rotation.set(dive*.38+Math.sin(tumble)*knock*.25,this.yaw+tumble*.35,dive*1.5+tumble*.7,'YXZ');
+    const body=this.bones.get('Body');
+    if(body){
+      const phase=player._setBounceTime>0?1-player._setBounceTime/.58:0;
+      body.bone.position.y-=Math.sin(phase*Math.PI*2)*.16;
+      body.bone.scale.set(body.scale.x*(1+bounce*.1),body.scale.y*(1-bounce*.16),body.scale.z*(1+bounce*.08));
+    }
     this.root.updateMatrixWorld(true);
     this.gaitPhase += dt * (7 + speed * .55) * (.2 + moving * .8);
     const gait = this.gaitPhase;
@@ -89,9 +111,11 @@ export class GiraffeRig {
       // Blender's hoof center is y=.15, with its sole resting on y=0.
       footLocal.y = .15 + Math.max(0, Math.cos(phase)) * .30 * moving + Math.min(player.y || 0, .7) * .12;
       footLocal.z += Math.sin(phase) * .3 * moving;
-      footLocal.x += leg.side * Math.min(player.y || 0, 1) * .06;
+      footLocal.x += leg.side * (Math.min(player.y || 0, 1) * .06+dive*.55+knock*.3);
+      footLocal.y += dive*.7+knock*(.55+Math.sin(time*15+i)*.2)-bounce*.1;
+      footLocal.z += leg.front*dive*.32+Math.sin(time*13+i)*knock*.25;
       const upperLength = hipLocal.distanceTo(kneeLocal), lowerLength = leg.lower.length;
-      const hip = this.root.localToWorld(hipLocal), foot = this.root.localToWorld(footLocal);
+      const hip = leg.upper.bone.getWorldPosition(new THREE.Vector3()), foot = this.root.localToWorld(footLocal);
       const delta = foot.clone().sub(hip), distance = Math.min(delta.length(), upperLength + lowerLength - .005), direction = delta.normalize();
       const along = (upperLength * upperLength - lowerLength * lowerLength + distance * distance) / (2 * Math.max(.02, distance));
       const bend = Z.clone().multiplyScalar(leg.front).applyQuaternion(this.root.quaternion);

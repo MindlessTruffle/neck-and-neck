@@ -2,6 +2,12 @@
 
 All assets in this folder are served from the game's own origin. No third-party requests occur while playing.
 
+## Original generated primary audio
+
+`elevenlabs/` contains five music cues (lobby, shop, abilities, match, results) and twelve action/UI effects generated through the user's paid ElevenLabs Creator account. These assets are not CC0 stock recordings. The original prompts, provider/model names, durations, and byte counts are recorded in `elevenlabs/manifest.json`. No API credential is included in this game. Generation was performed before building the game; playback only loads the local MP3 files.
+
+Scene changes crossfade the corresponding generated cue. If a generated file cannot load, the recordings documented below remain available as local fallbacks, followed by original Web Audio synthesis.
+
 ## Background loop
 
 **Juhani Junkala / SubspaceAudio — Chiptune Adventures, 1. Stage 1**

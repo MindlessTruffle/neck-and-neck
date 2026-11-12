@@ -4,6 +4,8 @@ const STOCK_EFFECTS = {
   click: 'click.wav', bump: 'bump.wav', set: 'set.wav', spike: 'spike.wav',
   block: 'block.wav', dive: 'dive.wav', point: 'point.wav', ability: 'ability.wav',
 };
+const EFFECT_IDS = ['click', 'bump', 'set', 'spike', 'block', 'dive', 'point', 'ability', 'jump', 'dash', 'roll', 'win'];
+const MUSIC_SCENES = new Set(['lobby', 'shop', 'abilities', 'match', 'results']);
 const ABILITY_NOTES = { feather: 79, spring: 76, magnet: 71, rocket: 83, shield: 67 };
 
 /** Local CC0 stock audio, gesture-safe Web Audio, and a procedural fallback. */
@@ -35,6 +37,11 @@ export class GameAudio {
     this._assetsReady = null;
     this._musicPromise = null;
     this._stockMusicSource = null;
+    this._musicVoice = null;
+    this._fadingMusicVoice = null;
+    this._sceneRequest = 0;
+    this.scene = 'lobby';
+    this.musicStatus = 'locked';
   }
 
   unlock() {
@@ -109,6 +116,13 @@ export class GameAudio {
     if (this.musicEnabled && this.unlocked) this._loadStockMusic();
   }
 
+  setScene(scene) {
+    if (!MUSIC_SCENES.has(scene) || this._disposed) return Promise.resolve(false);
+    if (this.scene === scene && this._musicPromise) return this._musicPromise;
+    this.scene = scene;
+    return this.unlocked ? this._loadStockMusic() : Promise.resolve(false);
+  }
+
   _loadBuffer(key, filename) {
     if (!this._fetcher || !this.context || this._disposed) return Promise.resolve(null);
     if (this._assetPromises.has(key)) return this._assetPromises.get(key);
@@ -133,34 +147,56 @@ export class GameAudio {
 
   _loadStockAssets() {
     if (this._assetsReady || !this._fetcher || this._disposed) return this._assetsReady;
-    const requests = Object.entries(STOCK_EFFECTS).map(([key, filename]) => this._loadBuffer(key, filename));
+    const requests = EFFECT_IDS.map(async key => {
+      const generatedName = key === 'point' ? 'score' : key;
+      const buffer = await this._loadBuffer(`generated-${key}`, `elevenlabs/sfx-${generatedName}.mp3`) || (STOCK_EFFECTS[key] ? await this._loadBuffer(`fallback-${key}`, STOCK_EFFECTS[key]) : null);
+      if (buffer && !this._disposed) this._stockBuffers.set(key, buffer);
+      return buffer;
+    });
     if (this.musicEnabled) requests.push(this._loadStockMusic());
     this._assetsReady = Promise.all(requests);
     return this._assetsReady;
   }
 
   _loadStockMusic() {
-    if (this._musicPromise || !this._fetcher || this._disposed || !this.context) return this._musicPromise;
+    if (!this._fetcher || this._disposed || !this.context) return Promise.resolve(false);
+    const scene = this.scene, request = ++this._sceneRequest;
+    this.musicStatus = 'loading';
     this._musicPromise = (async () => {
-      // Original Ogg preserves the composer's exact loop. MP3 covers older decoders.
-      const buffer = await this._loadBuffer('music-ogg', 'adventure-stage1.ogg') || await this._loadBuffer('music-mp3', 'adventure-stage1.mp3');
-      if (!buffer || this._disposed) return false;
+      const buffer = await this._loadBuffer(`music-${scene}`, `elevenlabs/music-${scene}.mp3`) || await this._loadBuffer('music-ogg', 'adventure-stage1.ogg') || await this._loadBuffer('music-mp3', 'adventure-stage1.mp3');
+      if (this._disposed || request !== this._sceneRequest) return false;
+      if (!buffer) { this.musicStatus = 'procedural'; return false; }
       this._stockBuffers.set('music', buffer);
-      this._startStockMusic(buffer);
+      this._startStockMusic(buffer, scene);
+      this.musicStatus = 'ready';
       return true;
     })();
     return this._musicPromise;
   }
 
-  _startStockMusic(buffer) {
+  _startStockMusic(buffer, scene) {
     const context = this.context;
-    if (this._disposed || !context || !this.musicBus || this._stockMusicSource) return;
+    if (this._disposed || !context || !this.musicBus || (this._musicVoice?.scene === scene && this._musicVoice?.source.buffer === buffer)) return;
+    const previous = this._musicVoice, now = context.currentTime;
+    // Rapid menu navigation keeps at most one outgoing crossfade alive.
+    if (this._fadingMusicVoice) {
+      try { this._fadingMusicVoice.source.stop(now); } catch {}
+      this._fadingMusicVoice.source.onended?.();
+      this._fadingMusicVoice = null;
+    }
+    if (previous) {
+      previous.gain.gain.cancelScheduledValues(now);
+      previous.gain.gain.setTargetAtTime(0, now, .18);
+      try { previous.source.stop(now + .9); } catch {}
+      this._fadingMusicVoice = previous;
+    }
     const source = context.createBufferSource(), gain = context.createGain();
     source.buffer = buffer; source.loop = true;
     gain.gain.value = 0;
     source.connect(gain); gain.connect(this.musicBus);
     this._trackVoice(source, [source, gain]);
     this._stockMusicSource = source;
+    this._musicVoice = { source, gain, scene };
     source.start(context.currentTime + .02);
     gain.gain.setTargetAtTime(.36, context.currentTime + .02, .14);
     this.fallbackBus?.gain.setTargetAtTime(0, context.currentTime, .1);
@@ -188,11 +224,12 @@ export class GameAudio {
     if (!type) return;
     try {
       switch (type.toLowerCase()) {
-        case 'jump': case 'boing': this._boing(); break;
+        case 'jump': case 'boing': this._stockSound('jump', .4) || this._boing(); break;
         case 'serve': this._rallyCount = 0; this._serve(); break;
         case 'score': case 'point': this._rallyCount = 0; this._score(); break;
         case 'win': case 'victory': case 'finish': this._rallyCount = 0; this._win(); break;
         case 'menu': case 'click': case 'select': this._menu(); break;
+        case 'roll': if (!this._stockSound('roll', .38)) this._ability({ ability: 'magnet' }); break;
         case 'round': this._rallyCount = 0; break;
         case 'toss': this._stockSound('set', .35) || this._serve(); break;
         case 'ability': this._ability(event); break;
@@ -201,6 +238,7 @@ export class GameAudio {
           break;
         case 'action': this._anticipate(event); break;
         case 'dash':
+          if (this._stockSound('dash', .35)) break;
           this._noise(.13, .075, 1100);
           this._tone(380, this.context.currentTime, .13, 'triangle', this.master, .045, 95);
           break;
@@ -249,7 +287,7 @@ export class GameAudio {
 
   _tone(frequency, start, duration, wave, destination, volume, endFrequency) {
     const context = this.context;
-    if (this._disposed || !context || !destination) return;
+    if (this._disposed || !context || !destination || this._liveNodes.size > 62) return;
     const oscillator = context.createOscillator(), gain = context.createGain();
     start = Math.max(context.currentTime, start);
     oscillator.type = wave;
@@ -311,7 +349,7 @@ export class GameAudio {
 
   _noise(duration, volume, cutoff) {
     const context = this.context;
-    if (this._disposed || !context || !this.master) return;
+    if (this._disposed || !context || !this.master || this._liveNodes.size >= 62) return;
     const sampleCount = Math.ceil(context.sampleRate * duration);
     let buffer = this._noiseBuffers.get(sampleCount);
     if (!buffer) {
@@ -337,6 +375,7 @@ export class GameAudio {
   }
 
   _win() {
+    if (this._stockSound('win', .42)) return;
     if (this._stockSound('point', .42, .94)) return;
     const time = this.context.currentTime + .005;
     [0, .13, .26, .4].forEach((offset, i) => this._tone(this._midi([72, 76, 79, 84][i]), time + offset, .22, 'sine', this.master, .11));
@@ -379,6 +418,10 @@ export class GameAudio {
     // Promise.all retains its decoded AudioBuffers unless its owner releases it.
     this._assetsReady = this._musicPromise = this._unlockPromise = null;
     this._stockMusicSource = null;
+    this._musicVoice = null;
+    this._fadingMusicVoice = null;
+    this._sceneRequest++;
+    this.musicStatus = 'disposed';
     this._closeContext(this.context);
     this.context = this.master = this.musicBus = this.fallbackBus = null;
     this.unlocked = false;

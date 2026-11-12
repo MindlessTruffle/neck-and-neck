@@ -5,6 +5,9 @@ export const BALL_RADIUS = .34;
 const G = BALL_GRAVITY;
 const BALL_R = BALL_RADIUS;
 const HEAD_R = .68;
+const DIVE_DURATION=.72;
+const ACTION_KEYS=['jump','dash','swing','smash','serve','toss','set','jumpSet','dive','ability'];
+const EMPTY_INPUT=Object.freeze({});
 export const ABILITIES = [
   { id:'feather',name:'Feather Float',description:'Your next touch becomes a slow, lofty return.',color:'#d8f4ee',duration:6,cooldown:6 },
   { id:'spring',name:'Spring Step',description:'Launch into a high jump for a spike or block.',color:'#ffd56c',duration:3,cooldown:5 },
@@ -20,15 +23,16 @@ const SKILL = {
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
 
 export class VolleyballGame {
-  constructor({ mode = '2v2', difficulty = 'club', onEvent = () => {} } = {}) {
+  constructor({ mode = '2v2', difficulty = 'club', equippedAbility='magnet',loadout=null,onEvent = () => {} } = {}) {
     this.onEvent = onEvent; this.mode = mode; this.difficulty = difficulty; this.seed = 72931;
-    this.reset({ mode, difficulty });
+    this.reset({ mode, difficulty,equippedAbility,loadout });
   }
   random() { this.seed = (Math.imul(this.seed, 1664525) + 1013904223) >>> 0; return this.seed / 4294967296; }
   emit(type, data = {}) { this.onEvent({ type, ...data }); }
   get state() { return this; }
-  reset({ mode = this.mode, difficulty = this.difficulty } = {}) {
+  reset({ mode = this.mode, difficulty = this.difficulty,equippedAbility=this.equippedAbility||'magnet',loadout=null } = {}) {
     this.mode = mode === '1v1' ? '1v1' : '2v2'; this.difficulty = SKILL[difficulty] ? difficulty : 'club';
+    this.equippedAbility=ABILITIES.some(a=>a.id===(loadout?.ability||equippedAbility))?(loadout?.ability||equippedAbility):'magnet';this.loadout=loadout;this.networkInputs=null;this._allowEdges=true;this._serveClickPlayer=null;this.celebrationRemaining=0;
     this.paused = false; this.phase = 'attract'; this.score = [0, 0]; this.rally = 0; this.hits = 0; this.rallyHits = 0;
     this.server = 0; this.timer = 0; this.message = 'READY'; this.lastTeam = null; this.lastHitter = null; this.touchCooldown = 0; this.netCooldown = 0;
     this.round=1;this.touches=[0,0];this.touchTeam=null;this.lastAction='';this.serveStage='ready';this.serveCharge=0;this.serveQuality=0;this._serveTime=0;this._lastWasBlock=false;
@@ -40,24 +44,41 @@ export class VolleyballGame {
         _jumpV: 0, _jumpBuffer: 0, _dash: 0, _dashCooldown: 0, _dashBuffer: 0, _dashX: 0, _dashZ: 0,
         _swingTime: 0, _swingCooldown: 0, _swingBuffer: 0, _shotYaw: 0, _reaction: 0, _tx: x, _tz: z,
         aimYaw:yaw,shotPower:.55,role:count===1?'all-rounder':i===0?'receiver':'striker',ability:null,
-        assisting:false,autoTarget:{x,z},_autoReaction:0,
+        equippedAbility:!team&&!i?this.equippedAbility:null,_matchAbility:null,skin:!team&&!i?loadout?.skin:null,
         _actionTime:0,_actionSerial:0,_lastHitActionSerial:-1,_contactAction:'bump',_setBuffer:0,_jumpSetBuffer:0,_blockTime:0,_contactCooldown:0,_jumpCooldown:0,
-        _dive:0,_diveCooldown:0,_diveX:0,_diveZ:0,dive:0 });
+        _dive:0,_diveCooldown:0,_diveX:0,_diveZ:0,dive:0,setBounce:0,_setBounceTime:0,
+        knockback:0,_knockTime:0,_knockVX:0,_knockVY:0,_knockVZ:0,tumble:0,_tumbleSpeed:0 });
     }
     for (const p of this.players) this._initNeck(p);
     this.ball = { x: -5, y: 3.2, z: 0, vx: 0, vy: 0, vz: 0, spin: 0 };
     this._launch(0, true); return this;
   }
-  start() { this.paused = false; this.phase = 'serve'; this.score = [0, 0]; this.rally = this.hits = this.rallyHits = 0; this.server = 0; this.timer = 0; this.message = 'CLICK TO TOSS'; this.lastHitter = this.lastTeam = null; this._place(); this._newRound(); this._hold(); return this; }
+  start(options={}) { if(options.equippedAbility||options.loadout)this.setPlayerLoadout(0,options.loadout||{ability:options.equippedAbility});this.paused = false; this.phase = 'serve'; this.score = [0, 0]; this.rally = this.hits = this.rallyHits = 0; this.server = 0; this.timer = 0;this.celebrationRemaining=0; this.message = 'CLICK TO TOSS'; this.lastHitter = this.lastTeam = null; this._place(); this._newRound(); this._hold(); return this; }
+  setPlayerLoadout(id,loadout={}) {
+    const p=this.players.find(q=>q.id===Number(id));if(!p)return false;
+    if(ABILITIES.some(a=>a.id===loadout.ability)){p.equippedAbility=loadout.ability;p._matchAbility=loadout.ability;if(p.id===0)this.equippedAbility=loadout.ability;}
+    if(loadout.skin!==undefined)p.skin=loadout.skin;
+    return true;
+  }
+  setNetworkInputs(map=null) {
+    this.networkInputs=map?Object.fromEntries(this.players.map(p=>[p.id,{...(map[p.id]||EMPTY_INPUT)}])):null;
+  }
+  _inputForPlayer(p,local=EMPTY_INPUT) {
+    const source=this.networkInputs?(this.networkInputs[p.id]||EMPTY_INPUT):(p.id===0?local:EMPTY_INPUT);
+    if(this._allowEdges&&p.id!==this._serveClickPlayer)return source;
+    const input={...source};for(const key of ACTION_KEYS)if(!this._allowEdges||key==='swing'||key==='smash')input[key]=false;return input;
+  }
   togglePause() { this.paused = !this.paused; if (this.paused) this.clearBufferedInput(); return this.paused; }
   clearBufferedInput() {
     for (const player of this.players) player._jumpBuffer = player._dashBuffer = player._swingBuffer = player._setBuffer = player._jumpSetBuffer = 0;
+    if(this.networkInputs)for(const input of Object.values(this.networkInputs))for(const key of ACTION_KEYS)input[key]=false;
   }
   _newRound() {
     this.round=this.rally+1;this.touches=[0,0];this.touchTeam=null;this.lastAction='';this._lastWasBlock=false;
     this.serveStage='ready';this.serveCharge=0;this._serveTime=0;
     for(const p of this.players){
-      const old=p.ability?.id;let available=ABILITIES.filter(a=>a.id!==old);const choice=available[Math.floor(this.random()*available.length)];
+      const chosen=p.human?(p.equippedAbility||this.equippedAbility):p._matchAbility;
+      const choice=ABILITIES.find(a=>a.id===chosen)||ABILITIES[Math.floor(this.random()*ABILITIES.length)];p._matchAbility=choice.id;
       p.ability={...choice,charges:1,cooldown:0,active:0,ready:false};
       p.role=this.mode==='1v1'?'all-rounder':(p.id%2===(this.round-1)%2?'receiver':'striker');
     }
@@ -68,7 +89,7 @@ export class VolleyballGame {
     for (const p of this.players) {
       p.x = p.team ? 4.8 : -4.8; p.z = count === 1 ? 0 : ((p.id % count) ? 2 : -2); p.y = p.jump = p._jumpV = 0;
       p.vx = p.vz = 0; p._dash = p._dashCooldown = p._dashBuffer = p._jumpBuffer = p._swingBuffer = p._swingTime = p._swingCooldown = 0; p.swing = 0;
-      p.assisting=false;p.autoTarget={x:p.x,z:p.z};p._autoReaction=0;
+      p.setBounce=p._setBounceTime=p.knockback=p._knockTime=p._knockVX=p._knockVY=p._knockVZ=p.tumble=0;
       p._actionTime=p._actionSerial=p._setBuffer=p._jumpSetBuffer=p._blockTime=p._contactCooldown=p._jumpCooldown=p._dive=p._diveCooldown=p.dive=0;p._lastHitActionSerial=-1;p._contactAction='bump';p.action='';
       this._initNeck(p);
     }
@@ -87,8 +108,8 @@ export class VolleyballGame {
     this.message='CLICK TO STRIKE';this.emit('toss',{team:this.server,x:this.ball.x,y:this.ball.y,z:this.ball.z});
   }
   _launch(team, attract = false, power=.55) {
-    const p = this.players.find(q => q.team === team); const yaw = p.human && team === 0 && !attract ? p.aimYaw : (team ? Math.PI : 0);
-    const pitch = p.human && team === 0 && !attract ? clamp(p.neck.pitch, -.15, .7) : .25;
+    const p = this.players.find(q => q.team === team); const yaw = p.human && !attract ? p.aimYaw : (team ? Math.PI : 0);
+    const pitch = p.human && !attract ? clamp(p.neck.pitch, -.15, .7) : .25;
     power=clamp(Number(power)||0,0,1);const speed=5.2+power*1.8;
     const tossed=!attract&&this.serveStage==='toss';
     Object.assign(this.ball, { x: p.head.x + Math.cos(yaw) * 1.5, y: tossed?Math.max(p.head.y+.3,this.ball.y):p.head.y+.3, z: p.head.z + Math.sin(yaw) * 1.5,
@@ -100,8 +121,40 @@ export class VolleyballGame {
   _point(team, reason) {
     if (this.phase === 'attract') { this._place(); this._launch(team, true); return; }
     this.score[team]++; this.rally++; this.server = team; this.phase = 'point'; this.timer = 0; this.message = team ? 'THEIR POINT' : 'YOUR POINT';
-    this.emit('score', { team, score: [...this.score], reason,rallyHits:this.rallyHits });
-    if ((this.score[team] >= 7 && this.score[team] - this.score[1-team] >= 2) || this.score[team] >= 11) { this.phase = 'finished'; this.message = team ? 'THEY WIN' : 'YOU WIN'; this.emit('win', { team, score: [...this.score] }); }
+    const final=(this.score[team]>=7&&this.score[team]-this.score[1-team]>=2)||this.score[team]>=11;
+    const origin=this._blastPlayers(final);
+    this.emit('score', { team, score: [...this.score], reason,rallyHits:this.rallyHits,explosion:true,final,...origin });
+    if(final){this.phase='finished';this.message=team?'THEY WIN':'YOU WIN';this.emit('win',{team,score:[...this.score],explosion:true,final:true,...origin});}
+  }
+  _blastPlayers(final=false) {
+    const origin={x:clamp(this.ball.x,-9,9),y:Math.max(.5,Math.min(this.ball.y,4)),z:clamp(this.ball.z,-5,5)};
+    const duration=final?2.6:1.5;this.celebrationRemaining=duration;
+    this.clearBufferedInput();
+    for(const p of this.players){
+      let dx=p.x-origin.x,dz=p.z-origin.z;const distance=Math.hypot(dx,dz);
+      if(distance<.1){dx=Math.cos(p.id*2.4);dz=Math.sin(p.id*2.4);}else{dx/=distance;dz/=distance;}
+      const force=(final?12:7)+2/(1+distance*.2);
+      p._knockVX=dx*force;p._knockVZ=dz*force;p._knockVY=final?8:5.5;p._knockTime=duration;p.knockback=1;
+      p._tumbleSpeed=(p.id%2?-1:1)*(final?8:5);p.tumble=0;p._dive=p.dive=p._setBounceTime=p.setBounce=0;p.action='knockback';
+    }
+    return origin;
+  }
+  _stepCelebration(dt) {
+    this.celebrationRemaining=Math.max(0,this.celebrationRemaining-dt);
+    for(const p of this.players){
+      if(p._knockTime<=0)continue;
+      p._knockTime=Math.max(0,p._knockTime-dt);p.knockback=Math.min(1,p._knockTime/.45);
+      const drag=Math.exp(-1.65*dt);p._knockVX*=drag;p._knockVZ*=drag;p._knockVY-=18*dt;
+      p.x=clamp(p.x+p._knockVX*dt,-23,23);p.z=clamp(p.z+p._knockVZ*dt,-18,18);p.y=Math.max(0,p.y+p._knockVY*dt);
+      if(p.y===0&&p._knockVY<0)p._knockVY=-p._knockVY*.12;
+      p.vx=p._knockVX;p.vz=p._knockVZ;p.jump=p.y;p.tumble+=p._tumbleSpeed*dt;p._tumbleSpeed*=Math.exp(-dt*.8);
+      this._stepNeck(p,dt);
+    }
+  }
+  advanceCelebration(dt) {
+    if(this.celebrationRemaining<=0||!['point','finished'].includes(this.phase))return;
+    dt=clamp(Number(dt)||0,0,.1);const steps=Math.max(1,Math.ceil(dt*120));
+    if(dt>0)for(let i=0;i<steps;i++)this._stepCelebration(dt/steps);
   }
   _predict(height = 3.2) {
     const b = this.ball, disc = Math.max(0, b.vy*b.vy + 2*G*(b.y-height));
@@ -112,6 +165,7 @@ export class VolleyballGame {
     if (p._swingCooldown > 0) return;
     if(!p.human||this.phase==='attract')p._shotYaw=(this.random()-.5)*(.75+Math.min(.35,this.rallyHits*.02));
     p._swingTime = .5; p._swingCooldown = .48;p._actionTime=.6;p._actionSerial++;p._contactAction=action;p.action=action;
+    if(action==='set')p._setBounceTime=.58;
     if(action==='block')p._blockTime=.68;
     const event={action,player:p.id,team:p.team,x:p.head.x,y:p.head.y,z:p.head.z};
     this.emit('action',event);if(action==='bump'||action==='spike')this.emit('smash',event);
@@ -119,7 +173,7 @@ export class VolleyballGame {
   _divePlayer(p,dx=0,dz=0) {
     if(p._diveCooldown>0||p.y>.4)return false;
     const len=Math.hypot(dx,dz);p._diveX=len>.1?dx/len:Math.cos(p.aimYaw);p._diveZ=len>.1?dz/len:Math.sin(p.aimYaw);
-    p._dive=.55;p._diveCooldown=1.25;p._actionTime=.65;p._actionSerial++;p._contactAction='dive';p.action='dive';
+    p._dive=DIVE_DURATION;p._diveCooldown=1.35;p._actionTime=.8;p._actionSerial++;p._contactAction='dive';p.action='dive';
     this.emit('dive',{action:'dive',player:p.id,team:p.team,x:p.x,y:p.head.y,z:p.z});return true;
   }
   _useAbility(p,dx=0,dz=0) {
@@ -158,36 +212,26 @@ export class VolleyballGame {
     if(ability==='magnet')p.ability.active=0;
     return ability;
   }
-  _stepPlayers(dt, input) {
+  _guideReturn(p,action,assisted) {
+    if(!p.human||!assisted||action==='set')return;
+    const b=this.ball,flight=(b.vy+Math.sqrt(b.vy*b.vy+2*G*Math.max(0,b.y-BALL_R)))/G;
+    if(flight<.15)return;
+    const projectedX=b.x+b.vx*flight,projectedZ=b.z+b.vz*flight;
+    const targetX=clamp(projectedX,p.team?-7.6:1.1,p.team?-1.1:7.6),targetZ=clamp(projectedZ,-4.1,4.1);
+    b.vx+=((targetX-b.x)/flight-b.vx)*.88;b.vz+=((targetZ-b.z)/flight-b.vz)*.88;
+  }
+  _stepPlayers(dt, frameInput) {
     const b = this.ball, pred = this._predict(), skill = SKILL[this.difficulty], count = this.mode === '1v1' ? 1 : 2;
     for (const p of this.players) {
-      const human = p.human && this.phase !== 'attract'; let dx = 0, dz = 0;
+      const human = p.human && this.phase !== 'attract',input=this._inputForPlayer(p,frameInput);let dx = 0, dz = 0;
       p.energy = clamp(p.energy + dt*.13, 0, 1); p._dash = Math.max(0,p._dash-dt); p._swingCooldown = Math.max(0,p._swingCooldown-dt);
       p._dashCooldown = Math.max(0,p._dashCooldown-dt);
       p._jumpBuffer = Math.max(0,p._jumpBuffer-dt); p._dashBuffer = Math.max(0,p._dashBuffer-dt); p._swingBuffer = Math.max(0,p._swingBuffer-dt);
-      for(const key of ['_setBuffer','_jumpSetBuffer','_actionTime','_blockTime','_contactCooldown','_jumpCooldown','_dive','_diveCooldown'])p[key]=Math.max(0,p[key]-dt);
+      for(const key of ['_setBuffer','_jumpSetBuffer','_actionTime','_blockTime','_contactCooldown','_jumpCooldown','_dive','_diveCooldown','_setBounceTime'])p[key]=Math.max(0,p[key]-dt);
+      p.setBounce=p._setBounceTime>0?Math.sin(Math.PI*(1-p._setBounceTime/.58)):0;
       if(p.ability){p.ability.active=Math.max(0,p.ability.active-dt);p.ability.cooldown=Math.max(0,p.ability.cooldown-dt);p.ability.ready=this.phase==='play'&&p.ability.charges>0&&p.ability.cooldown===0;}
       if (human) {
         dx = clamp(Number(input.x)||0,-1,1); dz = clamp(Number(input.z)||0,-1,1);
-        const manualMovement=Math.hypot(dx,dz)>.05;
-        p.assisting=input.autoMove!==false&&this.phase==='play'&&!manualMovement;
-        if(p.assisting){
-          p._autoReaction-=dt;
-          if(p._autoReaction<=0){
-            p._autoReaction=.12;
-            const receive=this._predict(clamp(p.head.y,2.7,4.2));
-            const own=receive.x*(p.team?1:-1)>-.25;
-            const canTouch=this.mode==='1v1'||this.touchTeam!==p.team||this.lastHitter!==p.id||this._lastWasBlock;
-            const mates=this.players.filter(q=>q.team===p.team&&q.id!==p.id&&!(this.touchTeam===q.team&&this.lastHitter===q.id&&this.touches[q.team]>0));
-            const distance=Math.hypot(p.x-receive.x,p.z-receive.z);
-            const nearest=mates.every(q=>distance<=Math.hypot(q.x-receive.x,q.z-receive.z)+.5);
-            const forward=p.team?-1:1;
-            p.autoTarget.x=clamp(own&&canTouch&&nearest?receive.x-forward*1.15:(p.team?4.8:-4.8),p.team?.9:-8.35,p.team?8.35:-.9);
-            p.autoTarget.z=clamp(own&&canTouch&&nearest?receive.z:(count===1?0:p.id%count?2:-2),-4.3,4.3);
-          }
-          dx=p.autoTarget.x-p.x;dz=p.autoTarget.z-p.z;const distance=Math.hypot(dx,dz);
-          if(distance>.12){const arrival=Math.min(1,distance/1.1);dx=dx/distance*arrival;dz=dz/distance*arrival;}else{dx=0;dz=0;}
-        }else p._autoReaction=0;
         const neckYaw = Number.isFinite(input.neckYaw) ? input.neckYaw : input.lookYaw;
         const neckPitch = Number.isFinite(input.neckPitch) ? input.neckPitch : input.lookPitch;
         if (Number.isFinite(neckYaw)) p.neck.yaw = neckYaw;
@@ -215,10 +259,6 @@ export class VolleyballGame {
         else if(p._setBuffer>0&&p._swingCooldown===0){p._setBuffer=0;this._swing(p,p.y>.15?'block':'set');}
         else if (p._swingBuffer > 0 && p._swingCooldown === 0) {
           p._swingBuffer=0;
-          // The click remains the attack decision. Footwork may add a small approach jump.
-          const highReceive=p.assisting&&p.y===0&&p._jumpCooldown===0&&Math.hypot(b.x-p.head.x,b.z-p.head.z)<1.9&&
-            b.y>p.head.y+.65&&b.y<p.head.y+2.1&&b.vy<1.5&&b.x*(p.team?1:-1)>-.2;
-          if(highReceive){p._jumpV=6.7;p._jumpCooldown=.9;this.emit('jump',{player:p.id,x:p.x,y:p.y,z:p.z,assisted:true});}
           this._swing(p);
         }
       } else {
@@ -226,7 +266,7 @@ export class VolleyballGame {
         if (p._reaction <= 0) {
           p._reaction = skill.reaction * (.8+this.random()*.4);
           const own = pred.x*(p.team ? 1 : -1) > -.3;
-          const mates = this.players.filter(q => q.team === p.team && !(count>1&&this.touchTeam===p.team&&this.lastHitter===q.id&&this.touches[p.team]>0) && (!q.human || this.phase === 'attract' || q.assisting || Math.hypot(q.x-pred.x,q.z-pred.z)<3));
+          const mates = this.players.filter(q => q.team === p.team && !(count>1&&this.touchTeam===p.team&&this.lastHitter===q.id&&this.touches[p.team]>0) && (!q.human || this.phase === 'attract' || Math.hypot(q.x-pred.x,q.z-pred.z)<3));
           const nearest = mates.reduce((a,q) => Math.hypot(q.x-pred.x,q.z-pred.z)<Math.hypot(a.x-pred.x,a.z-pred.z)?q:a,mates[0]);
           if (own && nearest === p) {
             // Approach from the back of the ball so the contact normal sends it across the net.
@@ -258,8 +298,8 @@ export class VolleyballGame {
       const dashWeight = p._dash > 0 ? .8*dashEnvelope : 0;
       let targetX = dx*speed*(1-dashWeight) + p._dashX*10.8*dashWeight;
       let targetZ = dz*speed*(1-dashWeight) + p._dashZ*10.8*dashWeight;
-      p.dive=p._dive>0?Math.sin(Math.PI*(1-p._dive/.55)):0;
-      if(p._dive>0){const diveSpeed=(p.ability?.id==='rocket'&&p.ability.active>0?12:9)*(0.45+.55*p._dive/.55);targetX=p._diveX*diveSpeed;targetZ=p._diveZ*diveSpeed;}
+      p.dive=p._dive>0?Math.sin(Math.PI*(1-p._dive/DIVE_DURATION)):0;
+      if(p._dive>0){const diveSpeed=(p.ability?.id==='rocket'&&p.ability.active>0?12.5:9)*(0.4+.6*p._dive/DIVE_DURATION);targetX=p._diveX*diveSpeed;targetZ=p._diveZ*diveSpeed;}
       // Acceleration and drag make direction changes gradual; air steering is weaker.
       const response = p._dive>0?30:p._dash > 0 ? 25 : (p.y > .01 ? 5 : (dx || dz ? 16 : 12));
       const blend = 1 - Math.exp(-response * dt);
@@ -277,10 +317,12 @@ export class VolleyballGame {
     }
   }
   _stepNeck(p, dt) {
-    const n=p.neck, points=p.neckPoints, length=1.8+n.extension*1.2+(p._blockTime>0?.35:0), segment=length/8;
-    const reach=Math.min(length*.82, .75 + p.swing*(p.human && this.phase !== 'attract' ? 1.4 : 1) + Math.abs(n.pitch)*.2);
-    const yaw=n.yaw, vertical=Math.sqrt(length*length-reach*reach) + Math.sin(n.pitch)*.8;
-    const base={x:p.x,y:1.45+p.y-p.dive*.85,z:p.z};
+    const human=p.human&&this.phase!=='attract';
+    const n=p.neck, points=p.neckPoints, length=(human?2.1+n.extension*1.6:1.8+n.extension*1.2)+(p._blockTime>0?.35:0), segment=length/8;
+    const setting=p._contactAction==='set'&&p._actionTime>0;
+    const reach=Math.min(length*(human?.94:.82), (human?1.05:.75) + p.swing*(setting?.55:human?2.25:1) + Math.abs(n.pitch)*.3+p.dive*.9);
+    const yaw=n.yaw, vertical=(Math.sqrt(length*length-reach*reach) + Math.sin(n.pitch)*(human?1:.8))*(1-p.dive*.65)+p.setBounce*.35;
+    const base={x:p.x+p._diveX*p.dive*.3,y:1.45+p.y-p.dive*1.1,z:p.z+p._diveZ*p.dive*.3};
     const target={x:base.x+Math.cos(yaw)*reach,y:base.y+vertical,z:base.z+Math.sin(yaw)*reach};
     Object.assign(points[0],base);
     const previous=p._previousNeck;
@@ -289,9 +331,8 @@ export class VolleyballGame {
       const q=points[i], t=i/8;
       // Every joint has inertia. Lower damping leaves a pronounced visible whip.
       const tx=base.x+(target.x-base.x)*t*t, ty=base.y+(target.y-base.y)*t, tz=base.z+(target.z-base.z)*t*t;
-      const human = p.human && this.phase !== 'attract';
-      const stiffness= human ? (i===8 ? 45 : 35) : 85;
-      const damping=human ? 3.8 : 10;
+      const stiffness= human ? (i===8 ? 42 : 28) : 85;
+      const damping=human ? 2.7 : 10;
       q.vx+=(stiffness*(tx-q.x)-damping*q.vx)*dt;
       q.vy+=(stiffness*(ty-q.y)-damping*q.vy)*dt;
       q.vz+=(stiffness*(tz-q.z)-damping*q.vz)*dt;
@@ -307,7 +348,7 @@ export class VolleyballGame {
         b.x-=dx*correction*wb;b.y-=dy*correction*wb;b.z-=dz*correction*wb;
       }
     }
-    for(let i=1;i<9;i++) { const q=points[i], old=previous[i]; q.vx=clamp((q.x-old.x)/dt,-24,24);q.vy=clamp((q.y-old.y)/dt,-24,24);q.vz=clamp((q.z-old.z)/dt,-24,24); }
+    for(let i=1;i<9;i++) { const q=points[i], old=previous[i]; q.vx=clamp((q.x-old.x)/dt,-28,28);q.vy=clamp((q.y-old.y)/dt,-28,28);q.vz=clamp((q.z-old.z)/dt,-28,28); }
     Object.assign(p.head,points[8]);
   }
   _ballStep(dt) {
@@ -369,7 +410,7 @@ export class VolleyballGame {
         const targetX=(forward*4.8-b.x)/flight;
         const targetZ=(clamp(b.z+Math.sin(p.aimYaw)*2,-2.8,2.8)-b.z)/flight;
         const targetY=(BALL_R-b.y+.5*G*flight*flight)/flight;
-        const correction=human?.55:.2;
+        const correction=human?.68:.2;
         b.vx+=(targetX-b.vx)*correction;b.vz+=(targetZ-b.vz)*correction;
         b.vy=Math.max(b.vy,clamp(targetY,5.8,8.4)*(human?1:.79));
         const airtime=(b.vy+Math.sqrt(b.vy*b.vy+2*G*Math.max(0,b.y-BALL_R)))/G;
@@ -379,6 +420,8 @@ export class VolleyballGame {
       const ability=this._shapeShot(p,action);
       const speed=Math.hypot(b.vx,b.vy,b.vz);
       if(speed>MAX_BALL_SPEED){const scale=MAX_BALL_SPEED/speed;b.vx*=scale;b.vy*=scale;b.vz*=scale;}
+      this._guideReturn(p,action,assisted);
+      const guidedSpeed=Math.hypot(b.vx,b.vy,b.vz);if(guidedSpeed>MAX_BALL_SPEED){const scale=MAX_BALL_SPEED/guidedSpeed;b.vx*=scale;b.vy*=scale;b.vz*=scale;}
       b.spin=clamp((h.vz-b.vz)*nx-(h.vx-b.vx)*nz,-15,15);
       this.lastTeam=p.team;this.lastHitter=p.id;this.touchCooldown=.08;p._contactCooldown=.36;p._lastHitActionSerial=p._actionSerial;this.hits++;this.rallyHits++;this.lastAction=action;
       const tip=p.neckPoints[8],recoil=Math.min(2.5,impulse*.09);tip.vx-=nx*recoil;tip.vy-=ny*recoil;tip.vz-=nz*recoil;
@@ -388,24 +431,29 @@ export class VolleyballGame {
     if(Math.abs(b.x)>13||Math.abs(b.z)>9||b.y>22){this._point(this.lastTeam===null?0:1-this.lastTeam,'out');}
   }
   update(dt,input={}) {
-    if(this.paused)return;dt=clamp(Number(dt)||0,0,.05);if(!dt||this.phase==='finished')return;
+    if(this.paused)return;dt=clamp(Number(dt)||0,0,.05);if(!dt)return;
+    if(this.phase==='finished'){this.advanceCelebration(dt);return;}
+    if(input.players||Object.keys(input).some(key=>/^\d+$/.test(key))){this.setNetworkInputs(input.players||input);input=EMPTY_INPUT;}
+    this._allowEdges=true;this._serveClickPlayer=null;
     this.timer+=dt;
     let serveClick=false;
     if(this.phase==='serve'){
-      const server=this.players.find(p=>p.team===this.server);
-      if(server.human){if(Number.isFinite(input.aimYaw))server.aimYaw=input.aimYaw;else if(Number.isFinite(input.neckYaw))server.aimYaw=input.neckYaw;}
-      serveClick=server.human&&!!(input.serve||input.toss||input.swing||input.smash);
+      const server=this.players.find(p=>p.team===this.server),serveInput=this._inputForPlayer(server,input);
+      if(server.human){if(Number.isFinite(serveInput.aimYaw))server.aimYaw=serveInput.aimYaw;else if(Number.isFinite(serveInput.neckYaw))server.aimYaw=serveInput.neckYaw;}
+      serveClick=server.human&&!!(serveInput.serve||serveInput.toss||serveInput.swing||serveInput.smash);
       if(serveClick){
+        this._serveClickPlayer=server.id;
         if(this.serveStage==='ready')this._toss();
-        else this._launch(this.server,false,Number.isFinite(input.power)?input.power:Number.isFinite(input.charge)?input.charge:this.serveCharge);
+        else this._launch(this.server,false,Number.isFinite(serveInput.power)?serveInput.power:Number.isFinite(serveInput.charge)?serveInput.charge:this.serveCharge);
       }else if(!server.human&&this.serveStage==='ready'&&this.timer>.65)this._toss();
     }
     const steps=Math.max(1,Math.ceil(dt/(1/120))), step=dt/steps;
     for(let i=0;i<steps;i++){
       if(this.paused||this.phase==='finished')break;
-      const edges=i===0?{...input,swing:serveClick?false:input.swing,smash:serveClick?false:input.smash}:{...input,jump:false,dash:false,smash:false,swing:false,serve:false,toss:false,set:false,jumpSet:false,dive:false,ability:false};
+      this._allowEdges=i===0;
+      if(this.phase==='point'){this._stepCelebration(step);continue;}
       this.touchCooldown=Math.max(0,this.touchCooldown-step);this.netCooldown=Math.max(0,this.netCooldown-step);
-      this._stepPlayers(step,edges);
+      this._stepPlayers(step,input);
       if(this.phase==='point')continue;
       if(this.phase==='serve'){
         if(this.serveStage==='ready')this._hold();
@@ -419,7 +467,9 @@ export class VolleyballGame {
       }
       if(this.phase==='play'||this.phase==='attract')this._ballStep(step);
     }
-    if(this.phase==='point'&&this.timer>1.45){this.phase='serve';this.timer=0;this._place();this._newRound();this.message=this.server?'THEIR SERVE':'CLICK TO TOSS';this._hold();}
+    if(this.phase==='point'&&this.timer>1.75){this.phase='serve';this.timer=0;this._place();this._newRound();this.message=this.server?'THEIR SERVE':'CLICK TO TOSS';this._hold();}
+    this._allowEdges=true;this._serveClickPlayer=null;
+    if(this.networkInputs)for(const value of Object.values(this.networkInputs))for(const key of ACTION_KEYS)value[key]=false;
   }
 }
 

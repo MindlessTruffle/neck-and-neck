@@ -11,6 +11,7 @@ function copyPoint(target, source) {
 function copyPose(target, source) {
   target.x = source.x; target.y = source.y; target.z = source.z;
   target.bodyYaw = source.bodyYaw; target.swing = source.swing;
+  target.dive=source.dive;target.setBounce=source.setBounce;target.knockback=source.knockback;target.tumble=source.tumble;
   target.head ||= {};
   copyPoint(target.head, source.head);
   target.neckPoints ||= [];
@@ -31,6 +32,7 @@ export class SmoothSimulation {
   reset() {
     this.accumulator = 0;
     this.pending = {};
+    this.pendingPlayers={};
     this.game.clearBufferedInput();
     this.capture();
     return this.sample(1);
@@ -44,18 +46,24 @@ export class SmoothSimulation {
 
   advance(dt, input = {}) {
     const game = this.game;
-    if (game.paused || game.phase === 'finished') return this.reset();
+    if (game.paused || (game.phase === 'finished'&&game.celebrationRemaining<=0)) return this.reset();
+    const playerMap=input.players||(Object.keys(input).some(key=>/^\d+$/.test(key))?input:null);
+    if(playerMap)for(const [id,controls] of Object.entries(playerMap))for(const key of ACTIONS)if(controls[key]){this.pendingPlayers[id]||={};this.pendingPlayers[id][key]=true;}
+    const effectiveMap=playerMap||(Object.values(this.pendingPlayers).some(controls=>ACTIONS.some(key=>controls[key]))?{}:null);
     for (const key of ACTIONS) if (input[key]) this.pending[key] = true;
     this.accumulator += Math.max(0, Math.min(Number(dt) || 0, .1));
     while (this.accumulator + 1e-10 >= STEP) {
       this.capture();
       const phase = game.phase;
-      game.update(STEP, { ...input, ...this.pending });
+      const mapIds=effectiveMap?[...new Set([...Object.keys(effectiveMap),...Object.keys(this.pendingPlayers)])]:[];
+      const stepInput=effectiveMap?Object.fromEntries(mapIds.map(id=>[id,{...effectiveMap[id],...this.pendingPlayers[id]}])):{...input,...this.pending};
+      game.update(STEP,stepInput);
       for (const key of ACTIONS) this.pending[key] = false;
+      for(const controls of Object.values(this.pendingPlayers))for(const key of ACTIONS)controls[key]=false;
       this.accumulator = Math.max(0, this.accumulator - STEP);
       // Serves/reset positions are teleports, not trajectories to blend through.
       if (phase !== game.phase) this.capture();
-      if (game.paused || game.phase === 'finished') {
+      if (game.paused || (game.phase === 'finished'&&game.celebrationRemaining<=0)) {
         this.accumulator = 0;
         this.capture();
         break;
@@ -68,7 +76,7 @@ export class SmoothSimulation {
     const game = this.game, state = this.renderState;
     state.phase = game.phase; state.paused = game.paused;
     state.score = game.score; state.rally = game.rally; state.hits = game.hits;
-    for(const key of ['round','touchTeam','lastAction','serveStage','serveCharge','serveQuality','rallyHits','server'])state[key]=game[key];
+    for(const key of ['round','touchTeam','lastAction','serveStage','serveCharge','serveQuality','rallyHits','server','celebrationRemaining'])state[key]=game[key];
     state.touches=[...game.touches];
     game.players.forEach((p, i) => {
       const out = state.players[i] ||= { head: {}, neckPoints: [] };
@@ -76,7 +84,7 @@ export class SmoothSimulation {
       Object.assign(out, p, { head, neckPoints });
       const old = this.previous.players[i];
       const t = !old || Math.hypot(p.x - old.x, p.z - old.z) > 2 ? 1 : alpha;
-      for (const key of ['x', 'y', 'z', 'swing']) out[key] = lerp(old?.[key] ?? p[key], p[key], t);
+      for (const key of ['x', 'y', 'z', 'swing','dive','setBounce','knockback','tumble']) out[key] = lerp(old?.[key] ?? p[key], p[key], t);
       out.jump = out.y;
       out.bodyYaw = angle(old?.bodyYaw ?? p.bodyYaw, p.bodyYaw, t);
       copyPoint(out.head, p.head);
