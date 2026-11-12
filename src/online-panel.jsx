@@ -28,7 +28,7 @@ export function OnlinePanel({ client, state = {}, profile, onClose }) {
     {!connected ? <div className="party-connect">
       <label>YOUR COURT NAME<input aria-label="Your court name" value={name} maxLength={24} onChange={event => setName(event.target.value)} placeholder="Tall Friend" autoComplete="nickname"/></label>
       <label>CLUB SERVER<input aria-label="Club server address" value={endpoint} onChange={event => setEndpoint(event.target.value)} placeholder="wss://your-club.example.com" autoCapitalize="none" spellCheck="false"/></label>
-      <p className="post-note">{localHost() ? 'Local club: start the multiplayer server, then connect. Online friends use your secure Oracle server address.' : 'Enter your club’s secure server address. Oracle setup instructions are included with the game.'}</p>
+      <p className="post-note">{localHost() ? 'Local club: start the multiplayer server, then connect. Online friends use your secure Oracle server address.' : 'Club address is ready. Enter your name, connect, then invite friends or find a match.'}</p>
       <button className="post-primary" disabled={busy || !endpoint.trim()} onClick={connect}>{busy ? 'SENDING YOUR POSTCARD…' : 'ENTER THE CLUB'}</button>
     </div> : <>
       {room ? <div className="party-room">
@@ -50,3 +50,4 @@ export function OnlinePanel({ client, state = {}, profile, onClose }) {
     <footer><span>Guest play · skins and clovers saved on this device</span><button onClick={onClose}>BACK TO CLOUDS</button></footer>
   </section>;
 }
+

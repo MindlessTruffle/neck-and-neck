@@ -89,6 +89,14 @@ For a baked-in default address, add a GitHub repository **Actions variable** nam
 
 ## Operations and limits
 
+### Temporary E2.1.Micro profile
+
+For a 1 GB Oracle E2.1.Micro, append `-f deploy/compose.micro.yaml` to every Compose command after the base file. This limits the server to one court and eight connections, caps the Node heap at 192 MB, and reduces container memory limits. It does not establish that the shared CPU can sustain play; run a one-court load test on the VM before opening queues. E2 uses an x86 image. Oracle Linux uses the `opc` SSH user and its own package manager; the Ubuntu installation commands above do not apply to it.
+
+```sh
+sudo docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.micro.yaml up -d --build
+```
+
 - Run `npm test`, `npm run test:network`, `npm run test:simulation`, and `npm run test:load` before updates. The load test runs locally; actual Oracle CPU, region, network and phone performance still need measurement after provisioning.
 - Physics runs at 120 Hz, snapshots at 20 Hz, and client inputs at 30 Hz. Clients predict only their own movement/neck, interpolate remote poses, and accept server ball contacts and scores. Internet latency still affects competitive hits; choose a region close to your players.
 - The initial eight-room cap is conservative, not a promise of capacity on every VM. Start with two rooms if the VM is busy, monitor health/CPU and player latency, then increase only after measurement.
@@ -119,3 +127,15 @@ sudo docker compose --env-file deploy/.env -f deploy/compose.yaml down
 - **Choppy online play:** check round-trip latency, close competing tabs/downloads, lower room capacity, and inspect VM CPU. Native pointer capture works best in direct Chrome/Edge; embedded previews may reject it.
 
 Provisioning handoff: once your VM exists, have its public IP, chosen DNS hostname and SSH connection ready. The remaining work is applying the commands above and testing the public endpoint with real remote players.
+
+## Live E2 playtest deployment (2026-11-12)
+
+The live client defaults to `wss://neck-club.147.5.119.55.sslip.io` through the repository Actions variable `VITE_SERVER_URL`. HTTPS `/health` exposes minimal status. The game itself is served by GitHub Pages.
+
+This Oracle Linux E2 VM uses native systemd services, not Docker: `neck-club` runs Node 24 from `/opt/neck-node/bin/node` with application files in `/opt/neck-club`; `caddy` provides automatic HTTPS. Both start on boot. The game binds only to `127.0.0.1:8787`, allows the Pages origin, and caps capacity at one court/eight connections with a 128 MB Node heap. Caddy configuration lives at `/etc/caddy/Caddyfile`. SSH is restricted to the administrator IP in both Oracle and firewalld; update both if that IP changes. Private keys remain outside this repository.
+
+Check services with `sudo systemctl status neck-club caddy`; inspect logs with `sudo journalctl -u neck-club -u caddy --since '10 minutes ago'`. Restarting `neck-club` ends matches. Copy reviewed server/physics/protocol updates to `/opt/neck-club` before restarting. Do not use Docker commands above on this native deployment.
+
+Validation: four-player host test sustained approximately 120 Hz physics and 20 Hz snapshots for 20 seconds; public TLS checks passed private 1v1/2v2 and both queues. These short tests do not guarantee sustained performance on shared E2 CPU. Keep one court until longer real-player sessions justify more.
+
+For an idle deployment, run `SMOKE_SERVER_URL=wss://your-host node tests/deploy-smoke.mjs`. It creates test rooms and matches, then leaves them. Never run against a busy one-court server.

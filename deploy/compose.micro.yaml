@@ -1,0 +1,13 @@
+# Temporary profile for Oracle Always Free E2.1.Micro (1 GB RAM).
+# Append: -f deploy/compose.micro.yaml after -f deploy/compose.yaml.
+# One court only until performance is measured on the actual host.
+services:
+  game:
+    environment:
+      MAX_ROOMS: "1"
+      MAX_CONNECTIONS: "8"
+      NODE_OPTIONS: --max-old-space-size=192
+    mem_limit: 320m
+    cpus: 1.0
+  caddy:
+    mem_limit: 96m
