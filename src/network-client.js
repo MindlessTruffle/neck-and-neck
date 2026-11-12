@@ -211,6 +211,17 @@ export class NetworkClient {
       }
       case 'error': {
         const code = typeof packet.code === 'string' ? packet.code : 'SERVER_ERROR', message = typeof packet.message === 'string' ? packet.message.slice(0, 240) : 'The server could not complete that action.';
+        // A server restart loses in-memory sessions. Retry once without the
+        // obsolete token instead of persisting a permanently broken login.
+        if (code === 'SESSION_EXPIRED' && this._sessionToken && ['connecting', 'reconnecting'].includes(this.state.status)) {
+          this._stopConnection(false);
+          this._tokens.delete(this.state.endpoint);
+          try { this.storage?.removeItem?.(this._storageKey()); } catch {}
+          this._sessionToken = null; this._seq = 0;
+          if (this.state.match && !this.state.match.ended) this._finishUnavailableMatch();
+          this.state.room = this.state.queue = null;
+          this._open(true); return;
+        }
         if (this.state.status === 'connecting' || this.state.status === 'reconnecting') {
           const error = failure(code, message); this._stopConnection(false); this._connectPending?.reject(error); this._connectPending = null; this._status('offline', error);
         } else this._error(code, message);
