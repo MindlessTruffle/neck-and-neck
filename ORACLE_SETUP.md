@@ -151,3 +151,9 @@ A 180-second on-host test with continuous rematches, eight clients and 30 Hz inp
 Open `/serverhealth` on the Oracle hostname, or `/neck-and-neck/serverhealth/` on GitHub Pages. It refreshes cached aggregate telemetry every five seconds: active courts, players, queue, connections, host CPU/available RAM, process CPU/RSS, uptime and event-loop delay. It monitors this deployed game service, not other Oracle instances. CPU percentage is sampled usage, not burst-credit balance or guaranteed capacity. Stale and unreachable samples are explicitly marked.
 
 Native deployments must include `server/resource-monitor.mjs` and `public/serverhealth/index.html` along with the game server. `/api/serverhealth` exposes only aggregate operational data; `/health` remains minimal. Cross-origin dashboard reads allow the configured game origin. Local preview: `npm run dev:online`, then `http://127.0.0.1:5173/serverhealth/`.
+
+### Recovery safeguards
+
+Guest sessions live in server memory. After a restart, the client now discards an expired saved token and reconnects as a fresh guest; it does not claim to restore a lost match or old invite code.
+
+For the native systemd deployment, install `deploy/health-watchdog.sh` under `/opt/neck-club/deploy/`, copy the supplied watchdog service/timer to `/etc/systemd/system/`, run `sudo systemctl daemon-reload`, then `sudo systemctl enable --now neck-club-watchdog.timer`. It probes local game health and local verified HTTPS once a minute, restarts only after three consecutive failed probes, and does not mistake an unavailable game upstream for a broken proxy. Inspect recovery logs with `journalctl -t neck-club-watchdog`. It never reboots the VM. A kernel/host freeze cannot be repaired by a watchdog inside the same frozen VM; Oracle power recovery is still required.
