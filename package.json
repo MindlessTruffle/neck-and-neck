@@ -11,7 +11,7 @@
     "test:simulation": "node tests/simulation.mjs",
     "server": "node server/index.mjs",
     "dev:online": "node scripts/dev-online.mjs",
-    "test:network": "node tests/network-server.mjs && node tests/network-client.mjs && node tests/server-health.mjs && node tests/health-watchdog.mjs",
+    "test:network": "node tests/network-server.mjs && node tests/network-client.mjs && node tests/room-reset.mjs && node tests/server-health.mjs && node tests/health-watchdog.mjs",
     "test:load": "node tests/network-load.mjs"
   },
   "dependencies": {

@@ -129,6 +129,23 @@ const moved = await connected({ storage: null }); moved.socket.close(4001);
 assert.equal(moved.client.getState().error.code, 'SESSION_MOVED'); moved.timers.advance(10000);
 assert.equal(moved.timers.jobs.size, 0, 'a session moved to another tab cannot enter a reconnect tug of war'); moved.client.dispose();
 
+// Choosing Leave while offline cancels reconnection and discards resume state.
+const exitStore = { data: new Map(), getItem(key) { return this.data.get(key); }, setItem(key, value) { this.data.set(key, value); } };
+const exiting = await connected({ storage: exitStore }); match(exiting.socket); exiting.socket.receive(snapshot(1, 0));
+exiting.socket.close(); assert.equal(exiting.client.getState().connection, 'reconnecting');
+exiting.client.leaveRoom();
+assert.equal(exiting.client.getState().match, null);
+assert.equal(exiting.client.getState().room, null);
+assert.equal(exiting.client.motion.snapshots.length, 0);
+assert.equal(exiting.timers.jobs.size, 0);
+const reconnectExit = exiting.client.connect('ws://127.0.0.1:8787');
+const exitSocket = Socket.instances.at(-1); exitSocket.open();
+assert.equal(exitSocket.sent[0].sessionToken, undefined, 'An intentional exit cannot resurrect its old match');
+exitSocket.receive({ type: 'welcome', version: 1, id: 'fresh-player', sessionToken: session + '-fresh', resumed: false });
+await reconnectExit; exiting.client.disconnect();
+assert.equal(exitSocket.sent.at(-1).type, 'room.leave', 'Connected disconnect explicitly releases its room before closing');
+exiting.client.dispose();
+
 // Deterministic delayed interpolation, finite extrapolation and a bounded buffer.
 const motion = new NetworkMotion(); motion.setLocal(1, 1);
 const firstState = state(), secondState = structuredClone(firstState);

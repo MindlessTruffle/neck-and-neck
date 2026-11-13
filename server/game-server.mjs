@@ -116,6 +116,8 @@ export function createGameServer(options={}) {
     for(const s of match.members){tell(s,{type:'match.end',matchId:match.id,reason:match.reason,winner,score:[...game.score]});s.matchId=null;s.playerId=null;s.input=noControls();s.lastSeq=s.ack=s.pendingSeq=-1;}
     matches.delete(match.id);match.room.matchId=null;touch(match.room);
     for(const s of [...match.room.members])if(!s.ws)removeFromRoom(s,{notify:false});
+    // Matchmaking rooms are temporary courts, not persistent private parties.
+    if(match.room.matchmade)for(const s of [...match.room.members])removeFromRoom(s);
     publishRoom(rooms.get(match.room.code));tryMatchQueues();
   }
   function forfeit(match,team,reason='disconnect') {
@@ -142,7 +144,7 @@ export function createGameServer(options={}) {
         if(rooms.size-replaced.size>=config.maxRooms||matches.size>=config.maxRooms)break;
         for(const group of found){queues.splice(queues.indexOf(group),1);if(group.roomCode)rooms.delete(group.roomCode);}
         const members=teams.flat();for(let t=0;t<2;t++)for(const s of teams[t])s.team=t;
-        const room=makeRoom(mode,members);startMatch(room);again=true;
+        const room=makeRoom(mode,members);room.matchmade=true;startMatch(room);again=true;
       }
     }
   }
@@ -185,7 +187,11 @@ export function createGameServer(options={}) {
     const room=roomFor(session);
     if(message.type==='room.leave'){
       const match=matchFor(session);if(match){forfeit(match,session.team,'left');session.matchId=null;session.playerId=null;match.members=match.members.filter(s=>s!==session);}
-      removeFromRoom(session);return;
+      removeFromRoom(session);
+      // No spectators remain: release the simulation immediately, including
+      // when everybody leaves during the forfeit celebration.
+      if(match&&!match.members.length)finishMatch(match);
+      tryMatchQueues();return;
     }
     if(message.type==='queue.cancel'){cancelQueue(session);return;}
     if(session.matchId)return fail(ws,'IN_MATCH','Finish your match before changing rooms.');
@@ -268,10 +274,15 @@ export function createGameServer(options={}) {
       if(session.ws)continue;
       const elapsed=now-session.disconnectedAt;
       if(session.matchId&&elapsed>=config.reconnectGraceMs)forfeit(matchFor(session),session.team,'disconnect');
+      if(!session.matchId&&elapsed>=config.reconnectGraceMs&&session.roomCode)removeFromRoom(session,{notify:false});
       if(!session.matchId&&elapsed>=config.sessionTtlMs){removeFromRoom(session,{notify:false});sessions.delete(session.token);}
     }
     for(const room of [...rooms.values()])if(!room.matchId&&!room.queued&&now-room.activity>config.roomIdleMs){for(const session of [...room.members])removeFromRoom(session);}
-    for(const match of matches.values())if(match.game.phase!=='finished'&&now-match.startedAt>config.matchTimeoutMs){match.reason='time-limit';const g=match.game;forfeit(match,g.score[0]<=g.score[1]?0:1,'time-limit');}
+    for(const match of [...matches.values()]){
+      if(match.members.every(s=>!s.ws&&now-s.disconnectedAt>=config.reconnectGraceMs)){match.reason='abandoned';finishMatch(match);continue;}
+      if(match.game.phase!=='finished'&&now-match.startedAt>config.matchTimeoutMs){match.reason='time-limit';const g=match.game;forfeit(match,g.score[0]<=g.score[1]?0:1,'time-limit');}
+    }
+    if(queues.length)tryMatchQueues();
   }
   function tick() {
     if(closing)return;const before=performance.now(),now=Date.now(),elapsed=(before-lastTick)/1000;lastTick=before;

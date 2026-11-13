@@ -300,7 +300,20 @@ export class NetworkClient {
   setMode(mode) { return this._command('room.mode', { mode }); }
   setTeam(team) { return this._command('room.team', { team }); }
   startMatch() { return this._command('room.start'); }
-  leaveRoom() { this.neutralize(); return this._command('room.leave'); }
+  _resetRoomState() {
+    this.motion.clear(); this._pendingEdges = []; this._latestInput = normalizeControls({});
+    this._events.clear(); this._eventOrder = [];
+    this.state.room = this.state.queue = this.state.match = null;
+    this.state.localPlayerId = this.state.localTeam = null;
+    this._seq = 0; this._saveSession(); this._notify();
+  }
+  leaveRoom() {
+    this.neutralize();
+    if (this.state.connection !== 'connected') { this.disconnect(); return false; }
+    const sent = this._command('room.leave');
+    this._resetRoomState();
+    return sent;
+  }
   joinQueue(mode = '1v1') { return this._command('queue.join', { mode }); }
   cancelQueue() { return this._command('queue.cancel'); }
 
@@ -314,7 +327,15 @@ export class NetworkClient {
     this._clearTimers(); this._stopSocket(); this._pendingEdges = []; this._latestInput = normalizeControls({}); this.motion.neutralize();
     if (reject && this._connectPending) { this._connectPending.reject(failure('CANCELLED', 'Connection cancelled.')); this._connectPending = null; }
   }
-  disconnect() { this.neutralize(); this._manual = true; this._generation++; this._stopConnection(); this._status('closed'); }
+  disconnect() {
+    this.neutralize();
+    if (this.state.connection === 'connected') this._send({ type: 'room.leave' });
+    this._manual = true; this._generation++; this._stopConnection();
+    // An intentional exit must not resume an abandoned match on next connect.
+    this._tokens.delete(this.state.endpoint);
+    try { this.storage?.setItem(this._storageKey(), 'null'); } catch {}
+    this._sessionToken = null; this._resetRoomState(); this._status('closed');
+  }
   dispose() {
     if (this._disposed) return;
     this.disconnect(); this._disposed = true; this.motion.clear(); this._tokens.clear(); this._sessionToken = null;

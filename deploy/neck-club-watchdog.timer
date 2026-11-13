@@ -1,8 +1,8 @@
 [Unit]
-Description=Probe Neck and Neck health every minute
+Description=Probe Neck and Neck health every thirty seconds
 [Timer]
-OnBootSec=2min
-OnUnitActiveSec=1min
+OnBootSec=1min
+OnUnitActiveSec=30s
 AccuracySec=5s
 [Install]
 WantedBy=timers.target

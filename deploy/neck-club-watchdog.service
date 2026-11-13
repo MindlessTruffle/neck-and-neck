@@ -6,4 +6,4 @@ Type=oneshot
 ExecStart=/bin/bash /opt/neck-club/deploy/health-watchdog.sh
 TimeoutStartSec=45
 MemoryMax=32M
-Nice=10
+OOMScoreAdjust=-250

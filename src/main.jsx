@@ -493,7 +493,7 @@ function App() {
       <MatchUI state={match} onAction={action} onPause={() => showMenu('pause')} onWalk={(walk, id) => applyWalk(interaction.current, walk, `stick:${id}`)} touch={touch}/>
     </>}
     {menu === 'lobby' && <CloudLobby error={error} onReload={() => location.reload()} profile={profile} skinName={getSkin(profile.equippedSkin).name} abilityName={ABILITY_CATALOG.find(item => item.id === profile.equippedAbility)?.name || profile.equippedAbility} hotspots={hotspots}
-      onSelect={view => { runtime.current.audio?.unlock(); runtime.current.audio?.event('menu'); setMenuTab(view); }} view={menuTab} onClose={() => setMenuTab('home')}
+      onSelect={view => { runtime.current.audio?.unlock(); runtime.current.audio?.event('menu'); setMenuTab(view); }} view={menuTab} onClose={() => { if (menuTab === 'online') runtime.current.online?.disconnect(); setMenuTab('home'); }}
       muted={muted} music={music} touch={touch} onMuted={() => setMuted(value => !value)} onMusic={() => setMusic(value => !value)}
       onTouch={() => { touchOverride.current = !touch; setTouch(!touch); }} onFullscreen={toggleFullscreen} ready={ready} progress={loadingProgress} panelRef={panel}>
       {(menuTab === 'shop' || menuTab === 'abilities') && <Shop view={menuTab === 'shop' ? 'skins' : 'abilities'} profile={profile} onChange={next => setProfile(saveProfile(next))} onClose={() => setMenuTab('home')} onSound={event => runtime.current.audio?.event(event || 'menu')}/>}
