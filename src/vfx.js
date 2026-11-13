@@ -115,21 +115,24 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
   const fragments = Array.from({ length: debris.instanceMatrix.count }, () => ({ x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 1, spin: 0 }));
   const debrisTransform = new THREE.Object3D(), debrisColor = new THREE.Color();
   let debrisLife = 0, debrisDuration = 1;
-  function scoreExplosion(team, final) {
+  function scoreExplosion(team, final, origin) {
     const count = reducedMotion ? 8 : mobile ? (final ? 36 : 24) : final ? 88 : 58;
     debris.count = count; debris.visible = true; debrisLife = debrisDuration = final ? 2.25 : 1.65;
     for (let i = 0; i < count; i++) {
       const fragment = fragments[i], angle = i * 2.39996, speed = reducedMotion ? 1.2 : (final ? 8 : 6) + Math.random() * 8;
-      fragment.x = Math.cos(angle) * .4; fragment.y = 1.6; fragment.z = Math.sin(angle) * .4;
-      fragment.vx = Math.cos(angle) * speed; fragment.vz = Math.sin(angle) * speed * .72; fragment.vy = reducedMotion ? .6 : 3 + Math.random() * 7;
+      fragment.x = origin.x + Math.cos(angle) * .4; fragment.y = origin.y + .25; fragment.z = origin.z + Math.sin(angle) * .4;
+      fragment.vx = Math.cos(angle) * speed; fragment.vz = Math.sin(angle) * speed * .72; fragment.vy = reducedMotion ? .6 : 4 + Math.random() * 8;
       fragment.size = reducedMotion ? .4 : .5 + Math.random() * 1.4; fragment.spin = Math.random() * 8 - 4;
-      debrisColor.set(i % 3 ? team ? CORAL : TEAL : GOLD); debris.setColorAt(i, debrisColor);
+      // Score impacts read as a hot orange blast for either team; team colors
+      // remain in the rings, callouts, and rally feedback around it.
+      debrisColor.set([ '#ff6a24', '#ff9a32', '#ffd15a', '#fff0a3' ][i % 4]); debris.setColorAt(i, debrisColor);
       debrisTransform.position.set(fragment.x, fragment.y, fragment.z); debrisTransform.scale.setScalar(fragment.size); debrisTransform.rotation.set(0, 0, 0); debrisTransform.updateMatrix(); debris.setMatrixAt(i, debrisTransform.matrix);
     }
     debris.instanceMatrix.needsUpdate = true; debris.instanceColor.needsUpdate = true;
     const center = vector(0, .12, 0);
     for (let i = 0; i < (reducedMotion ? 1 : mobile ? final ? 3 : 2 : final ? 6 : 4); i++) {
-      const wave = acquire('ring', center, i % 2 ? IVORY : team ? CORAL : TEAL, .72 + i * .09);
+      center.set(origin.x, origin.y, origin.z);
+      const wave = acquire('ring', center, i % 2 ? '#fff0a3' : '#ff8730', .72 + i * .09);
       if (!wave) break;
       wave.object.rotation.x = Math.PI / 2 + (i % 3 === 2 ? .45 : 0);
       wave.initialScale = .6 + i * .28; wave.growth = reducedMotion ? 4 : 15 + i * 2;
@@ -228,11 +231,12 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
     }
     if (/score|win|finish/.test(type)) {
       volleyCount = 0; successPulse = 0; lastAbility = null;
+      impulse = Math.min(.18, impulse + (type === 'score' ? .09 : .15));
       clearTrail();
-      scoreExplosion(event.team, type !== 'score');
-      burst(point.clone().setY(2.4), event.team === 1 ? CORAL : TEAL, type === 'score' ? 34 : 66, 1.1, true);
-      shock(point.clone().setY(.07), UP, GOLD, 1.4);
-      announce(type === 'score' ? 'POINT!' : 'VICTORY!', vector(0, 2.1, 0), type === 'score' ? .82 : 1.3, { width: type === 'score' ? 3 : 4.8 });
+      scoreExplosion(event.team, type !== 'score', point);
+      burst(point.clone().setY(point.y + 1), '#ff8730', type === 'score' ? 34 : 66, 1.1, true);
+      shock(point.clone().setY(.07), UP, '#ff8730', 1.4);
+      announce(type === 'score' ? 'POINT!' : 'VICTORY!', vector(point.x, point.y + .7, point.z), type === 'score' ? .82 : 1.3, { width: type === 'score' ? 3 : 4.8 });
       return { hitstop: 0 };
     }
     if (/jump|land|dash|dive/.test(type)) {
@@ -265,6 +269,10 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
           slash.object.rotation.set(.4, event.team === 1 ? Math.PI / 2 : -Math.PI / 2, -.4);
           slash.initialScale = .28; slash.growth = 1.4;
           slash.object.scale.setScalar(slash.initialScale);
+        }
+        if (action === 'bump' || action === 'spike') {
+          const puff = acquire('puff', point, IVORY, .16);
+          if (puff) { puff.initialScale = .45; puff.growth = 2.2; }
         }
       }
       return { hitstop: 0 };

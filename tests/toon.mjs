@@ -92,7 +92,14 @@ const close = (a, b, epsilon = 1e-5) => assert.ok(a.distanceTo(b) < epsilon, `${
   assert(rig.bones.get('Body').bone.scale.y<.9,'set visibly squashes the body bone');
   player.setBounce=0;player._setBounceTime=0;player.knockback=1;player.tumble=8;rig.update(player,1/60,3.6);
   for(const record of rig.bones.values())assert(finite(record.bone.matrixWorld.elements),'flop/set/tumble transforms remain finite');
-  rig.neck.forEach((record,i)=>close(record.bone.getWorldPosition(new THREE.Vector3()),new THREE.Vector3(points[i].x,points[i].y,points[i].z)));
+  // During a celebration the whole rig tumbles. Physics neckPoints stay in
+  // authoritative world space; the renderer carries them with the body's tumble
+  // quaternion so the neck/head remain attached to the rotating torso.
+  const inverseBodyYaw=new THREE.Quaternion().setFromEuler(new THREE.Euler(0,rig.yaw,0,'YXZ')).invert();
+  const visualTumble=rig.root.quaternion.clone().multiply(inverseBodyYaw);
+  const visualJoint=i=>new THREE.Vector3(points[i].x,points[i].y,points[i].z).sub(rig.root.position).applyQuaternion(visualTumble).add(rig.root.position);
+  rig.neck.forEach((record,i)=>close(record.bone.getWorldPosition(new THREE.Vector3()),visualJoint(i)));
+  close(rig.head.bone.getWorldPosition(new THREE.Vector3()),visualJoint(8));
   rig.dispose(); toon.dispose();
 }
 

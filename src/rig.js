@@ -35,6 +35,10 @@ export class GiraffeRig {
     }
     this.neck = Array.from({ length: 8 }, (_, i) => this.bones.get(`Neck_${String(i).padStart(2, '0')}`)).filter(Boolean);
     this.head = this.bones.get('Head');
+    this._renderNeckPoints = Array.from({ length: 9 }, () => new THREE.Vector3());
+    this._renderHead = new THREE.Vector3();
+    this._bodyYawQuaternion = new THREE.Quaternion();
+    this._tumbleQuaternion = new THREE.Quaternion();
     this.legs = ['Front_L', 'Front_R', 'Back_L', 'Back_R'].map(name => ({ upper: this.bones.get(`${name}_Upper`), lower: this.bones.get(`${name}_Lower`), front: name.startsWith('Front') ? 1 : -1, side: name.includes('_L') ? -1 : 1 })).filter(leg => leg.upper && leg.lower);
     this.legs.forEach(leg => {
       leg.restFoot = new THREE.Vector3(leg.side * .37, .15, leg.front > 0 ? .56 : -.57);
@@ -125,7 +129,17 @@ export class GiraffeRig {
     });
     const points = player.neckPoints;
     if (points?.length >= 9) {
-      this.neck.forEach((record, i) => this.poseSegment(record, V(points[i]), V(points[i + 1]), true));
+      // Celebration tumble rotates the full rig. The simulated neck chain remains
+      // in world space, so carry its rendered joints through the same body rotation
+      // before posing the skeleton; otherwise the torso spins away from its neck.
+      if (knock) {
+        this._bodyYawQuaternion.setFromEuler(new THREE.Euler(0, this.yaw, 0, 'YXZ')).invert();
+        this._tumbleQuaternion.copy(this.root.quaternion).multiply(this._bodyYawQuaternion);
+        for (let i = 0; i < 9; i++) this._renderNeckPoints[i].copy(V(points[i])).sub(this.root.position).applyQuaternion(this._tumbleQuaternion).add(this.root.position);
+      } else {
+        for (let i = 0; i < 9; i++) this._renderNeckPoints[i].copy(V(points[i]));
+      }
+      this.neck.forEach((record, i) => this.poseSegment(record, this._renderNeckPoints[i], this._renderNeckPoints[i + 1], true));
     } else {
       // Loading poses use the same armature, never a replacement character.
       const first = this.root.localToWorld(new THREE.Vector3(0, 1.45, .22));
@@ -135,7 +149,10 @@ export class GiraffeRig {
     if (this.head && player.head) {
       const record = this.head, bone = record.bone;
       bone.parent.updateWorldMatrix(true, false);
-      bone.position.copy(bone.parent.worldToLocal(V(player.head)));
+      const headPoint = knock
+        ? this._renderHead.copy(V(player.head)).sub(this.root.position).applyQuaternion(this._tumbleQuaternion).add(this.root.position)
+        : V(player.head);
+      bone.position.copy(bone.parent.worldToLocal(headPoint));
       const aimYaw = player.neck?.yaw ?? (player.team ? Math.PI : 0), pitch = player.neck?.pitch || 0;
       let yaw = aimYaw;
       if (points?.length >= 9) {
@@ -143,6 +160,7 @@ export class GiraffeRig {
         if (Math.hypot(dx, dz) > .035) yaw += Math.atan2(Math.sin(Math.atan2(dz, dx) - aimYaw), Math.cos(Math.atan2(dz, dx) - aimYaw)) * .24;
       }
       const wanted = new THREE.Quaternion().setFromEuler(new THREE.Euler(-pitch, Math.PI / 2 - yaw, 0, 'YXZ')).multiply(record.restQuaternion);
+      if (knock) wanted.premultiply(this._tumbleQuaternion);
       if (!this.headOrientation) this.headOrientation = wanted.clone();
       this.headOrientation.slerp(wanted, 1 - Math.exp(-dt * 13));
       bone.quaternion.copy(bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(this.headOrientation));

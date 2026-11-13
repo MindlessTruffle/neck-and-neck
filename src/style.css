@@ -74,3 +74,14 @@
 .match-ui[data-touch=true] .ability-reveal{top:100px;background:none;box-shadow:none;border:0;padding:0;text-shadow:0 1px 4px #102129}
 @media(max-width:360px){.match-ui[data-touch=true] .team-name{display:none}.match-ui[data-touch=true] .touch-stick{left:12px;width:82px;height:82px}.match-ui[data-touch=true] .action-deck{right:8px}}
 @media(max-height:400px){.match-ui[data-touch=true] .action-deck{bottom:max(8px,env(safe-area-inset-bottom))}.match-ui[data-touch=true] .ability-button{right:117px;bottom:130px}}
+/* Icon-only touch controls avoid illegible micro-labels. */
+.match-ui[data-touch=true] .action-button strong,.match-ui[data-touch=true] .team-name{display:none}
+.match-ui[data-touch=true] .movement-actions button{font-size:28px}
+.match-ui[data-touch=true] .rally-info,.match-ui[data-touch=true] .round-pill>span{font-size:16px}
+.match-ui[data-touch=true] .serve-meter{width:180px}
+.match-ui[data-touch=true] .serve-meter>div:first-child{font-size:16px}
+.match-ui[data-touch=true] .serve-meter small{display:none}
+.capture-prompt{font-size:18px}.capture-prompt small{display:none}
+.online-match-status{font-size:16px}.match-ui:not([data-touch=true]) .action-button strong{font-size:18px}.match-ui:not([data-touch=true]) .ability-button small,.match-ui:not([data-touch=true]) .ability-button div>span{font-size:16px}.match-ui:not([data-touch=true]) .look-hint{display:none}
+@media(prefers-reduced-motion:reduce){.visual-back{transition:none}}
+.match-ui[data-touch="true"] .scoreboard-ui .team-name{display:block;font-size:16px;letter-spacing:0;font-weight:900}.match-ui[data-touch="true"] .scoreboard-ui{gap:10px}.match-ui .scoreboard-ui .home{color:#a6f2d5}.match-ui .scoreboard-ui .away{color:#ffb7a0}.match-ui .team-name,.match-ui .round-pill small{font-size:16px}.match-ui .ability-button small,.match-ui .movement-actions button>span{display:none}.match-ui .ability-button strong{font-size:20px}

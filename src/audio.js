@@ -338,7 +338,11 @@ export class GameAudio {
     const action = event?.action || 'spike';
     if (action === 'dive') return;
     if (action === 'set' || action === 'block') this._tone(action === 'set' ? 420 : 230, now, .07, 'sine', this.master, .025, 330);
-    else this._noise(.09, event?.player === 0 ? .045 : .018, 1700);
+    else {
+      // A crisp, short neck-swing cue is audible even on a miss; actual contact
+      // still gets the heavier bump/spike sound in _impact.
+      if (!this._stockSound('click', event?.player === 0 ? .34 : .2, .88)) this._noise(.09, event?.player === 0 ? .07 : .035, 1250);
+    }
   }
 
   _ability(event) {

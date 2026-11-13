@@ -1,44 +1,28 @@
-# Cloud Club release validation
+# Release validation — 12 November 2026
 
 ## Automated checks
 
-- Physics, 30–240 Hz rendering equivalence, input buffering, capture, camera, touch ownership, device budgets, skinned alignment, full-body actions, VFX pools, audio, and profile transactions pass.
-- 120 seeded full bot matches completed across both modes and three difficulties. Longest rally: 41 contacts. Mean contacts per point: chill 3.75/7.40, club 4.86/8.92, elite 5.83/10.62 for 1v1/2v2. Both teams won in every configuration.
-- Real WebSocket tests cover private 1v1 and four-human 2v2, solo matchmaking, same-team duo queues, cancellation, input sequencing, authoritative scores, rejoin, forfeit celebration, origin/rate/payload/capacity checks, trusted-proxy address handling, and cleanup.
-- Client tests cover 30 Hz buffered action edges, 90 ms interpolation, bounded 100 ms extrapolation, local movement/neck prediction, reconciliation, reordered snapshots, event deduplication, reconnect expiry and timer/socket disposal. Native WebSocket integration uses the real server.
-- Production client builds successfully. Docker image builds and runs as a non-root user with a read-only filesystem and no capabilities. Its production-origin WebSocket handshake, room creation and health endpoint passed. Compose and Caddy configurations validate.
+- Gameplay, frame-rate independence (30–240 Hz), neck control, input buffering, pointer capture, mobile stick ownership, camera, device budgets, skinned rig alignment, pooled VFX, audio, and profile transactions pass.
+- Full-body celebration tests now check that rendered neck joints and head follow the torso tumble without changing authoritative physics points.
+- 120 seeded complete matches cover 1v1/2v2 and all three bot levels. Both teams win in each configuration; longest rally is 41 contacts. All five powers and bump/set/spike/block/dive actions occur.
+- Real WebSocket checks cover private parties, solo and duo queues, cancellation, authoritative scoring, reconnect/rejoin, expired sessions, payload/origin/rate/capacity limits, health telemetry, and the recovery watchdog.
+- Production build passes. Visual fixture at `/tests/visual.html` is development-only and excluded from production entry points.
 
-## Measured local server load
+## Server measurements
 
-Seven-second run, eight courts / 32 real WebSocket clients:
+Local four-second load check: eight courts, 32 WebSocket clients, 119.7 Hz physics per court, 20 Hz snapshots, 1.85 ms mean tick, 8.757 ms maximum tick, 22.36 ms event-loop p95, 99.7 MB process RSS, and no dropped simulation time. This is a development-PC measurement, not an E2 capacity claim.
 
-| Metric | Result |
-| --- | ---: |
-| Physics per court | 119.9 Hz |
-| Snapshots per client | 20 Hz |
-| Mean server tick | 2.477 ms |
-| Maximum tick | 54.466 ms |
-| Event-loop p95 | 25.43 ms |
-| Process RSS | 100.6 MB |
-| Total outbound | 4.84 MB/s |
-| Dropped simulation time | 0 ms |
+The deployed Oracle E2 remains capped at two simultaneous courts. Public TLS tests pass for private 1v1/2v2, both public queues, and two simultaneous four-player 2v2 courts. The simultaneous-court test measured 20–20.2 snapshots per second for all eight clients. These short checks do not establish long-duration WAN latency or performance on every device.
 
-Rounded snapshots reduced outbound traffic by roughly 44% from the initial implementation, to approximately 150 KB/s per client. This test runs server and simulated clients on one development PC. It is not an Oracle throughput guarantee or a long-duration soak test.
+## Presentation and device checks
 
-Two runs during Docker startup/shutdown and concurrent desktop work missed timing targets (roughly 95–100 Hz physics and 11–13 Hz snapshots). The quiet-host run above passed with unchanged timing assertions. Shared CPU contention matters: begin with fewer rooms on a busy VM, measure there, and increase capacity only after testing.
+- Independent cheaper-model reviewer inspected source and desktop/phone captures; feedback drove direct matchmaking, larger control guides, clear loss wording, mobile sign layout, readable shop contrast, and team identity on the compact HUD.
+- Browser checks cover the home menu, skins and power shops, power rolling, match setup, queue/cancel, party creation, and portrait/landscape touch HUDs.
+- Loading progress comes from the actual local asset queue. The generated four-frame mascot animates with CSS; reduced-motion uses a still frame.
+- Mobile starts with 3,200 grass instances, 14 trees, eight flags per side, six fans per stand, and 512-pixel shadows. Adaptive resolution remains bounded at 0.75–1.25 DPR on phones. Scene props have fewer shadow casters.
+- Score effects use connected full-body tumble, orange pooled particles, and action-start feedback distinct from ball impact. Final map pieces launch upward; finale framing uses a repeatable freeze-frame fixture for inspection.
+- Device-size checks run on desktop hardware. Physical-phone thermal, battery and prolonged multiplayer testing remain unverified. Embedded browser pointer-lock restrictions still require direct Chrome/Edge play for native capture validation.
 
-## Browser observations
+## Local preview
 
-- Tested desktop and 390×844 portrait layouts, skin purchase/equip, persistent power rolls, manual movement, mouse-driven neck/camera motion, serving, flop dive, and music scene loading.
-- Two separate browser clients created/joined a private room, started an authoritative match, showed opposite-team shoulder cameras, served, scored, handled a leaving opponent, displayed results and returned to the party.
-- Local browser observations reached 60 FPS, including the new court. Mobile-size observations were on desktop hardware, not a physical phone benchmark.
-- The embedded browser refused native pointer lock, so drag fallback was verified there. Capture ordering/error-state tests pass; direct browser capture still needs an ordinary Chrome/Edge session outside that embedded restriction.
-- Oracle provisioning, public DNS/certificate issuance, WAN multiplayer latency, and physical-device testing remain external handoff checks.
-
-## Art and audio budget
-
-New arena and lobby: approximately 2.2 MB, 39,562 combined triangles, 5/11 materials. Seven Quaternius models plus shared 512-pixel textures: approximately 4.33 MB. Total world asset bundle: approximately 8.36 MB before audio/fonts. Only the active world is rendered.
-
-Mobile starts at a 1.25 DPR cap, four lobby giraffes, 7,000 grass instances and 1024-pixel shadows. Sustained slow frames reduce DPR as far as 0.75 and shadows to 512. Effects use bounded pools and reduced-motion variants.
-
-Five generated music scenes and twelve generated effects total under 3 MiB. Scene loads and rapid transitions have race/disposal tests, a two-music-voice limit, and a 64-node transient ceiling. Stock/procedural fallbacks remain bundled. Credentials are absent from source, public assets and client bundles.
+Run `npm run dev:online`, or double-click `Start Online.cmd`. Development binds to localhost. Use `Start Game.cmd` for solo preview.

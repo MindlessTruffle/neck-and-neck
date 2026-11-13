@@ -44,7 +44,7 @@ Native pointer lock is requested before fullscreen within the same gesture. Unsu
 | Esc / P | Pause; P resumes |
 | M / F | Mute / fullscreen |
 
-On phones, drag the right field to swing and use the labeled return/action buttons. The left thumbstick moves your giraffe. Portrait and landscape layouts are supported; landscape shows more court. Touch controls can also be switched on for a touchscreen laptop. Controls use pointer capture, ownership tracking, cancel handling and safe-area spacing.
+On phones, drag the right field to swing and use the circular action buttons. The control guide maps each symbol to its action. The left thumbstick moves your giraffe. Portrait and landscape layouts are supported; landscape shows more court. Touch controls can also be switched on for a touchscreen laptop. Controls use pointer capture, ownership tracking, cancel handling and safe-area spacing.
 
 ## Volleyball systems
 

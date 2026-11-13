@@ -4,15 +4,15 @@ export function createRenderPerformance({ coarse = false, nativeDpr = 1, hardwar
   const profile = coarse ? 'mobile' : lowPower ? 'compact' : 'desktop';
   const cap = coarse ? 1.25 : lowPower ? 1.4 : 1.75;
   const budget = Object.freeze({
-    grass: coarse ? 7000 : lowPower ? 11000 : 19000,
-    trees: coarse ? 23 : lowPower ? 28 : 35,
-    fansPerStand: coarse ? 12 : lowPower ? 15 : 21,
-    flowersPerSide: coarse ? 12 : lowPower ? 17 : 24,
-    clouds: coarse ? 6 : 10,
-    birds: coarse ? 4 : 7,
-    hills: coarse ? 10 : 16,
-    flagsPerSide: coarse ? 19 : 29,
-    shadowSize: coarse || lowPower ? 1024 : 2048,
+    grass: coarse ? 3200 : lowPower ? 8000 : 15000,
+    trees: coarse ? 14 : lowPower ? 23 : 31,
+    fansPerStand: coarse ? 6 : lowPower ? 10 : 16,
+    flowersPerSide: coarse ? 6 : lowPower ? 11 : 17,
+    clouds: coarse ? 4 : 7,
+    birds: coarse ? 2 : 5,
+    hills: coarse ? 8 : 13,
+    flagsPerSide: coarse ? 8 : lowPower ? 13 : 19,
+    shadowSize: coarse ? 512 : lowPower ? 1024 : 2048,
     antialias: !coarse || !lowPower,
   });
   let deviceDpr = Math.max(.5, Number(nativeDpr) || 1), elapsed = 0, slowSeconds = 0, cooldown = 0, frameAverage = 1 / 60;

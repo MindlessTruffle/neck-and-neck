@@ -37,6 +37,7 @@ function App() {
   const [mode, setMode] = useState('2v2');
   const [difficulty, setDifficulty] = useState('club');
   const [ready, setReady] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [error, setError] = useState('');
   const [muted, setMuted] = useState(false);
   const [music, setMusic] = useState(true);
@@ -101,7 +102,7 @@ function App() {
     runtime.current.audio = audio;
     let frame, observer, cleanup, disposed = false;
     try {
-      const world = createWorld({ canvas: canvas.current });
+      const world = createWorld({ canvas: canvas.current, onLoadProgress: (loaded, total) => { if (!disposed) setLoadingProgress(total ? loaded / total : 0); } });
       const game = new VolleyballGame({ mode, difficulty, onEvent: runtime.current.handleGameEvent = event => {
         if (!runtime.current.started) return;
         audio.event(event);
@@ -494,7 +495,7 @@ function App() {
     {menu === 'lobby' && <CloudLobby error={error} onReload={() => location.reload()} profile={profile} skinName={getSkin(profile.equippedSkin).name} abilityName={ABILITY_CATALOG.find(item => item.id === profile.equippedAbility)?.name || profile.equippedAbility} hotspots={hotspots}
       onSelect={view => { runtime.current.audio?.unlock(); runtime.current.audio?.event('menu'); setMenuTab(view); }} view={menuTab} onClose={() => setMenuTab('home')}
       muted={muted} music={music} touch={touch} onMuted={() => setMuted(value => !value)} onMusic={() => setMusic(value => !value)}
-      onTouch={() => { touchOverride.current = !touch; setTouch(!touch); }} onFullscreen={toggleFullscreen} ready={ready} panelRef={panel}>
+      onTouch={() => { touchOverride.current = !touch; setTouch(!touch); }} onFullscreen={toggleFullscreen} ready={ready} progress={loadingProgress} panelRef={panel}>
       {(menuTab === 'shop' || menuTab === 'abilities') && <Shop view={menuTab === 'shop' ? 'skins' : 'abilities'} profile={profile} onChange={next => setProfile(saveProfile(next))} onClose={() => setMenuTab('home')} onSound={event => runtime.current.audio?.event(event || 'menu')}/>}
       {menuTab === 'online' && <OnlinePanel client={runtime.current.online} state={onlineStatus} profile={profile} onClose={() => setMenuTab('home')}/>}
       {(menuTab === 'play' || menuTab === 'controls') && <GameMenu key={menuTab} startHelp={menuTab === 'controls'} menu={menu} mode={mode} difficulty={difficulty} onMode={setMode} onDifficulty={setDifficulty} onPlay={begin} onBack={() => setMenuTab('home')} ready={ready} error={error} result={result} muted={muted} music={music} onMuted={() => setMuted(value => !value)} onMusic={() => setMusic(value => !value)} captureFailed={captureFailed} onReload={() => location.reload()} panelRef={panel} onFullscreen={toggleFullscreen} isFullscreen={isFullscreen} touch={touch} onTouch={() => { touchOverride.current = !touch; setTouch(!touch); }} onMenuSound={unlock => { if (unlock) runtime.current.audio?.unlock(); runtime.current.audio?.event('menu'); }}/> }

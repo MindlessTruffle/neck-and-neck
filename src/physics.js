@@ -134,7 +134,9 @@ export class VolleyballGame {
       let dx=p.x-origin.x,dz=p.z-origin.z;const distance=Math.hypot(dx,dz);
       if(distance<.1){dx=Math.cos(p.id*2.4);dz=Math.sin(p.id*2.4);}else{dx/=distance;dz/=distance;}
       const force=(final?12:7)+2/(1+distance*.2);
-      p._knockVX=dx*force;p._knockVZ=dz*force;p._knockVY=final?8:5.5;p._knockTime=duration;p.knockback=1;
+      // Give the whole articulated giraffe a clear upward launch. The rig follows
+      // this shared velocity and tumble state for both local and remote snapshots.
+      p._knockVX=dx*force;p._knockVZ=dz*force;p._knockVY=final?14:10;p._knockTime=duration;p.knockback=1;
       p._tumbleSpeed=(p.id%2?-1:1)*(final?8:5);p.tumble=0;p._dive=p.dive=p._setBounceTime=p.setBounce=0;p.action='knockback';
     }
     return origin;

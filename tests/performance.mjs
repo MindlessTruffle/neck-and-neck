@@ -49,7 +49,7 @@ assert.equal(position.x, -10);
 
 const mobile = createRenderPerformance({ coarse: true, nativeDpr: 3, hardwareConcurrency: 6 });
 assert.equal(mobile.state.pixelRatio, 1.25);
-assert.equal(mobile.budget.shadowSize, 1024);
+assert.equal(mobile.budget.shadowSize, 512, 'Mobile shadows use the reduced release budget');
 assert.ok(mobile.budget.grass < 10000);
 assert.ok(mobile.budget.trees < 30);
 const desktop = createRenderPerformance({ nativeDpr: 3, hardwareConcurrency: 16, deviceMemory: 16 });

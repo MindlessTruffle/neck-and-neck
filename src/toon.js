@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-const INK = '#28241f';
+const INK = '#34372f';
 
 /** Shared cel materials and bounded, screen-width ink hulls. No postprocess pass. */
 export function createToonStyle() {
@@ -96,7 +96,7 @@ export function createToonStyle() {
     return merged;
   }
 
-  function ink(root, { width = 1.6, skinned = false, predicate = () => true } = {}) {
+  function ink(root, { width = 1.35, skinned = false, predicate = () => true } = {}) {
     const sources = [];
     root.traverse(object => { const mats=object.material?(Array.isArray(object.material)?object.material:[object.material]):[];if (object.isMesh && !object.userData.isInk && !!object.isSkinnedMesh === skinned && !mats.some(mat=>mat.alphaTest>.01||(mat.transparent&&mat.opacity<.99)) && predicate(object)) sources.push(object); });
     if (!sources.length) return null;
@@ -113,7 +113,7 @@ export function createToonStyle() {
     outlineCount++; return outline;
   }
 
-  function stylize(root, { width = 1.6, outline = true } = {}) {
+  function stylize(root, { width = 1.35, outline = true } = {}) {
     root.traverse(object => {
       if (!object.isMesh || object.userData.isInk) return;
       object.material = Array.isArray(object.material) ? object.material.map(source => material(source)) : material(object.material);
