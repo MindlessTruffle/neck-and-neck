@@ -130,8 +130,11 @@ export class NetworkClient {
   _failed(error) {
     if (this._connectPending) { this._connectPending.reject(error); this._connectPending = null; }
     if (this._disposed || this._manual) return;
-    if (this.autoReconnect && this._sessionToken && this._attempt < 6) {
-      const wait = Math.min(8000, 500 * 2 ** this._attempt++) * (1 + this.random() * .15);
+    // Server recovery can outlast a short retry budget. Keep one bounded,
+    // jittered retry alive until success, explicit exit, or a terminal error.
+    if (this.autoReconnect && (this._sessionToken || this.state.status === 'reconnecting')) {
+      const wait = 500 * 2 ** Math.min(4, this._attempt) * (1 + this.random() * .15);
+      this._attempt = Math.min(4, this._attempt + 1);
       this._status('reconnecting', error);
       this._reconnectTimer = this.timers.setTimeout(() => { this._reconnectTimer = null; this._open(true); }, wait);
     } else this._status('offline', this.state.match ? failure(error.code, 'Connection lost. The server could not be reached. Reconnect from the Party Post to continue.') : error);
@@ -198,6 +201,8 @@ export class NetworkClient {
         if (packet.matchId !== this.state.match?.matchId || this._events.has(`end:${packet.matchId}`)) return;
         this._rememberEvent(`end:${packet.matchId}`);
         this.state.match = { ...this.state.match, ended: true, reason: packet.reason, winner: packet.winner, score: clone(packet.score) };
+        this.state.queue = null;
+        this.motion.finish();
         this.neutralize(); this._notify(); this._emit({ ...packet, type: 'match.end' });
         break;
       }
@@ -223,6 +228,9 @@ export class NetworkClient {
           this._open(true); return;
         }
         if (this.state.status === 'connecting' || this.state.status === 'reconnecting') {
+          if (code === 'CAPACITY' && this.state.status === 'reconnecting') {
+            this._stopConnection(false); this._failed(failure(code, message)); return;
+          }
           const error = failure(code, message); this._stopConnection(false); this._connectPending?.reject(error); this._connectPending = null; this._status('offline', error);
         } else this._error(code, message);
         break;

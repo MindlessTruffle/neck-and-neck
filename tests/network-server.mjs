@@ -27,7 +27,7 @@ assert.equal(normalizeControls({x:NaN}),null);assert.equal(normalizeControls({di
 assert.deepEqual(normalizeLoadout({ability:'invented',skin:{body:'url(secret)'}}),{ability:'magnet',skin:null});
 assert.ok(Math.hypot(...['x','z'].map(k=>normalizeControls({x:99,z:99})[k]))<=1.00001);
 assert.throws(()=>createGameServer({production:true}),/allowlist/);
-const app=createGameServer({port:0,maxRooms:4,maxConnectionsPerIP:20,reconnectGraceMs:180,sessionTtlMs:10000,heartbeatMs:200,helloTimeoutMs:1000});
+const app=createGameServer({port:0,maxRooms:4,maxConnectionsPerIP:20,maxCommandsPerSecond:100,reconnectGraceMs:180,sessionTtlMs:10000,heartbeatMs:200,helloTimeoutMs:1000});
 const peers=[];let address;
 try {
   address=await app.start();
@@ -52,8 +52,9 @@ try {
   const oldToken=b.welcome.sessionToken;b.close();await sleep(35);
   const resumed=await connect(address.url,{token:oldToken});peers.push(resumed);assert.equal(resumed.welcome.id,b.welcome.id);assert.equal(resumed.welcome.resumed,true);assert.equal(resumed.welcome.matchId,ma.matchId);assert.equal((await resumed.next('match')).playerId,1);await resumed.next('snapshot');
   resumed.close();const finishEvents=await a.next('events',m=>m.events.some(e=>e.type==='win'));assert.equal(finishEvents.events.find(e=>e.type==='win').team,0);
-  const blast=await a.next('snapshot',m=>m.state.phase==='finished');assert.ok(blast.state.celebrationRemaining>0);const laterBlast=await a.next('snapshot',m=>m.seq>blast.seq&&m.state.phase==='finished');assert.notEqual(laterBlast.state.players[0].x,blast.state.players[0].x,'celebration keeps moving');
-  const ended=await a.next('match.end',()=>true,4000);assert.equal(ended.reason,'disconnect');assert.equal(ended.winner,0);await a.next('room',m=>m.room?.status==='lobby');a.send('room.leave');await a.next('room',m=>m.room===null);
+  const blast=await a.next('snapshot',m=>m.state.phase==='finished');assert.ok(blast.state.celebrationRemaining>0);
+  const ended=await a.next('match.end',()=>true,600);assert.equal(ended.reason,'disconnect');assert.equal(ended.winner,0);await a.next('room',m=>m.room===null);
+  assert.equal(app.metrics().matches,0);assert.equal(app.metrics().rooms,0);
   const afterGrace=await connect(address.url,{token:oldToken});peers.push(afterGrace);assert.equal(afterGrace.welcome.resumed,true);assert.equal(afterGrace.welcome.matchId,null,'expired match must be explicitly absent on resume');await afterGrace.next('room',m=>m.room===null);afterGrace.close();
   console.log('PASS server: authoritative 1v1, finite/clamped inputs, ignored score writes, sequenced two-click serve/jump, origin/schema checks, rejoin and animated forfeit cleanup.');
 

@@ -129,6 +129,32 @@ const moved = await connected({ storage: null }); moved.socket.close(4001);
 assert.equal(moved.client.getState().error.code, 'SESSION_MOVED'); moved.timers.advance(10000);
 assert.equal(moved.timers.jobs.size, 0, 'a session moved to another tab cannot enter a reconnect tug of war'); moved.client.dispose();
 
+// Recovery must outlast the VM watchdog and the former six-attempt limit.
+const outage = await connected({ storage: null });
+outage.socket.close();
+for (let attempt = 0; attempt < 25; attempt++) {
+  assert.equal(outage.client.getState().status, 'reconnecting');
+  const job = outage.timers.jobs.get(outage.client._reconnectTimer);
+  assert(job && job.delay <= 8000, 'Exactly one bounded retry remains scheduled');
+  outage.timers.advance(job.at - outage.timers.now);
+  Socket.instances.at(-1).close();
+}
+assert(outage.timers.now > 120000, 'Reconnect survives a full host recovery window');
+let retry = outage.timers.jobs.get(outage.client._reconnectTimer);
+outage.timers.advance(retry.at - outage.timers.now);
+let recoveredSocket = Socket.instances.at(-1); recoveredSocket.open();
+recoveredSocket.receive({ type: 'error', code: 'SESSION_EXPIRED', message: 'Server restarted' });
+recoveredSocket = Socket.instances.at(-1); recoveredSocket.open();
+assert.equal(recoveredSocket.sent[0].sessionToken, undefined);
+recoveredSocket.close(); // Even losing the fresh handshake must keep recovery alive.
+retry = outage.timers.jobs.get(outage.client._reconnectTimer);
+assert(retry); outage.timers.advance(retry.at - outage.timers.now);
+recoveredSocket = Socket.instances.at(-1); recoveredSocket.open();
+recoveredSocket.receive({ type: 'welcome', version: 1, id: 'after-reboot', sessionToken: session + '-reboot', resumed: false });
+assert.equal(outage.client.getState().status, 'connected');
+assert.equal(outage.client._attempt, 0);
+outage.client.dispose(); assert.equal(outage.timers.jobs.size, 0);
+
 // Choosing Leave while offline cancels reconnection and discards resume state.
 const exitStore = { data: new Map(), getItem(key) { return this.data.get(key); }, setItem(key, value) { this.data.set(key, value); } };
 const exiting = await connected({ storage: exitStore }); match(exiting.socket); exiting.socket.receive(snapshot(1, 0));

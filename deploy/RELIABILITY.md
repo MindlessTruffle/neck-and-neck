@@ -41,8 +41,14 @@ Two simultaneous matches / 16 connections remain the production caps.
 - Back from Multiplayer to the cloud menu disconnects rather than leaving a
   hidden party or matchmaking queue active.
 - An empty match is released immediately, even during its celebration.
-- Matchmaking courts are temporary and disappear after the result. Private
-  parties remain available for rematches until their members leave.
+- All completed courts, including private parties, disappear immediately after
+  the final score. The server sends the final snapshot and result, releases the
+  room, and stops its physics. Clients finish the cosmetic ragdoll celebration
+  locally; players can create a new party or queue again from results.
+- Connected clients keep retrying a lost server with jittered exponential
+  backoff capped at 8–9.2 seconds, without an attempt limit. A restarted server's
+  expired session token is discarded automatically. Deliberate Leave cancels
+  recovery; protocol errors and a session moved to another tab remain terminal.
 - Abrupt disconnects preserve the normal 15-second reconnect grace. Empty
   disconnected matches/rooms are then released; sessions expire after 60 seconds.
 

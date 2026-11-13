@@ -115,10 +115,11 @@ export function createGameServer(options={}) {
     const game=match.game,winner=game.score[0]===game.score[1]?null:game.score[0]>game.score[1]?0:1;
     for(const s of match.members){tell(s,{type:'match.end',matchId:match.id,reason:match.reason,winner,score:[...game.score]});s.matchId=null;s.playerId=null;s.input=noControls();s.lastSeq=s.ack=s.pendingSeq=-1;}
     matches.delete(match.id);match.room.matchId=null;touch(match.room);
-    for(const s of [...match.room.members])if(!s.ws)removeFromRoom(s,{notify:false});
-    // Matchmaking rooms are temporary courts, not persistent private parties.
-    if(match.room.matchmade)for(const s of [...match.room.members])removeFromRoom(s);
-    publishRoom(rooms.get(match.room.code));tryMatchQueues();
+    // Every completed court is disposable, including private games. Results
+    // and celebration continue on clients without holding server capacity.
+    rooms.delete(match.room.code);
+    for(const s of match.room.members){s.roomCode=null;s.queued=false;tell(s,{type:'room',room:null});}
+    match.room.members=[];tryMatchQueues();
   }
   function forfeit(match,team,reason='disconnect') {
     if(!match||match.game.phase==='finished')return;
@@ -291,6 +292,7 @@ export function createGameServer(options={}) {
     if(now-lastHousekeeping>=100){housekeeping(now);lastHousekeeping=now;}
     while(accumulator>=STEP){
       for(const match of matches.values()){
+        if(match.game.phase==='finished')continue;
         const inputs={};for(const s of match.members){
           if(now-s.inputAt>config.inputStaleMs){s.input.x=0;s.input.z=0;emptyActions(s.input);}
           inputs[s.playerId]={...s.input};s.ack=s.pendingSeq;emptyActions(s.input);
@@ -300,8 +302,9 @@ export function createGameServer(options={}) {
     }
     const snapshot=snapshotElapsed>=1/SNAPSHOT_RATE;if(snapshot)snapshotElapsed%=1/SNAPSHOT_RATE;
     for(const match of [...matches.values()]){
-      flushEvents(match);if(snapshot)publishSnapshot(match);
-      if(match.game.phase==='finished'&&match.game.celebrationRemaining<=0)finishMatch(match);
+      const finished=match.game.phase==='finished';
+      flushEvents(match);if(snapshot||finished)publishSnapshot(match);
+      if(finished)finishMatch(match);
     }
     stats.ticks++;const duration=performance.now()-before;stats.tickMs+=duration;stats.maxTickMs=Math.max(stats.maxTickMs,duration);
   }

@@ -32,10 +32,26 @@ try {
     a._receive(JSON.stringify({ type: 'match.end', matchId: oldMatch, score: [0, 7], winner: 1 }));
     assert.equal(a.getState().match, null, 'Late events cannot revive an abandoned match');
   }
-  a.joinQueue('1v1'); b.joinQueue('1v1');
-  await until(() => peers.every(p => p.getState().match));
+  // One player remains on results: their private court must still stop now.
+  a.createRoom('1v1'); await until(() => a.getState().room?.code);
+  b.joinRoom(a.getState().room.code); await until(() => a.getState().room?.members.length === 2);
+  a.startMatch(); await until(() => peers.every(p => p.getState().match));
   a.leaveRoom();
-  await until(() => b.getState().match?.ended && !b.getState().room);
+  await until(() => b.getState().match?.ended && !b.getState().room, 600);
+  assert.equal(server.metrics().rooms, 0);
+  assert.equal(server.metrics().matches, 0);
+  const steps = server.metrics().physicsSteps;
+  const initialPose = b.sample(0, {});
+  const animatedPose = b.sample(.1, {});
+  assert(animatedPose.players.some((p, i) => p.y !== initialPose.players[i].y), 'Client keeps victory ragdolls moving');
+  for (let i = 0; i < 40; i++) assert(Number.isFinite(b.sample(.1, {}).players[0].head.y));
+  assert.equal(b.sample(0, {}).celebrationRemaining, 0);
+  await delay(150);
+  assert.equal(server.metrics().physicsSteps, steps, 'Results screens consume no server physics');
+  a.joinQueue('1v1'); b.joinQueue('1v1');
+  await until(() => peers.every(p => p.getState().match && !p.getState().match.ended));
+  a.leaveRoom();
+  await until(() => b.getState().match?.ended && !b.getState().room, 600);
   assert.equal(server.metrics().rooms, 0, 'A finished matchmaking court does not persist as an idle party');
   assert.equal(server.metrics().matches, 0);
   a.joinQueue('1v1'); b.joinQueue('1v1');

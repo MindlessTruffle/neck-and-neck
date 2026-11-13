@@ -1,5 +1,5 @@
 import { VolleyballGame, BALL_GRAVITY } from './physics.js';
-import { ACTION_KEYS } from './net-protocol.js';
+import { ACTION_KEYS, snapshotState } from './net-protocol.js';
 
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, Number.isFinite(value) ? value : lo));
 const mix = (a, b, t) => a + (b - a) * t;
@@ -39,6 +39,7 @@ export class NetworkMotion {
     this.snapshots = []; this.offset = null; this.latestSeq = -1; this.lastArrival = -Infinity;
     this.localPlayerId = null; this.localTeam = null; this.ghost = null; this.pending = {};
     this.correction = { x: 0, y: 0, z: 0 }; this.accumulator = 0; this.view = null;
+    this.celebration = null;
     this.neckCorrection = Array.from({ length: 9 }, () => ({ x: 0, y: 0, z: 0 }));
   }
 
@@ -92,6 +93,23 @@ export class NetworkMotion {
 
   neutralize() { this.pending = {}; this.accumulator = 0; this.ghost?.clearBufferedInput(); }
 
+  finish() {
+    const state = this.snapshots.at(-1)?.state;
+    if (!state || state.phase !== 'finished' || this.celebration) return;
+    const game = new VolleyballGame({ mode: state.mode });
+    const bases = game.players;
+    Object.assign(game, copy(state));
+    game.players = state.players.map(p => {
+      const base = bases.find(b => b.id === p.id);
+      const player = { ...base, ...copy(p) };
+      player._previousNeck = player.neckPoints.map(q => ({ x: q.x, y: q.y, z: q.z }));
+      return player;
+    });
+    game.paused = false;
+    this.celebration = game;
+    this.neutralize();
+  }
+
   _predict(dt, input) {
     const game = this.ghost, p = game?.players[0];
     if (!p || !['serve', 'play'].includes(game.phase)) return;
@@ -125,6 +143,15 @@ export class NetworkMotion {
   }
 
   sample(dt, input, now, { paused = false, connected = true } = {}) {
+    if (this.celebration) {
+      // Cosmetic only: never run contacts, scoring, AI, or network inputs.
+      this.celebration.advanceCelebration(dt);
+      const out = snapshotState(this.celebration);
+      for (const player of out.players) player.human = player.id === this.localPlayerId;
+      out.localPlayerId = this.localPlayerId; out.localTeam = this.localTeam; out.network = true;
+      this.view = out;
+      return out;
+    }
     const latest = this.snapshots.at(-1);
     if (!latest) return null;
     const target = now + this.offset - this.delay;

@@ -55,7 +55,7 @@ S->C welcome {version:1,id:stable member UUID,sessionToken,resumed:boolean,match
      match {matchId,playerId:numeric physics slot,team,localTeam,mode,roomCode}
      snapshot {matchId,seq,time:epoch milliseconds,ack:last input seq applied,state:snapshotState}
      events {matchId,events:[{id:monotonic per match,...physics event}]}
-     match.end {matchId,reason,winner,score}; room follows after celebration.
+     match.end {matchId,reason,winner,score}; room:null follows immediately.
      pong {id,clientTime,serverTime}; error {code,message}
 Private room host can queue a two-member 2v2 party; party remains on one team.
 Rejoin hello restores room, match and latest snapshot with same playerId.
