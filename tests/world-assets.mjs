@@ -24,8 +24,8 @@ for(const id of [...MAPS.map(m=>m.id),'lobby']){
 }
 assert(totalBytes<12*1024*1024);
 const loader=fs.readFileSync(new URL('../src/loading-screen.jsx',import.meta.url),'utf8');
-assert(loader.includes('giraffe-loading-illustrated.png'));
-const sprite=fs.readFileSync(new URL('../public/ui/giraffe-loading-illustrated.png',import.meta.url));
+assert(loader.includes('giraffe-pixel-clouds.png'));
+const sprite=fs.readFileSync(new URL('../public/ui/giraffe-pixel-clouds.png',import.meta.url));
 assert.equal(sprite.subarray(1,4).toString(),'PNG');
 assert.equal(sprite.readUInt32BE(16)/sprite.readUInt32BE(20),3,'four 3:4 frames form a 3:1 strip');
 console.log('PASS retro imagegen sprite and world download budgets.');

@@ -24,7 +24,7 @@ async function privateMatch(peers,mode){
 }
 function allFinite(value){if(typeof value==='number')assert.ok(Number.isFinite(value));else if(value&&typeof value==='object')for(const part of Object.values(value))allFinite(part);}
 assert.equal(normalizeControls({x:NaN}),null);assert.equal(normalizeControls({dive:1}),null);
-assert.deepEqual(normalizeLoadout({ability:'invented',skin:{body:'url(secret)'}}),{ability:'magnet',skin:null});
+assert.deepEqual(normalizeLoadout({ability:'invented',skin:{body:'url(secret)'}}),{ability:'magnet',skin:null,cosmetics:{hat:null,face:null,back:null}});
 assert.ok(Math.hypot(...['x','z'].map(k=>normalizeControls({x:99,z:99})[k]))<=1.00001);
 assert.throws(()=>createGameServer({production:true}),/allowlist/);
 const app=createGameServer({port:0,maxRooms:4,maxConnectionsPerIP:20,maxCommandsPerSecond:100,reconnectGraceMs:180,sessionTtlMs:10000,heartbeatMs:200,helloTimeoutMs:1000});

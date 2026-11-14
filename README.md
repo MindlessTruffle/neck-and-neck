@@ -15,6 +15,15 @@ npm run dev -- --port 5173
 
 Open http://127.0.0.1:5173. Development binds to localhost. Requires Node.js 20.19+ or 22.12+ and WebGL2. All models, fonts, music and sounds are bundled locally.
 
+## Relics, cosmetics and pixel menu release
+
+- Five original Blender ability relics: equipped power enlarged in the centre, four pure-black silhouettes orbiting behind it.
+- Pixel-art destination icons and cloud giraffe loading strip, illustrated circular bubble shortcuts, and crisp screen-resolution text anchored to the 3D signs.
+- Live presence counts players in queues or matches (not idle menu connections); polls every 12 seconds while the menu is visible, with an honest offline state.
+- Hats, sunglasses and backpack cosmetics persist, follow the physical character and travel with online loadouts. Purchases use earned clovers.
+- Illustrated utility icons, mobile-safe sign positions, touch-sized controls and full-width phone sliders.
+- Art sources and prompts: `RELIC_RELEASE_ART.md` and `PIXEL_MENU_ART.md`.
+
 ## Map and menu release
 
 Release includes six Blender-authored worlds with bundled Kenney and Quaternius assets, painted skies, and illustrated menu destinations.
@@ -132,3 +141,8 @@ This release completed 120 seeded bot matches across both modes and all three di
 
 The GitHub Pages workflow on main installs dependencies, runs regression suites and all 120 simulation matches, builds the game and deploys dist. Relative asset paths support the repository subdirectory. Keep local preview available with Start Game.cmd.
 
+
+### Kenney map restoration
+Five arenas rebuilt with the original Kenney Nature Kit silhouettes, camp props, pavilion and cel palette. Expanded movement bounds, abilities, queues and menu behavior are preserved. Blender source: `Blender/kenney-restored-worlds.blend`; builder: `Blender/restore_kenney_worlds.py`. Arena GLBs total about 4.6 MiB, with 11–23 material batches each. The lobby remains independently authored.
+
+The supplied circular bubble contains either the equipped retro imagegen power icon or the live online-player count. Power icons and rolling-menu currency art retain their correct aspect ratios.

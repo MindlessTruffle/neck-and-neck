@@ -22,16 +22,17 @@ async function privateMatch(peers,mode){
   for(let i=1;i<peers.length;i++){peers[i].send('room.join',{code:room.code});await peers[i].next('room',m=>m.room?.members.length===i+1);}
   peers[0].send('room.start');return Promise.all(peers.map(p=>p.next('match')));
 }
-function checkState(state){assert.ok(['meadow','jungle','beach','volcano','mountain'].includes(state.mapId),'server sends a release map');allFinite(state);}
+function checkState(state){assert.ok(state.players.every(p=>p.cosmetics?.hat==='cap'),'cosmetics reach every online player');assert.ok(['meadow','jungle','beach','volcano','mountain'].includes(state.mapId),'server sends a release map');allFinite(state);}
 function allFinite(value){if(typeof value==='number')assert.ok(Number.isFinite(value));else if(value&&typeof value==='object')for(const part of Object.values(value))allFinite(part);}
 if(!process.env.SMOKE_SERVER_URL)throw new Error('Set SMOKE_SERVER_URL to an idle test server.');
 const peers=[];
 try {
- for(let i=0;i<4;i++) peers.push(await connect(process.env.SMOKE_SERVER_URL,{name:`Deploy check ${i}`,origin:'https://mindlesstruffle.github.io'}));
+ for(let i=0;i<4;i++) peers.push(await connect(process.env.SMOKE_SERVER_URL,{name:`Deploy check ${i}`,loadout:{ability:'magnet',cosmetics:{hat:'cap',face:'shades',back:null}},origin:'https://mindlesstruffle.github.io'}));
  for(const mode of ['1v1','2v2']) {
   for(const p of peers)p.messages=[];
   const group=peers.slice(0,mode==='1v1'?2:4);
   await privateMatch(group,mode);
+  const presenceUrl=new URL(process.env.SMOKE_SERVER_URL);presenceUrl.protocol=presenceUrl.protocol==='wss:'?'https:':'http:';presenceUrl.pathname='/api/presence';const presence=await fetch(presenceUrl).then(r=>r.json());assert.equal(presence.playing,group.length);assert.equal(presence.total,group.length);
   await Promise.all(group.map(p=>p.next('snapshot').then(m=>checkState(m.state))));
   for(const p of group) p.send('room.leave');
   await Promise.all(group.map(p=>p.next('room',m=>m.room===null)));
@@ -50,7 +51,7 @@ try {
   console.log(`PASS public TLS queue ${mode}`);
  }
  if(process.env.SMOKE_TWO_COURTS==='1') {
-  for(let i=4;i<8;i++)peers.push(await connect(process.env.SMOKE_SERVER_URL,{name:`Deploy check ${i}`,origin:'https://mindlesstruffle.github.io'}));
+  for(let i=4;i<8;i++)peers.push(await connect(process.env.SMOKE_SERVER_URL,{name:`Deploy check ${i}`,loadout:{ability:'magnet',cosmetics:{hat:'cap',face:'shades',back:null}},origin:'https://mindlesstruffle.github.io'}));
   for(const p of peers)p.messages=[];
   const matches=await Promise.all([privateMatch(peers.slice(0,4),'2v2'),privateMatch(peers.slice(4),'2v2')]);
   assert.notEqual(matches[0][0].matchId,matches[1][0].matchId);

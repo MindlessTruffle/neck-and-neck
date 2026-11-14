@@ -1,3 +1,4 @@
+import { cleanCosmetics } from './cosmetics-catalog.js';
 /** Shared wire contract. Sessions travel only in hello/welcome JSON, never URLs. */
 export const PROTOCOL_VERSION = 1;
 export const TICK_RATE = 120;
@@ -28,7 +29,7 @@ export function normalizeLoadout(value={}) {
   const ability=ABILITY_IDS.includes(value?.ability)?value.ability:'magnet';
   const skin=value?.skin;
   const palette=skin&&typeof skin==='object'&&['body','spots','muzzle','scarf','accent'].every(k=>typeof skin[k]==='string'&&/^#[0-9a-f]{6}$/i.test(skin[k]))?Object.fromEntries(['body','spots','muzzle','scarf','accent'].map(k=>[k,skin[k]])):null;
-  return {ability,skin:palette};
+  return {ability,skin:palette,cosmetics:cleanCosmetics(value?.cosmetics)};
 }
 export function normalizeName(name) {return typeof name==='string'?name.replace(/[\u0000-\u001f\u007f]/g,'').trim().slice(0,24)||'Tall Friend':'Tall Friend';}
 /** Public, JSON-safe authoritative render state. No private solver/session fields. */
@@ -37,7 +38,7 @@ export function snapshotState(game) {
   for(const key of ['mode','phase','paused','rally','hits','rallyHits','mapId','round','touchTeam','lastAction','serveStage','serveCharge','serveQuality','server','celebrationRemaining','message'])state[key]=game[key];
   state.score=[...game.score];state.touches=[...game.touches];state.ball={...game.ball};
   const fields=['id','team','human','name','x','y','z','vx','vz','bodyYaw','heading','jump','swing','dive','setBounce','knockback','tumble','energy','action','aimYaw','shotPower','role','equippedAbility'];
-  state.players=game.players.map(p=>({...Object.fromEntries(fields.map(k=>[k,p[k]])),...Object.fromEntries(Object.entries(p).filter(([k,v])=>k.startsWith('_')&&typeof v==='number'&&Number.isFinite(v))),_contactAction:p._contactAction,neck:{...p.neck},head:{...p.head},neckPoints:p.neckPoints.map(q=>({...q})),ability:p.ability?{...p.ability}:null,skin:p.skin?{...p.skin}:null}));
+  state.players=game.players.map(p=>({...Object.fromEntries(fields.map(k=>[k,p[k]])),...Object.fromEntries(Object.entries(p).filter(([k,v])=>k.startsWith('_')&&typeof v==='number'&&Number.isFinite(v))),_contactAction:p._contactAction,neck:{...p.neck},head:{...p.head},neckPoints:p.neckPoints.map(q=>({...q})),ability:p.ability?{...p.ability}:null,cosmetics:cleanCosmetics(p.cosmetics),skin:p.skin?{...p.skin}:null}));
   // Millimetre positions and four-decimal angles are below visible tolerance, keeping articulated
   // neck snapshots small enough for mobile connections without compression CPU.
   function round(value,key){if(typeof value==='number'){const scale=key==='yaw'||key==='pitch'||key==='aimYaw'||key==='bodyYaw'?1e4:1e3;return Number.isInteger(value)?value:Math.round(value*scale)/scale;}if(value&&typeof value==='object')for(const k in value)value[k]=round(value[k],k);return value;}

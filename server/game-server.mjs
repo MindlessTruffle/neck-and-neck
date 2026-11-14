@@ -38,6 +38,12 @@ export function createGameServer(options={}) {
     if(request.method==='GET'&&(path==='/serverhealth'||path==='/serverhealth/')){
       response.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-cache','x-content-type-options':'nosniff'});response.end(healthPage);return;
     }
+    if(request.method==='GET'&&path==='/api/presence'){
+      const headers={'content-type':'application/json','cache-control':'no-store','vary':'Origin'};
+      if(origins.has(request.headers.origin)||(!config.production&&/^http:\/\/(localhost|127\.0\.0\.1)(?::\d+)?$/.test(request.headers.origin||'')))headers['access-control-allow-origin']=request.headers.origin;
+      const queued=new Set(queues.flatMap(g=>g.members.filter(s=>s.ws).map(s=>s.id))),playing=new Set([...matches.values()].flatMap(m=>m.members.filter(s=>s.ws).map(s=>s.id)));
+      response.writeHead(200,headers);response.end(JSON.stringify({ok:!closing,queued:queued.size,playing:playing.size,total:new Set([...queued,...playing]).size}));return;
+    }
     if(request.method==='GET'&&path==='/api/serverhealth'){
       const headers={'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff','vary':'Origin'};
       if(origins.has(request.headers.origin)||(!config.production&&/^http:\/\/(localhost|127\.0\.0\.1)(?::\d+)?$/.test(request.headers.origin||'')))headers['access-control-allow-origin']=request.headers.origin;

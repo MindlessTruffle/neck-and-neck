@@ -5,6 +5,9 @@ import { assetUrl } from './assets.js';
 import './cloud-lobby.css';
 import { Icon } from './icons.jsx';
 import { useT } from './i18n.jsx';
+import { usePresence } from './presence.js';
+import { PowerIcon } from './power-icon.jsx';
+import { getAbility } from './profile.js';
 
 const LANDMARKS = [
   { id: 'play', name: 'PLAY',  x: 25, y: 52 },
@@ -22,7 +25,7 @@ function CloudBackdrop() {
 }
 
 export function CloudLobby({ error, onReload, profile, skinName, abilityName, hotspots, onSelect, muted, music, touch, onMuted, onMusic, onTouch, onFullscreen, ready, progress, panelRef, children, view, onClose, onFocus }) {
-  const t=useT();
+  const t=useT(),presence=usePresence(ready&&view==='home');
   return <div className="cloud-lobby" data-view={view} ref={panelRef} onKeyDown={event => { if (event.key === 'Escape' && view !== 'home') onClose(); }}>
     <CloudBackdrop />
     {!ready && !error ? <LoadingScreen progress={progress}/> : <>
@@ -33,10 +36,11 @@ export function CloudLobby({ error, onReload, profile, skinName, abilityName, ho
         <nav className="landmark-buttons" aria-label="Sky club destinations">{LANDMARKS.map(item => {
           const point = hotspots?.[item.id];
           const projected = point?.visible && Number.isFinite(point.x) && Number.isFinite(point.y);
-          return <button key={item.id} className={`world-menu-access landmark-${item.id}`} onFocus={() => onFocus?.(item.id)} disabled={!ready} onClick={() => onSelect(item.id)} style={projected ? { left: `clamp(112px, ${point.x}px, calc(100% - 112px))`, top: `${point.y}px` } : { left: `clamp(112px, ${item.x}%, calc(100% - 112px))`, top: `${item.y}%` }}>
+          return <button key={item.id} className={`world-menu-access landmark-${item.id}`} onFocus={() => onFocus?.(item.id)} disabled={!ready} onClick={() => onSelect(item.id)} style={projected ? { left: `${point.x}px`, top: `${point.y}px`, '--sign-width': `${point.width}px`, '--sign-height': `${point.height}px`, '--sign-x': `${point.x}px`, '--sign-y': `${point.y}px`, fontSize: `${Math.max(17, Math.min(30, point.width / (item.id==='online'?8:7)))}px` } : { left: `clamp(112px, ${item.x}%, calc(100% - 112px))`, top: `${item.y}%` }}>
             <span className="landmark-icon"><LandmarkIcon id={item.id}/></span><strong>{t(item.name)}</strong>
           </button>;
         })}</nav>
+        <div className="sky-live-bubbles">{hotspots?.abilities?.visible&&<button className="sky-power-bubble" style={{left:hotspots.abilities.x,top:hotspots.abilities.y,backgroundImage:`url("${assetUrl('ui/player-power-bubble.png')}")`}} onClick={()=>onSelect('abilities')} aria-label={`Equipped: ${abilityName}. Open powers`} title={abilityName}><PowerIcon id={profile.equippedAbility} color={getAbility(profile.equippedAbility).color}/></button>}{hotspots?.online?.visible&&<button className="sky-player-count" style={{left:hotspots.online.x,top:hotspots.online.y,backgroundImage:`url("${assetUrl('ui/player-power-bubble.png')}")`}} onClick={()=>onSelect('online')} aria-label={presence?.unavailable?'Player count unavailable. Open multiplayer':`${presence?.total??0} players: ${presence?.queued??0} queuing, ${presence?.playing??0} in matches. Open multiplayer`}><PowerIcon id="players"/><b>{presence&&!presence.unavailable?presence.total:'—'}</b></button>}</div>
         <div className="sky-loadout"><span>{skinName}</span><Icon name="power" size={20}/><span>{abilityName}</span></div>
         <footer className="sky-settings"><button onClick={() => onSelect("options")} aria-label={t("Options")}><Icon name="settings"/></button>
           <button onClick={() => onSelect('controls')} aria-label={t("How to play")}><Icon name="help"/></button>

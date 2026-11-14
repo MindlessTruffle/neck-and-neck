@@ -1,3 +1,4 @@
+import { COSMETICS, cleanCosmetics } from './cosmetics-catalog.js';
 export const PROFILE_VERSION = 1;
 export const PROFILE_KEY = 'neck-and-neck.profile.v1';
 export const ROLL_COST = 100;
@@ -29,7 +30,7 @@ const integer = (value, fallback = 0) => Number.isSafeInteger(value) && value >=
 const ids = (values, allowed, starter) => [...new Set([starter, ...(Array.isArray(values) ? values.filter(value => typeof value === 'string' && allowed.has(value)) : [])])];
 
 export function createProfile() {
-  return { version: PROFILE_VERSION, coins: 500, ownedSkins: ['classic'], equippedSkin: 'classic', ownedAbilities: ['magnet'], equippedAbility: 'magnet', stats: { points: 0, wins: 0, matches: 0, rolls: 0 }, claimedRewards: [] };
+  return { version: PROFILE_VERSION, coins: 500, ownedSkins: ['classic'], equippedSkin: 'classic', ownedAbilities: ['magnet'], equippedAbility: 'magnet', ownedCosmetics: [], cosmetics: cleanCosmetics(), stats: { points: 0, wins: 0, matches: 0, rolls: 0 }, claimedRewards: [] };
 }
 
 /** Only known IDs, nonnegative integers and bounded arrays enter the saved schema. */
@@ -42,6 +43,8 @@ export function validateProfile(raw) {
     version: PROFILE_VERSION,
     coins: integer(raw.coins),
     ownedSkins,
+    ownedCosmetics: [...new Set((Array.isArray(raw.ownedCosmetics)?raw.ownedCosmetics:[]).filter(id=>COSMETICS.some(c=>c.id===id)))],
+    cosmetics: cleanCosmetics(Object.fromEntries(Object.entries(cleanCosmetics(raw.cosmetics)).map(([slot,id])=>[slot,Array.isArray(raw.ownedCosmetics)&&raw.ownedCosmetics.includes(id)?id:null]))),
     equippedSkin: ownedSkins.includes(raw.equippedSkin) ? raw.equippedSkin : 'classic',
     ownedAbilities,
     equippedAbility: ownedAbilities.includes(raw.equippedAbility) ? raw.equippedAbility : 'magnet',
@@ -131,4 +134,19 @@ export const purchase = purchaseSkin;
 export const roll = rollAbility;
 export function equip(profile, selection) {
   return selection?.ability ? equipAbility(profile, selection.ability) : equipSkin(profile, typeof selection === 'string' ? selection : selection?.skin);
+}
+
+export function purchaseCosmetic(raw,id){
+ const profile=validateProfile(raw),item=COSMETICS.find(c=>c.id===id);
+ if(!item)return outcome(false,profile,'Unknown cosmetic.');
+ if(profile.ownedCosmetics.includes(id))return equipCosmetic(profile,id);
+ if(profile.coins<item.price)return outcome(false,profile,`You need ${item.price-profile.coins} more clovers.`);
+ profile.coins-=item.price;profile.ownedCosmetics.push(id);profile.cosmetics[item.slot]=id;
+ return outcome(true,profile,`${item.name} unlocked and equipped.`,{item,spent:item.price});
+}
+export function equipCosmetic(raw,id,slot){
+ const profile=validateProfile(raw),item=COSMETICS.find(c=>c.id===id);
+ if(id===null&&['hat','face','back'].includes(slot)){profile.cosmetics[slot]=null;return outcome(true,profile,'Cosmetic removed.');}
+ if(!item||!profile.ownedCosmetics.includes(id))return outcome(false,profile,'Unlock this cosmetic first.');
+ profile.cosmetics[item.slot]=id;return outcome(true,profile,`${item.name} equipped.`,{item});
 }

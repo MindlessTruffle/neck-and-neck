@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {createProfile,validateProfile,purchaseCosmetic,equipCosmetic} from '../src/profile.js';
+import {normalizeLoadout,snapshotState} from '../src/net-protocol.js';
+import {VolleyballGame} from '../src/physics.js';
+let p=createProfile();assert.deepEqual(p.cosmetics,{hat:null,face:null,back:null});
+let r=purchaseCosmetic(p,'cap');assert.equal(r.profile.coins,p.coins-80);assert.equal(r.profile.cosmetics.hat,'cap');assert.equal(p.cosmetics.hat,null);
+p=r.profile;r=purchaseCosmetic(p,'cap');assert.equal(r.profile.coins,p.coins);assert.equal(r.profile.ownedCosmetics.length,1);
+p=purchaseCosmetic(p,'shades').profile;p=purchaseCosmetic(p,'pack').profile;assert.deepEqual(p.cosmetics,{hat:'cap',face:'shades',back:'pack'});
+assert.equal(equipCosmetic(p,'crown').ok,false);assert.equal(purchaseCosmetic({...p,coins:0},'crown').ok,false);assert.equal(purchaseCosmetic(p,'bad').ok,false);
+assert.equal(validateProfile({...p,cosmetics:{hat:'crown'}}).cosmetics.hat,null);assert.equal(normalizeLoadout({cosmetics:{hat:'shades',face:'cap'}}).cosmetics.hat,null);
+assert.equal(equipCosmetic(p,null,'hat').profile.cosmetics.hat,null);
+const loadout=normalizeLoadout({ability:'rocket',cosmetics:p.cosmetics}),game=new VolleyballGame({loadout});game.start();assert.deepEqual(snapshotState(game).players[0].cosmetics,p.cosmetics);
+console.log('PASS cosmetics: migration, ownership, isolated purchases, slots, removal, whitelist and network snapshot.');

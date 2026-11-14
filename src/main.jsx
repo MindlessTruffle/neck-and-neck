@@ -386,8 +386,9 @@ function App() {
   }, [menu, menuTab, ready]);
   useEffect(() => {
     runtime.current.world?.setPlayerSkin?.(0, getSkin(profile.equippedSkin).palette);
-    if (onlineStatus.connection === 'connected' && !runtime.current.onlineActive) runtime.current.online?.setLoadout({ ability: profile.equippedAbility, skin: getSkin(profile.equippedSkin).palette });
-  }, [profile.equippedSkin, profile.equippedAbility, ready, onlineStatus.connection]);
+    runtime.current.world?.setPlayerCosmetics?.(profile.cosmetics);
+    if (onlineStatus.connection === 'connected' && !runtime.current.onlineActive) runtime.current.online?.setLoadout({ ability: profile.equippedAbility, skin: getSkin(profile.equippedSkin).palette, cosmetics: profile.cosmetics });
+  }, [profile.equippedSkin, profile.equippedAbility, profile.cosmetics.hat, profile.cosmetics.face, profile.cosmetics.back, ready, onlineStatus.connection]);
   useEffect(() => {
     const media = window.matchMedia('(pointer: coarse), (max-width: 699px)');
     const change = () => { if (touchOverride.current === null) setTouch(media.matches); };
@@ -417,7 +418,7 @@ function App() {
     if (!game) return;
     neckAim.current = { yaw: 0, pitch: .15, extension: .35 };
     cameraAim.current = { yaw: 0, pitch: 0, distance: 7.2 };
-    game.reset({ mode, difficulty, equippedAbility: profile.equippedAbility });
+    game.reset({ mode, difficulty, loadout: {ability:profile.equippedAbility,skin:getSkin(profile.equippedSkin).palette,cosmetics:profile.cosmetics} });
     game.mapId = chooseMap();
     game.seed = crypto.getRandomValues(new Uint32Array(1))[0];
     runtime.current.started = true;

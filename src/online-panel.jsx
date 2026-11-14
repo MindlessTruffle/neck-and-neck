@@ -25,7 +25,7 @@ export function OnlinePanel({ client, state = {}, profile }) {
   const invoke = async operation => { setNotice(''); try { await operation(); } catch (error) { setNotice(error.message || 'Could not connect. Try again.'); } };
   const connect = async () => {
     save('neck.server', endpoint.trim()); save('neck.name', name.trim());
-    await client.connect(endpoint.trim(), { name: name.trim(), loadout: { ability: profile.equippedAbility, skin: getSkin(profile.equippedSkin).palette } });
+    await client.connect(endpoint.trim(), { name: name.trim(), loadout: { ability: profile.equippedAbility, skin: getSkin(profile.equippedSkin).palette, cosmetics: profile.cosmetics } });
   };
   const ensureConnected = async () => { if (!connected) await connect(); };
   const setQueue = mode => { setPartyMenu(false); return invoke(async () => { await ensureConnected(); await client.joinQueue(mode); }); };

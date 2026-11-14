@@ -1,3 +1,4 @@
+import { createCosmeticRig } from './cosmetics-rig.js';
 import * as THREE from 'three';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
@@ -11,6 +12,7 @@ export class GiraffeRig {
     this.root = new THREE.Group();
     this.model = cloneSkeleton(template);
     this.root.add(this.model); scene.add(this.root);
+    this.cosmetics=createCosmeticRig(this.root);
     this.index = index; this.yaw = Math.PI / 2; this.team = -1;
     this.gaitPhase = index * 1.7; this.moving = 0; this.headOrientation = null;
     this.bones = new Map(); this.materials = [];this.baseColors=new Map();this.skin=null;this.skinKey='';
@@ -169,7 +171,8 @@ export class GiraffeRig {
     }
     const tail = this.bones.get('Tail_00');
     if (tail) tail.bone.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(UP, Math.sin(time * 5 + this.index) * .22));
+    this.cosmetics.set(player.cosmetics);this.cosmetics.update(player,knock?this._renderHead:null,knock?this._tumbleQuaternion:null);
     this.root.updateMatrixWorld(true);
   }
-  dispose() { this.root.removeFromParent(); this.materials.forEach(material => material.dispose()); }
+  dispose() { this.cosmetics.dispose();this.root.removeFromParent(); this.materials.forEach(material => material.dispose()); }
 }

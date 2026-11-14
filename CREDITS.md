@@ -21,3 +21,11 @@ Kenney logos are not used. No remote asset requests occur during gameplay.
 
 - November world overhaul: editable `Blender/release-worlds.blend`, reproducible `Blender/build_release_worlds.py`, six runtime GLBs and geometry budgets in `public/models/worlds/manifest.json`. Uses the credited CC0 Kenney and Quaternius sources above.
 - Original imagegen assets: `public/ui/giraffe-loading-illustrated.png` (retro four-frame giraffe illustration), `public/ui/destination-atlas.png` (four illustrated destinations), and `public/textures/painted-sky.png` (painted cloud panorama). See `ART_RELEASE.md` for direction and validation.
+
+- Retro pixel menu update: original imagegen atlas `public/ui/destination-pixel-atlas.png` and four-frame cloud mascot `public/ui/giraffe-pixel-clouds.png`. These replace the painted variants in the current UI. Exact prompts and reference notes: `PIXEL_MENU_ART.md`.
+
+- Original Blender ability relics: `Blender/ability-relics.blend` and `Blender/build_ability_relics.py`; runtime `public/models/abilities/relics.glb`. Original generated toy UI icons, cosmetic portraits and soap-bubble artwork: prompts and paths in `RELIC_RELEASE_ART.md`. These generated icons are inspired by game UI; they are not distributed as official Kenney assets.
+
+- Kenney restoration: `Blender/restore_kenney_worlds.py` / `Blender/kenney-restored-worlds.blend` recompose the credited Kenney Nature Kit and original pavilion across five arenas. Native pigments and original cel lighting restored.
+- Bubble badge: user-supplied image, `public/ui/player-power-bubble.png`, copied unchanged; not claimed as original or CC0.
+- Retro ability/player atlas: original built-in imagegen art, `public/ui/power-icons-retro.png`; exact prompt in `RELIC_RELEASE_ART.md`.

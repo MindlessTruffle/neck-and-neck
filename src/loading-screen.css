@@ -12,3 +12,11 @@
 .loading-screen p{font-size:20px;letter-spacing:2px;color:#fff1d2}
 .loading-screen-meter{height:26px;border-color:#f7d695;background:#172b42;box-shadow:0 5px #101e32;border-radius:6px}
 .loading-screen-meter span{background:linear-gradient(90deg,#eaa650,#ffe19b);border-radius:0}
+
+/* Generated pixel sprites retain crisp edges; clouds are part of each frame. */
+.loading-screen{background:radial-gradient(ellipse at 50% 30%,#b2e5f4,#69afd2 58%,#5b8fba);color:#fff7df}
+.loading-screen::before{content:'';position:absolute;inset:0;background:linear-gradient(transparent 40%,#e9edf442);pointer-events:none}
+.loading-screen-giraffe{image-rendering:pixelated;filter:drop-shadow(0 8px 0 #29456855);position:relative;z-index:1}
+.loading-screen h1,.loading-screen-meter,.loading-screen p{position:relative;z-index:1}
+.loading-screen h1{-webkit-text-stroke-color:#244461;text-shadow:0 4px #244461}
+.loading-screen p{color:#fff7df;text-shadow:0 2px #244461}

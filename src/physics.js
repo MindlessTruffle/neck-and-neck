@@ -1,3 +1,4 @@
+import { cleanCosmetics } from './cosmetics-catalog.js';
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 export const BALL_GRAVITY = 10.8;
 export const MAX_BALL_SPEED = 11.5;
@@ -46,7 +47,7 @@ export class VolleyballGame {
         _jumpV: 0, _jumpBuffer: 0, _dash: 0, _dashCooldown: 0, _dashBuffer: 0, _dashX: 0, _dashZ: 0,
         _swingTime: 0, _swingCooldown: 0, _swingBuffer: 0, _shotYaw: 0, _reaction: 0, _tx: x, _tz: z,
         aimYaw:yaw,shotPower:.55,role:count===1?'all-rounder':i===0?'receiver':'striker',ability:null,
-        equippedAbility:!team&&!i?this.equippedAbility:null,_matchAbility:null,skin:!team&&!i?loadout?.skin:null,
+        equippedAbility:!team&&!i?this.equippedAbility:null,_matchAbility:null,skin:!team&&!i?loadout?.skin:null,cosmetics:cleanCosmetics(!team&&!i?loadout?.cosmetics:null),
         _actionTime:0,_actionSerial:0,_lastHitActionSerial:-1,_contactAction:'bump',_setBuffer:0,_jumpSetBuffer:0,_blockTime:0,_contactCooldown:0,_jumpCooldown:0,
         _dive:0,_diveCooldown:0,_diveX:0,_diveZ:0,dive:0,setBounce:0,_setBounceTime:0,
         knockback:0,_knockTime:0,_knockVX:0,_knockVY:0,_knockVZ:0,tumble:0,_tumbleSpeed:0 });
@@ -60,6 +61,7 @@ export class VolleyballGame {
     const p=this.players.find(q=>q.id===Number(id));if(!p)return false;
     if(ABILITIES.some(a=>a.id===loadout.ability)){p.equippedAbility=loadout.ability;p._matchAbility=loadout.ability;if(p.id===0)this.equippedAbility=loadout.ability;}
     if(loadout.skin!==undefined)p.skin=loadout.skin;
+    if(loadout.cosmetics!==undefined)p.cosmetics=cleanCosmetics(loadout.cosmetics);
     return true;
   }
   setNetworkInputs(map=null) {
