@@ -18,3 +18,6 @@
 - Additional rising volley notes, airy anticipation, and the offline music/SFX fallback are original Web Audio synthesis. Real stock samples replace, rather than double, their synthesized equivalents when loaded.
 
 Kenney logos are not used. No remote asset requests occur during gameplay.
+
+- November world overhaul: editable `Blender/release-worlds.blend`, reproducible `Blender/build_release_worlds.py`, six runtime GLBs and geometry budgets in `public/models/worlds/manifest.json`. Uses the credited CC0 Kenney and Quaternius sources above.
+- Original imagegen assets: `public/ui/giraffe-loading-illustrated.png` (retro four-frame giraffe illustration), `public/ui/destination-atlas.png` (four illustrated destinations), and `public/textures/painted-sky.png` (painted cloud panorama). See `ART_RELEASE.md` for direction and validation.

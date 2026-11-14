@@ -1,8 +1,9 @@
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 /** Mouse steers the physical neck target; the renderer follows its actual pose. */
-export function steerLook(view, neck, dx, dy, touch = false) {
-  const sensitivity = touch ? .007 : .007;
+export function steerLook(view, neck, dx, dy, touch = false, options = {}) {
+  const sensitivity = .007 * (touch ? options.touchSensitivity ?? 1 : options.sensitivity ?? 1);
+  dy *= options.invertY ? -1 : 1;
   neck.yaw += dx * sensitivity;
   neck.pitch = clamp(neck.pitch - dy * sensitivity, -.9, 1.25);
   view.yaw = neck.yaw;

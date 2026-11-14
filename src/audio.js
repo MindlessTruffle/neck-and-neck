@@ -15,7 +15,7 @@ export class GameAudio {
     this.master = null;
     this.musicBus = null;
     this.fallbackBus = null;
-    this.muted = false;
+    this.muted = false; this.masterVolume=1; this.musicVolume=1;
     this.musicEnabled = true;
     this.unlocked = false;
     this.timer = null;
@@ -68,10 +68,10 @@ export class GameAudio {
       context = new AudioContextClass();
       this.context = context;
       this.master = context.createGain();
-      this.master.gain.value = this.muted ? 0 : .48;
+      this.master.gain.value = this.muted ? 0 : .48*this.masterVolume;
       this.master.connect(context.destination);
       this.musicBus = context.createGain();
-      this.musicBus.gain.value = this.musicEnabled ? .3 : 0;
+      this.musicBus.gain.value = this.musicEnabled ? .3*this.musicVolume : 0;
       this.musicBus.connect(this.master);
       this.fallbackBus = context.createGain();
       this.fallbackBus.gain.value = 1;
@@ -105,14 +105,16 @@ export class GameAudio {
     }
   }
 
+  setVolumes(master,music) { this.masterVolume=Math.max(0,Math.min(1,master));this.musicVolume=Math.max(0,Math.min(1,music));this.setMuted(this.muted);this.setMusic(this.musicEnabled); }
+
   setMuted(value) {
     this.muted = Boolean(value);
-    if (this.master && this.context && !this._disposed) this.master.gain.setTargetAtTime(this.muted ? 0 : .48, this.context.currentTime, .035);
+    if (this.master && this.context && !this._disposed) this.master.gain.setTargetAtTime(this.muted ? 0 : .48*this.masterVolume, this.context.currentTime, .035);
   }
 
   setMusic(value) {
     this.musicEnabled = Boolean(value);
-    if (this.musicBus && this.context && !this._disposed) this.musicBus.gain.setTargetAtTime(this.musicEnabled ? .3 : 0, this.context.currentTime, .06);
+    if (this.musicBus && this.context && !this._disposed) this.musicBus.gain.setTargetAtTime(this.musicEnabled ? .3*this.musicVolume : 0, this.context.currentTime, .06);
     if (this.musicEnabled && this.unlocked) this._loadStockMusic();
   }
 

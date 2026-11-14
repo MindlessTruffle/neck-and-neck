@@ -1,11 +1,13 @@
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 export const BALL_GRAVITY = 10.8;
 export const MAX_BALL_SPEED = 11.5;
-export const BALL_RADIUS = .34;
+export const BALL_RADIUS = .41;
+export const PLAYER_BOUND_X = 17;
+export const PLAYER_BOUND_Z = 12;
 const G = BALL_GRAVITY;
 const BALL_R = BALL_RADIUS;
 const HEAD_R = .68;
-const DIVE_DURATION=.72;
+const DIVE_DURATION=.94;
 const ACTION_KEYS=['jump','dash','swing','smash','serve','toss','set','jumpSet','dive','ability'];
 const EMPTY_INPUT=Object.freeze({});
 export const ABILITIES = [
@@ -247,7 +249,7 @@ export class VolleyballGame {
         if ((input.swing || input.smash)&&this.phase!=='serve') p._swingBuffer = .16;
         if(input.set)p._setBuffer=.16;
         if(input.jumpSet){p._jumpSetBuffer=.2;p._jumpBuffer=.12;}
-        if(input.dive&&this.phase==='play')this._divePlayer(p,dx,dz);
+        if(input.dive&&['serve','play','point'].includes(this.phase)&&this.celebrationRemaining<=0)this._divePlayer(p,dx,dz);
         if(input.ability)this._useAbility(p,dx,dz);
         if (p._jumpBuffer > 0 && p.y === 0) { p._jumpBuffer = 0; p._jumpV = p.ability?.id==='spring'&&p.ability.active>0?10.4:7.8; this.emit('jump',{player:p.id,x:p.x,z:p.z}); }
         if (p._dashBuffer > 0 && p.energy >= .28 && p._dashCooldown === 0) {
@@ -301,15 +303,15 @@ export class VolleyballGame {
       let targetX = dx*speed*(1-dashWeight) + p._dashX*10.8*dashWeight;
       let targetZ = dz*speed*(1-dashWeight) + p._dashZ*10.8*dashWeight;
       p.dive=p._dive>0?Math.sin(Math.PI*(1-p._dive/DIVE_DURATION)):0;
-      if(p._dive>0){const diveSpeed=(p.ability?.id==='rocket'&&p.ability.active>0?12.5:9)*(0.4+.6*p._dive/DIVE_DURATION);targetX=p._diveX*diveSpeed;targetZ=p._diveZ*diveSpeed;}
+      if(p._dive>0){const diveSpeed=(p.ability?.id==='rocket'&&p.ability.active>0?16:12.5)*(0.4+.6*p._dive/DIVE_DURATION);targetX=p._diveX*diveSpeed;targetZ=p._diveZ*diveSpeed;}
       // Acceleration and drag make direction changes gradual; air steering is weaker.
       const response = p._dive>0?30:p._dash > 0 ? 25 : (p.y > .01 ? 5 : (dx || dz ? 16 : 12));
       const blend = 1 - Math.exp(-response * dt);
       p.vx += (targetX-p.vx)*blend; p.vz += (targetZ-p.vz)*blend;
-      const minX=p.team?.7:-8.6, maxX=p.team?8.6:-.7;
-      p.x=clamp(p.x+p.vx*dt,minX,maxX);p.z=clamp(p.z+p.vz*dt,-4.6,4.6);
+      const minX=p.team?.7:-PLAYER_BOUND_X, maxX=p.team?PLAYER_BOUND_X:-.7;
+      p.x=clamp(p.x+p.vx*dt,minX,maxX);p.z=clamp(p.z+p.vz*dt,-PLAYER_BOUND_Z,PLAYER_BOUND_Z);
       if ((p.x<=minX&&p.vx<0)||(p.x>=maxX&&p.vx>0)) p.vx=0;
-      if ((p.z<=-4.6&&p.vz<0)||(p.z>=4.6&&p.vz>0)) p.vz=0;
+      if ((p.z<=-PLAYER_BOUND_Z&&p.vz<0)||(p.z>=PLAYER_BOUND_Z&&p.vz>0)) p.vz=0;
       if (Math.abs(dx)>.1) p.heading=dx>0?1:-1;
       if(p.y>0||p._jumpV>0){p._jumpV-=18*dt;p.y+=p._jumpV*dt;if(p.y<=0){p.y=0;p._jumpV=0;}}p.jump=p.y;
       p._swingTime=Math.max(0,p._swingTime-dt); p.swing=p._swingTime>0?Math.sin(Math.PI*(1-p._swingTime/.5)):0;
@@ -376,8 +378,23 @@ export class VolleyballGame {
       // Repeated 2v2 contacts count only after a fresh deliberate action.
       if(this.mode==='2v2'&&this.lastHitter===p.id&&this.touchTeam===p.team&&this.touches[p.team]>0&&!this._lastWasBlock&&
         (p._actionSerial===p._lastHitActionSerial||p._actionTime<=0))continue;
-      const h=p.head, human=p.human&&this.phase!=='attract';
-      const physicalRadius=BALL_R+HEAD_R, forgiveness=human ? (p._actionTime>0?.5:.4) : 0;
+      let h=p.head, contactRadius=HEAD_R;
+      const human=p.human&&this.phase!=='attract';
+      // Neck capsules participate in the same touch/cooldown rules as the head.
+      // Find the nearest point on each articulated segment, including motion.
+      let best=Math.hypot(b.x-h.x,b.y-h.y,b.z-h.z)-(BALL_R+HEAD_R);
+      const headInReach=best<=(human?(p._actionTime>0?.62:.48):0);
+      if(!headInReach)for(let i=1;i<p.neckPoints.length-1;i++){
+        const a=p.neckPoints[i],c=p.neckPoints[i+1],dx=c.x-a.x,dy=c.y-a.y,dz=c.z-a.z;
+        for(const time of [0,.5,1]){
+          const bx=oldX+(b.x-oldX)*time,by=oldY+(b.y-oldY)*time,bz=oldZ+(b.z-oldZ)*time;
+          const u=clamp(((bx-a.x)*dx+(by-a.y)*dy+(bz-a.z)*dz)/(dx*dx+dy*dy+dz*dz||1),0,1);
+          const x=a.x+dx*u,y=a.y+dy*u,z=a.z+dz*u,d=Math.hypot(bx-x,by-y,bz-z)-(BALL_R+.38);
+          const vx=(a.vx||0)+((c.vx||0)-(a.vx||0))*u,vy=(a.vy||0)+((c.vy||0)-(a.vy||0))*u,vz=(a.vz||0)+((c.vz||0)-(a.vz||0))*u;
+          if(d<best&&(b.vx-vx)*(bx-x)+(b.vy-vy)*(by-y)+(b.vz-vz)*(bz-z)<0){best=d;contactRadius=.38;h={x,y,z,vx,vy,vz};}
+        }
+      }
+      const physicalRadius=BALL_R+contactRadius, forgiveness=human ? (p._actionTime>0?.62:.48) : 0;
       const action=p._dive>0?'dive':p._blockTime>0?'block':p._actionTime>0?p._contactAction:'bump';
       const abilityReach=p.ability?.active>0?(p.ability.id==='magnet'?.65:p.ability.id==='shield'?.55:0):0;
       const min=physicalRadius+forgiveness+abilityReach+(action==='dive'?.4:action==='block'?.3:0);

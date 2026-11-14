@@ -15,6 +15,27 @@ npm run dev -- --port 5173
 
 Open http://127.0.0.1:5173. Development binds to localhost. Requires Node.js 20.19+ or 22.12+ and WebGL2. All models, fonts, music and sounds are bundled locally.
 
+## Map and menu release
+
+Release includes six Blender-authored worlds with bundled Kenney and Quaternius assets, painted skies, and illustrated menu destinations.
+
+- Five randomly selected courts: meadow, jungle, beach, volcano and mountain. Online players receive the same server-selected map.
+- Four clickable 3D island signs, an image-generated retro giraffe loading animation and a 3D power carousel.
+- Longer dives before and during rallies, neck-segment contacts and a larger ball/contact window.
+- Options cover mouse/touch sensitivity, inverted aim, camera distance, key bindings, volume, rendering, reduced motion and English/Spanish/French UI.
+- Completed solo queue matches return to mode selection; real parties return to their idle lobby. Two-player parties can queue for 2v2 together.
+
+For frontend plus local multiplayer, run `npm run dev:online`. To use the isolated backend port used for this review in PowerShell:
+
+```powershell
+$env:PORT = '8788'
+npm run dev:online
+```
+
+Close existing local preview processes before restarting. In Multiplayer → Advanced, use `ws://127.0.0.1:8788` for that port (saved server choices take precedence).
+
+Validation: unit/mechanics, network lifecycle, fixed-clock bot simulation, build, responsive browser checks and an eight-court local load test. Desktop load results are not an Oracle or physical-phone performance guarantee.
+
 ## Play with a mouse
 
 - Move the mouse to swing the physical neck. The high shoulder camera follows the actual neck with a small, bounded spring lag; there is no right-mouse camera mode.

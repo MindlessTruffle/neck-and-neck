@@ -1,0 +1,1 @@
+import React from 'react';import {createRoot} from 'react-dom/client';import {LoadingScreen} from '../src/loading-screen.jsx';import '../src/style.css';createRoot(document.getElementById('root')).render(<LoadingScreen progress={.64}/>);

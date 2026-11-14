@@ -38,8 +38,8 @@ try {
   a.send('room.start');assert.equal((await a.next('error')).code,'PLAYERS_REQUIRED');
   b.send('room.join',{code:room.code});await b.next('room',m=>m.room?.members.length===2);
   b.send('room.start');assert.equal((await b.next('error')).code,'HOST_REQUIRED');
-  a.send('room.start');const [ma,mb]=await Promise.all([a.next('match'),b.next('match')]);assert.equal(ma.playerId,0);assert.equal(mb.playerId,1);assert.equal(mb.team,1);
-  const initial=await a.next('snapshot');assert.equal(initial.state.players.length,2);assert.ok(initial.state.players.every(p=>p.human));allFinite(initial.state);
+  a.send('room.start');const [ma,mb]=await Promise.all([a.next('match'),b.next('match')]);assert.equal(ma.playerId,0);assert.equal(mb.playerId,1);assert.equal(mb.team,1);assert.equal(ma.mapId,mb.mapId);assert(['meadow','jungle','beach','volcano','mountain'].includes(ma.mapId));assert.equal(ma.partyCode,room.code);
+  const initial=await a.next('snapshot');assert.equal(initial.state.mapId,ma.mapId);assert.equal(initial.state.players.length,2);assert.ok(initial.state.players.every(p=>p.human));allFinite(initial.state);
   a.send('input',{seq:1,controls:{x:99,z:0,neckYaw:1e99,neckPitch:99,extension:9},score:[999,0],position:{x:1000}});
   const moved=await a.next('snapshot',m=>m.ack===1&&m.state.players[0].x>initial.state.players[0].x+.15);assert.equal(moved.state.score[0],0);assert.ok(moved.state.players[0].x<0);assert.ok(moved.state.players[0].neck.pitch<=1.35);allFinite(moved.state);
   a.send('input',{seq:2,controls:{serve:true,aimYaw:0,neckYaw:0,x:0}});const toss=await a.next('snapshot',m=>m.ack===2);assert.equal(toss.state.serveStage,'toss');assert.equal(toss.state.phase,'serve');
@@ -54,7 +54,7 @@ try {
   resumed.close();const finishEvents=await a.next('events',m=>m.events.some(e=>e.type==='win'));assert.equal(finishEvents.events.find(e=>e.type==='win').team,0);
   const blast=await a.next('snapshot',m=>m.state.phase==='finished');assert.ok(blast.state.celebrationRemaining>0);
   const ended=await a.next('match.end',()=>true,600);assert.equal(ended.reason,'disconnect');assert.equal(ended.winner,0);await a.next('room',m=>m.room===null);
-  assert.equal(app.metrics().matches,0);assert.equal(app.metrics().rooms,0);
+  assert.equal(app.metrics().matches,0);assert.equal(app.metrics().rooms,1);await a.next('room',m=>m.room?.status==='lobby');a.send('room.leave');await a.next('room',m=>m.room===null);
   const afterGrace=await connect(address.url,{token:oldToken});peers.push(afterGrace);assert.equal(afterGrace.welcome.resumed,true);assert.equal(afterGrace.welcome.matchId,null,'expired match must be explicitly absent on resume');await afterGrace.next('room',m=>m.room===null);afterGrace.close();
   console.log('PASS server: authoritative 1v1, finite/clamped inputs, ignored score writes, sequenced two-click serve/jump, origin/schema checks, rejoin and animated forfeit cleanup.');
 
@@ -67,11 +67,11 @@ try {
   group[0].send('room.leave');await group[1].next('match.end',()=>true,4000);for(const p of group){p.send('room.leave');await p.next('room',m=>m.room===null);}
   console.log('PASS server: four real human slots, loadout/profile transfer, isolated remote actions and host leave forfeit.');
 
-  group[0].send('room.create',{mode:'2v2'});const party=(await group[0].next('room',m=>m.room?.members.length===1)).room;
-  group[1].send('room.join',{code:party.code});await group[1].next('room',m=>m.room?.members.length===2);
+  group[0].send('room.create',{mode:'1v1'});const party=(await group[0].next('room',m=>m.room?.members.length===1)).room;
+  group[1].send('room.join',{code:party.code});await group[1].next('room',m=>m.room?.members.length===2);group[0].send('room.mode',{mode:'2v2'});await group[0].next('room',m=>m.room?.code===party.code&&m.room.mode==='2v2');
   group[0].send('queue.join',{mode:'2v2'});await group[1].next('queue',m=>m.status==='waiting');group[1].send('queue.cancel');await group[0].next('queue',m=>m.status==='cancelled');assert.equal(app.metrics().queued,0);
   group[0].send('queue.join',{mode:'2v2'});await group[0].next('queue',m=>m.status==='waiting');group[2].send('queue.join',{mode:'2v2'});group[3].send('queue.join',{mode:'2v2'});
-  const queuedMatches=await Promise.all(group.map(p=>p.next('match')));assert.equal(new Set(queuedMatches.map(m=>m.matchId)).size,1);assert.equal(queuedMatches[0].team,queuedMatches[1].team);assert.notEqual(queuedMatches[0].team,queuedMatches[2].team);assert.equal(app.metrics().queued,0);
+  const queuedMatches=await Promise.all(group.map(p=>p.next('match')));assert.equal(new Set(queuedMatches.map(m=>m.matchId)).size,1);assert.equal(queuedMatches[0].team,queuedMatches[1].team);assert.notEqual(queuedMatches[0].team,queuedMatches[2].team);assert.equal(app.metrics().queued,0);assert.equal(queuedMatches[0].partyCode,party.code);assert.equal(queuedMatches[1].partyCode,party.code);assert.equal(queuedMatches[2].partyCode,null);
   group[0].send('room.leave');await group[1].next('match.end',()=>true,4000);for(const p of group){p.send('room.leave');await p.next('room',m=>m.room===null);}
   group[0].send('queue.join',{mode:'1v1'});await group[0].next('queue',m=>m.status==='waiting');group[0].send('queue.cancel');await group[0].next('queue',m=>m.status==='cancelled');assert.equal(app.metrics().queued,0);
   group[0].send('queue.join',{mode:'1v1'});group[1].send('queue.join',{mode:'1v1'});await Promise.all([group[0].next('match'),group[1].next('match')]);assert.equal(app.metrics().matches,1);

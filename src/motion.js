@@ -76,7 +76,7 @@ export class SmoothSimulation {
     const game = this.game, state = this.renderState;
     state.phase = game.phase; state.paused = game.paused;
     state.score = game.score; state.rally = game.rally; state.hits = game.hits;
-    for(const key of ['round','touchTeam','lastAction','serveStage','serveCharge','serveQuality','rallyHits','server','celebrationRemaining'])state[key]=game[key];
+    for(const key of ['mapId','round','touchTeam','lastAction','serveStage','serveCharge','serveQuality','rallyHits','server','celebrationRemaining'])state[key]=game[key];
     state.touches=[...game.touches];
     game.players.forEach((p, i) => {
       const out = state.players[i] ||= { head: {}, neckPoints: [] };

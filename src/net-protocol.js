@@ -34,7 +34,7 @@ export function normalizeName(name) {return typeof name==='string'?name.replace(
 /** Public, JSON-safe authoritative render state. No private solver/session fields. */
 export function snapshotState(game) {
   const state={};
-  for(const key of ['mode','phase','paused','rally','hits','rallyHits','round','touchTeam','lastAction','serveStage','serveCharge','serveQuality','server','celebrationRemaining','message'])state[key]=game[key];
+  for(const key of ['mode','phase','paused','rally','hits','rallyHits','mapId','round','touchTeam','lastAction','serveStage','serveCharge','serveQuality','server','celebrationRemaining','message'])state[key]=game[key];
   state.score=[...game.score];state.touches=[...game.touches];state.ball={...game.ball};
   const fields=['id','team','human','name','x','y','z','vx','vz','bodyYaw','heading','jump','swing','dive','setBounce','knockback','tumble','energy','action','aimYaw','shotPower','role','equippedAbility'];
   state.players=game.players.map(p=>({...Object.fromEntries(fields.map(k=>[k,p[k]])),...Object.fromEntries(Object.entries(p).filter(([k,v])=>k.startsWith('_')&&typeof v==='number'&&Number.isFinite(v))),_contactAction:p._contactAction,neck:{...p.neck},head:{...p.head},neckPoints:p.neckPoints.map(q=>({...q})),ability:p.ability?{...p.ability}:null,skin:p.skin?{...p.skin}:null}));

@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SKINS, ABILITY_CATALOG, ROLL_COST, DUPLICATE_REFUND, getSkin, getAbility, purchaseSkin, equipSkin, equipAbility, rollAbility, validateProfile } from './profile.js';
 import './shop.css';
+import { PowerRoll } from './power-roll.jsx';
+import { Icon } from './icons.jsx';
+import { useT } from './i18n.jsx';
 
 function Clover({ size = 20 }) {
   return <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true"><path d="M16 16C3 13 7 0 14 5l2 4 2-4c7-5 11 8-2 11Zm0 0c3-13 16-9 11-2l-4 2 4 2c5 7-8 11-11-2Zm0 0c13 3 9 16 2 11l-2-4-2 4c-7 5-11-8 2-11Zm0 0c-3 13-16 9-11 2l4-2-4-2c-5-7 8-11 11 2Z" fill="#8dc875" stroke="#315b3a" strokeWidth="1.5"/><path d="M17 17q3 10 10 13" fill="none" stroke="#315b3a" strokeWidth="2.5" strokeLinecap="round"/></svg>;
@@ -16,12 +19,14 @@ function PowerIcon({ id, color, className = '' }) {
 
 const POWER_EFFECT = { magnet: 'WIDER RECEIVES', feather: 'FLOATING RETURNS', spring: 'HIGHER JUMPS', rocket: 'LONGER DIVES', shield: 'WIDER BLOCKS' };
 
-export function Shop({ view = 'skins', profile: rawProfile, onChange, onClose, onSound = () => {} }) {
+export function Shop({ view = 'skins', profile: rawProfile, onChange, onClose, onSound = () => {}, reducedMotion = false }) {
+  const t = useT();
   const profile = validateProfile(rawProfile), profileRef = useRef(profile), timer = useRef(null);
   const panel = useRef(null);
   profileRef.current = profile;
   const [selectedSkin, setSelectedSkin] = useState(profile.equippedSkin);
   const [selectedAbility, setSelectedAbility] = useState(profile.equippedAbility);
+  const [rollTarget, setRollTarget] = useState(profile.equippedAbility);
   const [rolling, setRolling] = useState(false), [notice, setNotice] = useState(''), [lastRoll, setLastRoll] = useState(null);
   const powers = view === 'abilities';
   const item = getSkin(selectedSkin), power = getAbility(selectedAbility);
@@ -44,13 +49,14 @@ export function Shop({ view = 'skins', profile: rawProfile, onChange, onClose, o
   const roll = () => {
     if (rolling) return;
     if (profileRef.current.coins < ROLL_COST) { apply(rollAbility(profileRef.current)); return; }
-    onSound('roll'); setRolling(true); setNotice('Drawing your next power…'); setLastRoll(null);
+    const result = rollAbility(profileRef.current);
+    if (!result.ok) { apply(result); return; }
+    onChange?.(result.profile); setRollTarget(result.ability.id);
+    onSound('roll'); setRolling(true); setNotice(''); setLastRoll(null);
     timer.current = setTimeout(() => {
-      timer.current = null;
-      const result = apply(rollAbility(profileRef.current));
-      if (result.ok) { setSelectedAbility(result.ability.id); setLastRoll(result); }
-      setRolling(false);
-    }, 850);
+      timer.current = null; setSelectedAbility(result.ability.id); setLastRoll(result);
+      setNotice(result.message); onSound('ability'); setRolling(false);
+    }, reducedMotion ? 300 : 2750);
   };
   const close = () => { if (timer.current !== null) clearTimeout(timer.current); timer.current = null; onSound('menu'); onClose?.(); };
 
@@ -63,25 +69,25 @@ export function Shop({ view = 'skins', profile: rawProfile, onChange, onClose, o
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
   };
   return <section ref={panel} onKeyDown={keys} className={`locker-shop ${powers ? 'locker-powers' : 'locker-colours'}`} role="dialog" aria-modal="true" aria-labelledby="locker-title">
-    <header className="locker-header"><div><span className="locker-kicker"></span><h1 id="locker-title">{powers ? 'PICK YOUR POWER.' : 'COURT COLOURS.'}</h1></div><div className="locker-wallet"><Clover/><strong>{profile.coins.toLocaleString()}</strong><small>CLOVERS</small></div><button className="locker-close" onClick={close} aria-label="Close locker">×</button></header>
+    <header className="locker-header"><div><span className="locker-kicker"></span><h1 id="locker-title">{powers ? t('PICK YOUR POWER.') : t('COURT COLOURS.')}</h1></div><div className="locker-wallet"><Clover/><strong>{profile.coins.toLocaleString()}</strong><small>{t('CLOVERS')}</small></div><button className="locker-close" onClick={close} aria-label="Close locker">×</button></header>
 
     {powers ? <div className="locker-power-layout">
       <aside className="locker-roll-panel">
-        <div className={`locker-power-orb ${rolling ? 'is-rolling' : ''}`} style={{ '--power-colour': (lastRoll?.ability || power).color }}><PowerIcon id={rolling ? profile.equippedAbility : (lastRoll?.ability || power).id} color={(lastRoll?.ability || power).color}/>{rolling && <div className="locker-orbit-stars"><i/><i/><i/></div>}</div>
-        <span className="locker-kicker">{lastRoll ? lastRoll.duplicate ? 'DUPLICATE DRAW' : 'NEW POWER UNLOCKED' : ''}</span>
-        <h2>{rolling ? 'HERE IT COMES…' : (lastRoll?.ability || power).name}</h2>
+        <PowerRoll selected={rolling ? rollTarget : (lastRoll?.ability || power).id} rolling={rolling} reducedMotion={reducedMotion} onTick={() => onSound('menu')}/>
+        <span className="locker-kicker">{lastRoll ? lastRoll.duplicate ? t('DUPLICATE DRAW') : t('NEW POWER UNLOCKED') : ''}</span>
+        <h2>{rolling ? t('HERE IT COMES…') : (lastRoll?.ability || power).name}</h2>
 
-        <button className="locker-primary" onClick={roll} disabled={rolling || profile.coins < ROLL_COST}><span>{rolling ? 'DRAWING…' : 'ROLL A POWER'}</span><span><Clover size={19}/>{ROLL_COST}</span></button>
+        <button className="locker-primary" onClick={roll} disabled={rolling || profile.coins < ROLL_COST}><span>{rolling ? t('DRAWING…') : t('ROLL A POWER')}</span><span><Clover size={19}/>{ROLL_COST}</span></button>
         <small className="locker-refund">Duplicate: +{DUPLICATE_REFUND} clovers</small>
-        <div className="locker-odds"><b>ROLL ODDS</b>{ABILITY_CATALOG.map(ability => <div key={ability.id}><i style={{ background: ability.color }}/><span>{ability.name}</span><strong>{ability.odds}%</strong></div>)}</div>
+        <details className="locker-odds"><summary>{t('ROLL ODDS')}</summary>{ABILITY_CATALOG.map(ability => <div key={ability.id}><i style={{ background: ability.color }}/><span>{ability.name}</span><strong>{ability.odds}%</strong></div>)}</details>
       </aside>
-      <div className="locker-collection"><div className="locker-section-label"><h2>YOUR PLAYBOOK</h2><span>{profile.ownedAbilities.length} / {ABILITY_CATALOG.length} POWERS</span></div><div className="locker-ability-grid">{ABILITY_CATALOG.map(ability => {
+      <div className="locker-collection"><div className="locker-section-label"><h2>{t('YOUR PLAYBOOK')}</h2><span>{profile.ownedAbilities.length} / {ABILITY_CATALOG.length} POWERS</span></div><div className="locker-ability-grid">{ABILITY_CATALOG.map(ability => {
         const unlocked = profile.ownedAbilities.includes(ability.id), active = profile.equippedAbility === ability.id;
-        return <button key={ability.id} className={`locker-ability-card ${selectedAbility === ability.id ? 'is-selected' : ''} ${active ? 'is-equipped' : ''}`} aria-pressed={selectedAbility === ability.id} onClick={() => { setSelectedAbility(ability.id); setLastRoll(null); onSound('menu'); }}><PowerIcon id={ability.id} color={ability.color}/><div><small>{ability.rarity}</small><b>{ability.name}</b></div><i>{active ? 'EQUIPPED' : unlocked ? 'OWNED' : `${ability.odds}% DRAW`}</i></button>;
-      })}</div><div className="locker-power-detail"><div><b>{power.name}</b><p className="power-effect">{POWER_EFFECT[power.id]}</p></div><button className="locker-secondary" disabled={rolling || !profile.ownedAbilities.includes(power.id) || profile.equippedAbility === power.id} onClick={() => apply(equipAbility(profileRef.current, power.id))}>{profile.equippedAbility === power.id ? 'EQUIPPED' : profile.ownedAbilities.includes(power.id) ? 'EQUIP POWER' : 'UNLOCK BY ROLLING'}</button></div></div>
+        return <button key={ability.id} className={`locker-ability-card ${selectedAbility === ability.id ? 'is-selected' : ''} ${active ? 'is-equipped' : ''}`} aria-pressed={selectedAbility === ability.id} onClick={() => { setSelectedAbility(ability.id); setLastRoll(null); onSound('menu'); }}><PowerIcon id={ability.id} color={ability.color}/><div><small>{ability.rarity}</small><b>{ability.name}</b></div><i>{active ? t('EQUIPPED') : unlocked ? t('OWNED') : `${ability.odds}% DRAW`}</i></button>;
+      })}</div><div className="locker-power-detail"><div><b>{power.name}</b><p className="power-effect">{t(POWER_EFFECT[power.id])}</p></div><button className="locker-secondary" disabled={rolling || !profile.ownedAbilities.includes(power.id) || profile.equippedAbility === power.id} onClick={() => apply(equipAbility(profileRef.current, power.id))}>{profile.equippedAbility === power.id ? t('EQUIPPED') : profile.ownedAbilities.includes(power.id) ? t('EQUIP POWER') : t('UNLOCK BY ROLLING')}</button></div></div>
     </div> : <div className="locker-skin-layout">
-      <aside className="locker-skin-preview"><div className="locker-portrait-stage" style={{ '--coat': item.palette.body, '--trim': item.palette.scarf }}><span className="locker-rarity">{item.rarity}</span><SkinPortrait palette={item.palette} className="locker-hero-giraffe"/><div className="locker-colour-dots">{Object.values(item.palette).map((colour, index) => <i key={index} style={{ background: colour }}/>)}</div></div><h2>{item.name}</h2><button className="locker-primary" onClick={buy} disabled={equipped || (!owned && profile.coins < item.price)}><span>{equipped ? 'EQUIPPED' : owned ? 'EQUIP' : 'BUY'}</span>{!owned && <span><Clover size={19}/>{item.price}</span>}</button>{!owned && profile.coins < item.price && <small className="locker-refund">{item.price - profile.coins} more clovers to this colourway.</small>}</aside>
-      <div className="locker-collection"><div className="locker-section-label"><h2>THE COLLECTION</h2><span>{profile.ownedSkins.length} / {SKINS.length} COLOURWAYS</span></div><div className="locker-skin-grid">{SKINS.map(entry => <button key={entry.id} className={`locker-skin-card ${selectedSkin === entry.id ? 'is-selected' : ''}`} aria-pressed={selectedSkin === entry.id} onClick={() => { setSelectedSkin(entry.id); onSound('menu'); }}><div style={{ '--card-coat': entry.palette.body }}><SkinPortrait palette={entry.palette}/>{profile.equippedSkin === entry.id && <i className="locker-card-equipped">EQUIPPED</i>}</div><b>{entry.name}</b><small>{entry.rarity}</small><span>{profile.ownedSkins.includes(entry.id) ? 'OWNED' : <><Clover size={14}/>{entry.price}</>}</span></button>)}</div></div>
+      <aside className="locker-skin-preview"><div className="locker-portrait-stage" style={{ '--coat': item.palette.body, '--trim': item.palette.scarf }}><span className="locker-rarity">{item.rarity}</span><SkinPortrait palette={item.palette} className="locker-hero-giraffe"/><div className="locker-colour-dots">{Object.values(item.palette).map((colour, index) => <i key={index} style={{ background: colour }}/>)}</div></div><h2>{item.name}</h2><button className="locker-primary" onClick={buy} disabled={equipped || (!owned && profile.coins < item.price)}><span>{equipped ? t('EQUIPPED') : owned ? t('EQUIP') : t('BUY')}</span>{!owned && <span><Clover size={19}/>{item.price}</span>}</button>{!owned && profile.coins < item.price && <small className="locker-refund">{item.price - profile.coins} more clovers to this colourway.</small>}</aside>
+      <div className="locker-collection"><div className="locker-section-label"><h2>{t('THE COLLECTION')}</h2><span>{profile.ownedSkins.length} / {SKINS.length} COLOURWAYS</span></div><div className="locker-skin-grid">{SKINS.map(entry => <button key={entry.id} className={`locker-skin-card ${selectedSkin === entry.id ? 'is-selected' : ''}`} aria-pressed={selectedSkin === entry.id} onClick={() => { setSelectedSkin(entry.id); onSound('menu'); }}><div style={{ '--card-coat': entry.palette.body }}><SkinPortrait palette={entry.palette}/>{profile.equippedSkin === entry.id && <i className="locker-card-equipped">{t('EQUIPPED')}</i>}</div><b>{entry.name}</b><small>{entry.rarity}</small><span>{profile.ownedSkins.includes(entry.id) ? t('OWNED') : <><Clover size={14}/>{entry.price}</>}</span></button>)}</div></div>
     </div>}
     <footer className="locker-footer"><span className="locker-notice" role="status" aria-live="polite">{notice}</span><button onClick={close} className="visual-back" aria-label="Back">➜</button></footer>
   </section>;

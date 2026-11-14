@@ -3,12 +3,14 @@ import { Crest } from './ui-art.jsx';
 import { LoadingScreen } from './loading-screen.jsx';
 import { assetUrl } from './assets.js';
 import './cloud-lobby.css';
+import { Icon } from './icons.jsx';
+import { useT } from './i18n.jsx';
 
 const LANDMARKS = [
-  { id: 'play', name: 'PLAY', icon: '🏐', x: 25, y: 52 },
-  { id: 'shop', name: 'STYLE', icon: '✿', x: 73, y: 48 },
-  { id: 'abilities', name: 'POWERS', icon: '✦', x: 48, y: 69 },
-  { id: 'online', name: 'MULTIPLAYER', icon: '✉', x: 83, y: 72 },
+  { id: 'play', name: 'PLAY',  x: 25, y: 52 },
+  { id: 'shop', name: 'STYLE',  x: 73, y: 48 },
+  { id: 'abilities', name: 'POWERS',  x: 48, y: 69 },
+  { id: 'online', name: 'MULTIPLAYER',  x: 83, y: 72 },
 ];
 
 function LandmarkIcon({ id }) {
@@ -19,28 +21,29 @@ function CloudBackdrop() {
   return <div className="lobby-clouds" aria-hidden="true"><i/><i/><i/><i/><i/></div>;
 }
 
-export function CloudLobby({ error, onReload, profile, skinName, abilityName, hotspots, onSelect, muted, music, touch, onMuted, onMusic, onTouch, onFullscreen, ready, progress, panelRef, children, view, onClose }) {
-  return <div className="cloud-lobby" ref={panelRef} onKeyDown={event => { if (event.key === 'Escape' && view !== 'home') onClose(); }}>
+export function CloudLobby({ error, onReload, profile, skinName, abilityName, hotspots, onSelect, muted, music, touch, onMuted, onMusic, onTouch, onFullscreen, ready, progress, panelRef, children, view, onClose, onFocus }) {
+  const t=useT();
+  return <div className="cloud-lobby" data-view={view} ref={panelRef} onKeyDown={event => { if (event.key === 'Escape' && view !== 'home') onClose(); }}>
     <CloudBackdrop />
     {!ready && !error ? <LoadingScreen progress={progress}/> : <>
-      {view === 'home' && <header className="sky-brand"><Crest/><div><small>THE SKY CLUB</small><h1>NECK <i>&</i> NECK</h1></div></header>}
-      {view === 'home' && <button className="sky-wallet" onClick={() => onSelect('shop')} aria-label={`Clovers ${profile.coins}. Open skins shop`}><span>✹</span><b>{profile.coins.toLocaleString()}</b></button>}
-      {error && <div className="sky-error" role="alert"><p>{error}</p><button onClick={onReload}>RELOAD</button></div>}
+      {view === 'home' && <header className="sky-brand"><Crest/><div><small>{t('THE SKY CLUB')}</small><h1>NECK <i>&</i> NECK</h1></div></header>}
+      {view === 'home' && <button className="sky-wallet" onClick={() => onSelect('shop')} aria-label={`Clovers ${profile.coins}. Open skins shop`}><Icon name="coin"/><b>{profile.coins.toLocaleString()}</b></button>}
+      {error && <div className="sky-error" role="alert"><p>{error}</p><button onClick={onReload}>{t('RELOAD')}</button></div>}
       {view === 'home' ? <>
         <nav className="landmark-buttons" aria-label="Sky club destinations">{LANDMARKS.map(item => {
           const point = hotspots?.[item.id];
           const projected = point?.visible && Number.isFinite(point.x) && Number.isFinite(point.y);
-          return <button key={item.id} className={`landmark-sign landmark-${item.id}`} disabled={!ready} onClick={() => onSelect(item.id)} style={projected ? { left: `clamp(112px, ${point.x}px, calc(100% - 112px))`, top: `${point.y}px` } : { left: `clamp(112px, ${item.x}%, calc(100% - 112px))`, top: `${item.y}%` }}>
-            <span className="landmark-icon"><LandmarkIcon id={item.id}/></span><strong>{item.name}</strong>
+          return <button key={item.id} className={`world-menu-access landmark-${item.id}`} onFocus={() => onFocus?.(item.id)} disabled={!ready} onClick={() => onSelect(item.id)} style={projected ? { left: `clamp(112px, ${point.x}px, calc(100% - 112px))`, top: `${point.y}px` } : { left: `clamp(112px, ${item.x}%, calc(100% - 112px))`, top: `${item.y}%` }}>
+            <span className="landmark-icon"><LandmarkIcon id={item.id}/></span><strong>{t(item.name)}</strong>
           </button>;
         })}</nav>
-        <div className="sky-loadout"><span>{skinName}</span><b>✦</b><span>{abilityName}</span></div>
-        <footer className="sky-settings">
-          <button onClick={() => onSelect('controls')} aria-label="How to play">?</button>
-          <button onClick={onMuted} aria-label={muted ? 'Turn sound on' : 'Turn sound off'} aria-pressed={!muted}>{muted ? '🔇' : '🔊'}</button>
-          <button onClick={onMusic} aria-label={music ? 'Turn music off' : 'Turn music on'} aria-pressed={music}>♫</button>
-          <button onClick={onTouch} aria-label={touch ? 'Turn touch controls off' : 'Turn touch controls on'} aria-pressed={touch}>☝</button>
-          <button onClick={onFullscreen} aria-label="Toggle fullscreen">⛶</button>
+        <div className="sky-loadout"><span>{skinName}</span><Icon name="power" size={20}/><span>{abilityName}</span></div>
+        <footer className="sky-settings"><button onClick={() => onSelect("options")} aria-label={t("Options")}><Icon name="settings"/></button>
+          <button onClick={() => onSelect('controls')} aria-label={t("How to play")}><Icon name="help"/></button>
+          <button onClick={onMuted} aria-label={muted ? 'Turn sound on' : 'Turn sound off'} aria-pressed={!muted}><Icon name={muted ? "mute" : "sound"}/></button>
+          <button onClick={onMusic} aria-label={music ? 'Turn music off' : 'Turn music on'} aria-pressed={music}><Icon name="music"/></button>
+          <button onClick={onTouch} aria-label={touch ? 'Turn touch controls off' : 'Turn touch controls on'} aria-pressed={touch}><Icon name="touch"/></button>
+          <button onClick={onFullscreen} aria-label="Toggle fullscreen"><Icon name="fullscreen"/></button>
         </footer>
       </> : <div className={`sky-overlay sky-view-${view}`}><button className="sky-close" style={{ backgroundImage: `url("${assetUrl('kenney/ui/back-button-red.png')}")` }} onClick={onClose} aria-label="Back to clouds"><img className="sky-back-icon" src={assetUrl('kenney/ui/back-arrow-red.png')} alt=""/></button>{children}</div>}
     </>}

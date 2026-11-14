@@ -41,8 +41,9 @@ Two simultaneous matches / 16 connections remain the production caps.
 - Back from Multiplayer to the cloud menu disconnects rather than leaving a
   hidden party or matchmaking queue active.
 - An empty match is released immediately, even during its celebration.
-- All completed courts, including private parties, disappear immediately after
-  the final score. The server sends the final snapshot and result, releases the
+- All completed match simulations disappear immediately after
+  the final score. Actual pre-match party lobbies are restored without physics;
+  unrelated solo queue players return to the mode picker. The server sends the final snapshot and result, releases the
   room, and stops its physics. Clients finish the cosmetic ragdoll celebration
   locally; players can create a new party or queue again from results.
 - Connected clients keep retrying a lost server with jittered exponential

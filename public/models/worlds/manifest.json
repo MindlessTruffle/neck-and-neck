@@ -1,0 +1,45 @@
+{
+  "generator": "Blender MCP",
+  "assets": [
+    {
+      "file": "meadow.glb",
+      "bytes": 2728032,
+      "triangles": 23492,
+      "objects": 78
+    },
+    {
+      "file": "jungle.glb",
+      "bytes": 5053276,
+      "triangles": 35421,
+      "objects": 64
+    },
+    {
+      "file": "beach.glb",
+      "bytes": 537484,
+      "triangles": 14174,
+      "objects": 143
+    },
+    {
+      "file": "volcano.glb",
+      "bytes": 359372,
+      "triangles": 8428,
+      "objects": 46
+    },
+    {
+      "file": "mountain.glb",
+      "bytes": 412844,
+      "triangles": 8452,
+      "objects": 50
+    },
+    {
+      "file": "lobby.glb",
+      "bytes": 2247176,
+      "triangles": 29344,
+      "objects": 87
+    }
+  ],
+  "licensed_packs": [
+    "Kenney Nature Kit CC0",
+    "Quaternius Stylized Nature MegaKit CC0"
+  ]
+}

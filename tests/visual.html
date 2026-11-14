@@ -34,7 +34,7 @@
     <section class="panel" aria-label="Visual effects harness controls">
       <h1>Visual effects harness</h1>
       <p>Real game simulation, giraffe rigs, score VFX, and map motion. Launch an event, then freeze at any moment for inspection.</p>
-      <div class="buttons">
+      <label>Map <select id="biome"><option value="meadow">Meadow</option><option value="jungle">Jungle</option><option value="beach">Beach</option><option value="volcano">Volcano</option><option value="mountain">Mountain</option></select></label><label><input id="overview" type="checkbox"/> Overview camera</label><div id="render-metrics"></div><div class="buttons">
         <button class="primary" id="point" disabled>Point explosion</button>
         <button class="primary" id="match" disabled>Match explosion</button>
         <button id="swing" disabled>Swing / bump</button>
@@ -51,7 +51,7 @@
         <span>Map motion</span><strong id="map">idle</strong>
         <span>Ragdoll</span><strong id="ragdoll">idle</strong>
       </div>
-      <div id="error"></div>
+      <div id="inspection"></div><div id="error"></div>
     </section>
     <div class="help">Point explosion launches a normal score. Match explosion sets a 6–0 fixture and awards point seven. Auto-freeze captures the selected time; Freeze holds or resumes manually.</div>
     <script type="module" src="/tests/visual.mjs"></script>

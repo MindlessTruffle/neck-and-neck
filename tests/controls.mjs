@@ -29,3 +29,5 @@ assert.equal(movement.walkOwner, null, 'Capture loss/release clears the owning p
 applyWalk(movement, { x: 0, z: -1 }, 'canvas:2');
 assert.equal(movement.walk.z, -1);
 console.log('PASS controls: mouse-driven neck target, reverse swings without modifiers, safe pitch limits, camera-relative movement, multi-pointer joystick ownership.');
+
+const slowView={yaw:0,pitch:0},slowNeck={yaw:0,pitch:0};steerLook(slowView,slowNeck,100,10,false,{sensitivity:.5,invertY:true});assert(Math.abs(slowNeck.yaw-.35)<1e-9);assert(slowNeck.pitch>0);console.log('PASS settings controls: sensitivity and inverted vertical aim affect physical neck targets.');

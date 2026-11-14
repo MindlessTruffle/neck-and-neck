@@ -37,8 +37,8 @@ try {
   b.joinRoom(a.getState().room.code); await until(() => a.getState().room?.members.length === 2);
   a.startMatch(); await until(() => peers.every(p => p.getState().match));
   a.leaveRoom();
-  await until(() => b.getState().match?.ended && !b.getState().room, 600);
-  assert.equal(server.metrics().rooms, 0);
+  await until(() => b.getState().match?.ended && b.getState().room?.status === 'lobby', 600);
+  assert.equal(server.metrics().rooms, 1, 'Private party survives without a running match');
   assert.equal(server.metrics().matches, 0);
   const steps = server.metrics().physicsSteps;
   const initialPose = b.sample(0, {});
@@ -48,6 +48,7 @@ try {
   assert.equal(b.sample(0, {}).celebrationRemaining, 0);
   await delay(150);
   assert.equal(server.metrics().physicsSteps, steps, 'Results screens consume no server physics');
+  b.leaveRoom(); await until(() => server.metrics().rooms === 0);
   a.joinQueue('1v1'); b.joinQueue('1v1');
   await until(() => peers.every(p => p.getState().match && !p.getState().match.ended));
   a.leaveRoom();

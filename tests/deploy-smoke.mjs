@@ -22,6 +22,7 @@ async function privateMatch(peers,mode){
   for(let i=1;i<peers.length;i++){peers[i].send('room.join',{code:room.code});await peers[i].next('room',m=>m.room?.members.length===i+1);}
   peers[0].send('room.start');return Promise.all(peers.map(p=>p.next('match')));
 }
+function checkState(state){assert.ok(['meadow','jungle','beach','volcano','mountain'].includes(state.mapId),'server sends a release map');allFinite(state);}
 function allFinite(value){if(typeof value==='number')assert.ok(Number.isFinite(value));else if(value&&typeof value==='object')for(const part of Object.values(value))allFinite(part);}
 if(!process.env.SMOKE_SERVER_URL)throw new Error('Set SMOKE_SERVER_URL to an idle test server.');
 const peers=[];
@@ -31,7 +32,7 @@ try {
   for(const p of peers)p.messages=[];
   const group=peers.slice(0,mode==='1v1'?2:4);
   await privateMatch(group,mode);
-  await Promise.all(group.map(p=>p.next('snapshot').then(m=>allFinite(m.state))));
+  await Promise.all(group.map(p=>p.next('snapshot').then(m=>checkState(m.state))));
   for(const p of group) p.send('room.leave');
   await Promise.all(group.map(p=>p.next('room',m=>m.room===null)));
   await sleep(3500);
@@ -42,7 +43,7 @@ try {
   const group=peers.slice(0,mode==='1v1'?2:4);
   for(const p of group)p.send('queue.join',{mode});
   await Promise.all(group.map(p=>p.next('match')));
-  await Promise.all(group.map(p=>p.next('snapshot').then(m=>allFinite(m.state))));
+  await Promise.all(group.map(p=>p.next('snapshot').then(m=>checkState(m.state))));
   for(const p of group)p.send('room.leave');
   await Promise.all(group.map(p=>p.next('room',m=>m.room===null)));
   await sleep(3500);
@@ -53,7 +54,7 @@ try {
   for(const p of peers)p.messages=[];
   const matches=await Promise.all([privateMatch(peers.slice(0,4),'2v2'),privateMatch(peers.slice(4),'2v2')]);
   assert.notEqual(matches[0][0].matchId,matches[1][0].matchId);
-  const counts=peers.map(()=>0),listeners=peers.map((p,i)=>data=>{const m=JSON.parse(data);if(m.type==='snapshot'){allFinite(m.state);counts[i]++;}});
+  const counts=peers.map(()=>0),listeners=peers.map((p,i)=>data=>{const m=JSON.parse(data);if(m.type==='snapshot'){checkState(m.state);counts[i]++;}});
   peers.forEach((p,i)=>p.ws.on('message',listeners[i]));
   await sleep(5000);
   peers.forEach((p,i)=>p.ws.off('message',listeners[i]));

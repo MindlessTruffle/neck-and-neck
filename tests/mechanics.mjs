@@ -88,7 +88,7 @@ for(const input of ['set','jumpSet','dive','ability']){
   assert(s.events.some(e=>input==='ability'?e.type==='ability':input==='dive'?e.type==='dive':e.type==='action'));
   assert.equal(motion.renderState.round,1);assert.equal(motion.renderState.players[0].ability.id,'magnet');assert.deepEqual(motion.renderState.touches,[0,0]);
 }
-assert.equal(BALL_RADIUS,.34);assert.equal(BALL_GRAVITY,10.8);
+assert.equal(BALL_RADIUS,.41);assert.equal(BALL_GRAVITY,10.8);
 console.log('PASS mechanics: timed/toss/fallback serves, bump/set/spike/block/dive, solo/team touch rules, equipped power refill, role rotation, buffered controls and UI state');
 
 // Footwork is entirely manual, including compatibility with old autoMove inputs.
@@ -102,7 +102,7 @@ standingClick.g.update(tick,{swing:true});assert.equal(standingClick.p._jumpV,0,
 // New movement is expressive, without changing the gentle ball speed limit.
 const longDive=live();longDive.p.x=-8;longDive.g._initNeck(longDive.p);const diveStart=longDive.p.x;
 longDive.g.update(tick,{dive:true,x:1});for(let i=0;i<86;i++)longDive.g.update(tick);
-assert(longDive.p.x-diveStart>4&&longDive.p.x-diveStart<5.3,'full flop dive travels about four units');
+assert(longDive.p.x-diveStart>5.5&&longDive.p.x-diveStart<=7.3,'longer flop dive covers most of a half court without crossing the net');
 const bouncySet=live();bouncySet.g.update(tick,{set:true});for(let i=0;i<20;i++)bouncySet.g.update(tick);
 assert(bouncySet.p.setBounce>.5,'set has a visible squash/rebound envelope');
 const longNeck=live();longNeck.g.phase='serve';for(let i=0;i<180;i++)longNeck.g.update(tick,{extension:1,neckYaw:0});
@@ -133,3 +133,7 @@ const final=live();final.g.score=[6,0];final.g._point(0,'test');const finalMotio
 for(let i=0;i<30;i++)finalMotion.advance(tick);assert.notEqual(final.p.x,finalX);assert.equal(final.g.phase,'finished');
 for(let i=0;i<400;i++)finalMotion.advance(tick);assert.equal(final.g.celebrationRemaining,0);assert(final.p.neckPoints.every(p=>[p.x,p.y,p.z].every(Number.isFinite)));assert(Math.abs(final.p.x)<=23);
 console.log('PASS overhaul: manual-only feet, long flop dives, set bounce, extreme bounded neck, court guidance, persistent loadouts, isolated network inputs and final-point knockback');
+
+const waiting = new VolleyballGame({mode:'1v1'});waiting.start();const waitPlayer=waiting.players[0],waitX=waitPlayer.x;waiting.update(tick,{dive:true,x:1});for(let i=0;i<25;i++)waiting.update(tick);assert(waitPlayer.x>waitX+1,'Dive works before the serve toss');assert.equal(waiting.phase,'serve');
+// Isolate a middle-neck contact far below the head.
+const neckHit=live();neckHit.g.lastHitter=null;neckHit.g.touchCooldown=0;Object.assign(neckHit.p.head,{x:-4,y:5,z:0,vx:0,vy:0,vz:0});neckHit.p.neckPoints.forEach((q,i)=>Object.assign(q,{x:-4,y:1+i*.5,z:0,vx:0,vy:0,vz:0}));Object.assign(neckHit.g.ball,{x:-3.3,y:2.1,z:0,vx:-5,vy:0,vz:0});neckHit.g._ballStep(.001);assert.equal(neckHit.g.hits,1,'Middle of neck returns the ball');assert(Math.hypot(neckHit.g.ball.vx,neckHit.g.ball.vy,neckHit.g.ball.vz)<=MAX_BALL_SPEED);console.log('PASS expanded controls: pre-serve diving, longer bounded dives and neck-segment returns.');

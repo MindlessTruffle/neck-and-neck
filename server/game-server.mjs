@@ -7,6 +7,7 @@ import { performance } from 'node:perf_hooks';
 import { isIP } from 'node:net';
 import { WebSocketServer, WebSocket } from 'ws';
 import { VolleyballGame } from '../src/physics.js';
+import { MAPS } from '../src/maps.js';
 import { ACTION_KEYS, CLIENT_MESSAGES, PROTOCOL_VERSION, TICK_RATE, SNAPSHOT_RATE, MODES, MAX_PAYLOAD_BYTES, normalizeControls, normalizeLoadout, normalizeName, snapshotState } from '../src/net-protocol.js';
 
 const STEP=1/TICK_RATE;
@@ -79,7 +80,7 @@ export function createGameServer(options={}) {
     return room;
   }
   function defaultControls(player) {return{x:0,z:0,aimYaw:player.aimYaw,neckYaw:player.neck.yaw,neckPitch:player.neck.pitch,extension:player.neck.extension};}
-  function matchNotice(match,s) {return{type:'match',matchId:match.id,playerId:s.playerId,team:s.team,localTeam:s.team,mode:match.game.mode,roomCode:match.room.code};}
+  function matchNotice(match,s) {return{type:'match',matchId:match.id,playerId:s.playerId,team:s.team,localTeam:s.team,mode:match.game.mode,mapId:match.game.mapId,partyCode:match.parties.find(p=>p.members.includes(s))?.code||null,roomCode:match.room.code};}
   function publishSnapshot(match,one=null) {
     // The large render state is identical for every player. Encode it once;
     // only the acknowledgement differs. Keep the existing JSON wire format.
@@ -94,13 +95,14 @@ export function createGameServer(options={}) {
   }
   function startMatch(room) {
     const members=[...room.members].sort((a,b)=>a.team-b.team);
-    const match={id:randomUUID(),room,members,game:null,events:[],eventId:0,snapshotSeq:0,startedAt:Date.now(),reason:'completed',finishedAt:0};
+    const match={id:randomUUID(),room,members,parties:room.matchmade?(room.parties||[]):[{...room,members:[...room.members]}],game:null,events:[],eventId:0,snapshotSeq:0,startedAt:Date.now(),reason:'completed',finishedAt:0};
     match.game=new VolleyballGame({mode:room.mode,onEvent:event=>{
       match.events.push({...event,id:++match.eventId});
       if(match.events.length>256)match.events.shift();
       if(event.type==='win')match.finishedAt=Date.now();
     }});
     match.game.seed=randomInt(1,0x7fffffff);
+    match.game.mapId=MAPS[randomInt(MAPS.length)].id;
     for(let i=0;i<members.length;i++){
       const s=members[i],p=match.game.players[i];s.matchId=match.id;s.playerId=i;s.lastSeq=-1;s.ack=-1;s.pendingSeq=-1;s.input=defaultControls(p);s.inputAt=Date.now();s.queued=false;
       p.human=true;p.name=s.name;match.game.setPlayerLoadout(i,s.loadout);
@@ -119,7 +121,17 @@ export function createGameServer(options={}) {
     // and celebration continue on clients without holding server capacity.
     rooms.delete(match.room.code);
     for(const s of match.room.members){s.roomCode=null;s.queued=false;tell(s,{type:'room',room:null});}
-    match.room.members=[];tryMatchQueues();
+    const remaining=new Set(match.room.members);
+    match.room.members=[];
+    // Party lobbies have no simulation. Restore only actual pre-match parties;
+    // unrelated solo queue players return to the multiplayer mode picker.
+    for(const party of match.parties){
+      party.members=party.members.filter(s=>remaining.has(s)&&s.ws);
+      if(!party.members.length)continue;
+      party.matchId=null;party.queued=false;party.hostId=party.members.some(s=>s.id===party.hostId)?party.hostId:party.members[0].id;touch(party);
+      rooms.set(party.code,party);for(const s of party.members)s.roomCode=party.code;publishRoom(party);
+    }
+    tryMatchQueues();
   }
   function forfeit(match,team,reason='disconnect') {
     if(!match||match.game.phase==='finished')return;
@@ -143,9 +155,10 @@ export function createGameServer(options={}) {
         search(0,[],0);if(!found)break;
         const replaced=new Set(found.map(g=>g.roomCode).filter(Boolean));
         if(rooms.size-replaced.size>=config.maxRooms||matches.size>=config.maxRooms)break;
+        const parties=found.map(g=>rooms.get(g.roomCode)).filter(Boolean).map(p=>({...p,members:[...p.members]}));
         for(const group of found){queues.splice(queues.indexOf(group),1);if(group.roomCode)rooms.delete(group.roomCode);}
         const members=teams.flat();for(let t=0;t<2;t++)for(const s of teams[t])s.team=t;
-        const room=makeRoom(mode,members);room.matchmade=true;startMatch(room);again=true;
+        const room=makeRoom(mode,members);room.matchmade=true;room.parties=parties;startMatch(room);again=true;
       }
     }
   }

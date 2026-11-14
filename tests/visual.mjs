@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { createWorld } from '../src/art.js';
 import { VolleyballGame } from '../src/physics.js';
 import { GameAudio } from '../src/audio.js';
@@ -28,6 +29,7 @@ function updateStatus() {
   status.event.textContent = `${eventLabel}${frozen ? ' · frozen' : ''}`;
   status.timer.textContent = eventTime === null ? '—' : `${Math.max(0, time - eventTime).toFixed(2)} s`;
   status.map.textContent = snapshot?.mapMotion?.active ? `${snapshot.mapMotion.final ? 'final' : 'point'} · ${snapshot.mapMotion.time.toFixed(2)} s` : 'idle';
+  document.querySelector('#render-metrics').textContent=`${snapshot?.mapId}: ${snapshot?.drawCalls} draws / ${snapshot?.triangles} triangles / ${Math.round(snapshot?.performance.averageFps||0)} FPS`;
   const launched = game?.players?.filter(player => player._knockTime > 0).length || 0;
   status.ragdoll.textContent = launched ? `${launched}/4 airborne` : 'idle';
 }
@@ -54,6 +56,7 @@ function resetMatch() {
   freezeButton.textContent = 'Freeze effect';
   eventLabel = 'ready'; eventTime = null; autoFreezeAt = null; accumulator = 0;
   game.reset({ mode: '2v2', difficulty: 'club' });
+  game.mapId=document.querySelector('#biome').value;
   game.start();
   world.setMenuScene(false);
   world.setCamera({ yaw: 0, pitch: 0, distance: 7.2, snap: true });
@@ -102,6 +105,7 @@ function animate(now) {
       frozen = true; autoFreezeAt = null; freezeButton.textContent = 'Resume effect';
     }
   }
+  if(world&&document.querySelector('#overview').checked){world.camera.position.set(-38,31,38);world.camera.lookAt(0,1,0);world.scene.getObjectByName('PaintedSkyDome').position.copy(world.camera.position);}
   world?.renderer.render(world.scene, world.camera);
   if (Math.floor(now / 100) !== Math.floor((now - dt * 1000) / 100)) updateStatus();
 }
@@ -123,6 +127,7 @@ async function start() {
   frame = requestAnimationFrame(animate);
 }
 
+document.querySelector('#biome').addEventListener('change',()=>{if(world&&game)resetMatch();});
 pointButton.addEventListener('click', () => launchPoint(false));
 matchButton.addEventListener('click', () => launchPoint(true));
 swingButton.addEventListener('click', launchSwing);
@@ -139,3 +144,9 @@ window.addEventListener('pagehide', () => {
 }, { once: true });
 
 start().catch(setError);
+
+canvas.addEventListener('click',event=>{
+ const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2(event.clientX/canvas.clientWidth*2-1,1-event.clientY/canvas.clientHeight*2),world.camera);
+ const hits=ray.intersectObjects(world.scene.children,true).filter(h=>{for(let o=h.object;o;o=o.parent)if(!o.visible)return false;return true;});
+ document.querySelector('#inspection').textContent=hits.slice(0,4).map(h=>`${h.object.name}: ${h.object.material?.name||''} at ${h.point.toArray().map(n=>n.toFixed(1))}`).join(' | ');
+});

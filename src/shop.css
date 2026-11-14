@@ -64,3 +64,17 @@
 .locker-shop .locker-section-label h2,.locker-shop .locker-odds>b,.locker-shop .locker-kicker{font-size:18px}.locker-shop .locker-power-detail b{font-size:22px}.locker-shop .power-effect{font-size:18px;font-weight:800;margin:8px 0}.locker-shop .locker-header{padding-right:54px}.locker-shop .locker-close{position:absolute;right:16px;top:16px}.locker-shop .locker-wallet{margin-right:0}@media(max-width:700px){.locker-shop .locker-header{padding-right:48px}.locker-shop .locker-wallet{margin-top:8px}.locker-shop .locker-header h1{font-size:28px}.locker-shop .locker-section-label{gap:8px}}
 .locker-shop{width:min(1120px,100%);margin-inline:auto}.locker-shop .locker-collection,.locker-shop .locker-power-layout{min-width:0}@media(max-width:700px){.locker-shop{width:100%}.locker-shop .locker-header{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding-right:52px}.locker-shop .locker-wallet{margin:0 0 8px}.locker-shop .locker-section-label{flex-wrap:wrap}}
 .locker-shop button:disabled{opacity:1}.locker-shop .locker-primary:disabled{background:#d4dfb8;color:#526344!important;border-color:#7b8d66;box-shadow:0 4px #9eae87}.locker-shop .locker-secondary:disabled{background:#e5dcc8;color:#695c47;border-color:#b5a17c}
+
+/* Keep the carousel, result and action visible together on desktop. */
+.locker-odds summary{font-size:18px;font-weight:800;cursor:pointer;padding:8px 0}
+@media(min-width:901px){
+ .locker-powers .locker-header{margin-bottom:18px}
+ .locker-powers .locker-ability-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .locker-powers .locker-ability-card{display:grid;grid-template-columns:50px minmax(0,1fr);gap:4px 10px;min-height:104px;padding:10px}
+ .locker-powers .locker-ability-card>svg{width:50px;height:50px;grid-row:1/3}
+ .locker-powers .locker-ability-card>i{grid-column:2;justify-self:start;margin:0;padding:3px 5px;font-size:16px}
+ .locker-powers .locker-roll-panel{padding:12px 18px}
+ .locker-powers .locker-odds{margin-top:8px;padding-top:4px}
+ .locker-powers .locker-footer{margin-top:12px;padding-top:8px}
+ .locker-powers .power-roll-3d{height:min(27vh,220px)!important}
+}

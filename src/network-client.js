@@ -175,7 +175,7 @@ export class NetworkClient {
         if (typeof packet.matchId !== 'string' || !Number.isSafeInteger(packet.playerId) || ![0, 1].includes(packet.localTeam ?? packet.team)) return;
         const fresh = this.state.match?.matchId !== packet.matchId;
         if (fresh) { this.motion.clear(); this._events.clear(); this._eventOrder = []; this._pendingEdges = []; this._latestInput = normalizeControls({}); }
-        const match = { matchId: packet.matchId, playerId: packet.playerId, team: packet.team, localTeam: packet.localTeam ?? packet.team, mode: packet.mode, roomCode: packet.roomCode };
+        const match = { matchId: packet.matchId, playerId: packet.playerId, team: packet.team, localTeam: packet.localTeam ?? packet.team, mode: packet.mode, mapId: packet.mapId, partyCode: packet.partyCode || null, roomCode: packet.roomCode };
         this.state.match = match; this.state.localPlayerId = packet.playerId; this.state.localTeam = match.localTeam;
         this.motion.setLocal(packet.playerId, match.localTeam); this._notify();
         for (const listener of this._matchListeners) { try { listener({ ...clone(match), resumed: !fresh }); } catch {} }

@@ -94,7 +94,7 @@ let playerSteps=0;const normalStep=ending._stepPlayers.bind(ending);ending._step
 ending.update(.05,{x:1});assert.equal(ending.phase,'finished');assert.equal(playerSteps,1,'winning point stops remaining physics substeps');
 console.log('PASS: winning contact stops rally physics before celebration');
 
-function paddedHit({offset=1.05,headSpeed=0,swing=0,backward=false,human=true}={}) {
+function paddedHit({offset=1.2,headSpeed=0,swing=0,backward=false,human=true}={}) {
  let event;
  const game=new VolleyballGame({mode:'1v1',onEvent:e=>{if(e.type==='hit')event=e}});
  game.start();game.phase='play';game.lastHitter=null;game.touchCooldown=0;
@@ -108,8 +108,8 @@ const forgiving=paddedHit();assert.equal(forgiving.game.hits,1,'near miss receiv
 assert.equal(forgiving.event.softContact,true);assert.equal(forgiving.event.assisted,true);
 assert.equal(forgiving.event.rallyHits,1);
 assert.equal(paddedHit({human:false}).game.hits,0,'bot hit radius stays physically smaller');
-assert.equal(paddedHit({offset:1.47}).game.hits,0,'idle assistance remains bounded');
-assert.equal(paddedHit({offset:1.47,swing:.2}).game.hits,1,'active swing gives a larger timing window');
+assert.equal(paddedHit({offset:1.64}).game.hits,0,'idle assistance remains bounded');
+assert.equal(paddedHit({offset:1.64,swing:.2}).game.hits,1,'active swing gives a larger timing window');
 const gentle=paddedHit({offset:.8,headSpeed:4}),hard=paddedHit({offset:.8,headSpeed:24});
 assert(gentle.game.ball.vx<6,'ordinary four m/s head motion does not fire a cannonball');
 assert(hard.event.outgoingSpeed<=MAX_BALL_SPEED+1e-9,'extreme whips obey the post-hit speed cap');
@@ -124,3 +124,15 @@ assert(BALL_GRAVITY<18&&BALL_GRAVITY>0,'ball floats longer without changing play
 const serveFloat=new VolleyballGame({mode:'1v1'});serveFloat.start();serveFloat.update(1/120,{serve:true});serveFloat.update(1/120,{serve:true});
 assert(Math.hypot(serveFloat.ball.vx,serveFloat.ball.vz)<7,'serve horizontal speed is reduced');
 console.log('PASS: generous bounded contact, active-swing forgiveness, padded momentum, gentle speed cap, forward-only aim help and floating serves');
+
+// Players can chase saves well outside regulation lines; scoring still uses court dimensions.
+{
+ const g=new VolleyballGame({mode:'1v1'});g.start();const p=g.players[0];
+ p.x=-8.8;p.z=4.8;
+ for(let i=0;i<180;i++)g.update(1/120,{x:-1,z:1});
+ assert(p.x < -12 && p.z > 8, 'movement crosses old court walls');
+ for(let i=0;i<600;i++)g.update(1/120,{x:-1,z:1});
+ assert.equal(p.x,-17);assert.equal(p.z,12);assert.equal(p.vx,0);assert.equal(p.vz,0);
+ p.x=-.7;p.vx=5;g.update(1/120,{x:1});assert.equal(p.x,-.7,'net separation stays enforced');
+ console.log('PASS expanded run-off: players cross court lines, stop at outer arena bounds, and cannot cross the net.');
+}
