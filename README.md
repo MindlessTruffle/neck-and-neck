@@ -143,6 +143,10 @@ The GitHub Pages workflow on main installs dependencies, runs regression suites 
 
 
 ### Kenney map restoration
-Five arenas rebuilt with the original Kenney Nature Kit silhouettes, camp props, pavilion and cel palette. Expanded movement bounds, abilities, queues and menu behavior are preserved. Blender source: `Blender/kenney-restored-worlds.blend`; builder: `Blender/restore_kenney_worlds.py`. Arena GLBs total about 4.6 MiB, with 11–23 material batches each. The lobby remains independently authored.
+Five arenas rebuilt with the original Kenney Nature Kit silhouettes, camp props, pavilion and cel palette. Expanded movement bounds, abilities, queues and menu behavior are preserved. Blender source: `Blender/kenney-restored-worlds.blend`; builder: `Blender/restore_kenney_worlds.py`. Arena GLBs total about 6.1 MiB, with 10–23 material batches each. The lobby remains independently authored.
 
 The supplied circular bubble contains either the equipped retro imagegen power icon or the live online-player count. Power icons and rolling-menu currency art retain their correct aspect ratios.
+
+Border scenery now includes clustered shrubs, flowers, mushrooms, extra trees, log-and-stump seating, coastal fences and volcanic rock beds. New mesh bounds are recorded in the world manifest and tested against the full movement envelope. Geometry remains below 40,000 triangles per map; material batch counts are unchanged.
+
+All four destination icons sit above their boards. Wide-screen Play/Style boards and icons move down together; status bubbles sit beside the upper destinations. Portrait menus use a vertically spaced stack.

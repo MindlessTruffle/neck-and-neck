@@ -119,12 +119,52 @@ for theme,gc,sc in [('meadow','#91bb54','#887d65'),('jungle','#6b9d4b','#63765e'
                 for face in o.data.polygons:face.material_index=0
         category='Water';ribbon('LavaFlow',[(28,8.4,-17),(26,5,-15),(24,.05,-13),(25,.05,-5),(31,.05,-2)],1.4,lava);category='Scenery'
         for x,z in [(21,15),(-24,-7),(-20,19)]:asset('tallrock',x,z,4.2,.3)
+    # Layered Kenney border gardens: medium silhouettes, low shrubs, tiny accents.
+    # Leave court and expanded +/-17 by +/-12 movement rectangle untouched.
+    detail_before=set(current.objects)
+    for i,(x,z) in enumerate([(-21,-7),(-21,7),(21,-7),(21,7),(-10,-16),(10,-16),(-10,16),(10,16)]):
+        if theme in ['meadow','jungle','mountain']:
+            asset('bushTriangle' if i%2 else 'bush',x,z,1.25,i*.8)
+            asset('bush',x+.9,z+1.1,.65,i*.6)
+            for j in range(3):
+                asset('redflower' if j%2 else 'flower',x-1+j*.8,z-1.2,.38+j*.07,i+j)
+            if theme=='meadow' and i%2:asset('mushroom',x+1.7,z+.4,.4,i)
+            if theme=='jungle':asset('fern',x-1,z+.5,.85,i)
+        elif theme=='beach':
+            asset('bushTriangle',x,z,.7,i)
+            asset('rockB',x+1.1,z+.7,.45,i)
+            asset('rock',x-.8,z+.5,.3,i+.7)
+        else:
+            asset('rockB',x,z,1.05,i)
+            asset('rock',x+1.2,z+.8,.55,i)
+            asset('tallrock',x-.8,z+.5,.7,i)
+    # Small woodland/camp vignettes frame either team's shoulder-camera view.
+    for side in [-1,1]:
+        if theme in ['meadow','jungle','mountain']:
+            for j in range(3):
+                asset('pine' if theme=='mountain' else 'small' if j%2 else 'oak',side*(23+j*1.8),-9+j*3,4.5+j*.5,j+side)
+        if theme in ['meadow','beach','mountain']:
+            asset('logs',side*20,3,.85,side*.6)
+            for dz in [-1.7,1.7]:asset('stump',side*21,3+dz,.65,dz)
+        if theme=='beach':
+            for j in range(3):asset('fence',side*(19+j*2),-18,.65,.1)
+        if theme=='volcano':
+            for j in range(4):asset('rockB',side*(22+j),5+j*1.3,1.2+j*.25,j)
+    # Retain authoring evidence for an automated clearance regression check.
+    bpy.context.view_layer.update()
+    detail_bounds=[]
+    for o in set(current.objects)-detail_before:
+        if o.type!='MESH':continue
+        corners=[o.matrix_world@Vector(v) for v in o.bound_box]
+        lo=[min(v[k] for v in corners) for k in range(3)];hi=[max(v[k] for v in corners) for k in range(3)]
+        assert hi[0]<=-17 or lo[0]>=17 or hi[1]<=-12 or lo[1]>=12, 'Detail enters player movement envelope: '+o.name
+        detail_bounds.append({'min':lo,'max':hi})
     if theme=='volcano':
         for o in current.objects:
             if 'Pack_rock' in o.name or 'Pack_tallrock' in o.name:
                 o.data=o.data.copy();o.data.materials.clear();o.data.materials.append(stone)
                 for face in o.data.polygons:face.material_index=0
-    manifest.append(export(current,theme));current.hide_render=True
+    entry=export(current,theme);entry['border_detail_meshes']=len(detail_bounds);entry['border_detail_bounds_z_up']=detail_bounds;manifest.append(entry);current.hide_render=True
 bpy.data.libraries.write(BASE+'/Blender/kenney-restored-worlds.blend',{scene},compress=True)
 old=json.loads(Path(OUT+'/manifest.json').read_text());old['assets']=[*manifest,*[a for a in old['assets'] if a['file']=='lobby.glb']];old['generator']='Blender MCP / Kenney restoration';Path(OUT+'/manifest.json').write_text(json.dumps(old,indent=2))
 result={'assets':manifest,'blend':bpy.data.filepath}

@@ -29,3 +29,15 @@ const sprite=fs.readFileSync(new URL('../public/ui/giraffe-pixel-clouds.png',imp
 assert.equal(sprite.subarray(1,4).toString(),'PNG');
 assert.equal(sprite.readUInt32BE(16)/sprite.readUInt32BE(20),3,'four 3:4 frames form a 3:1 strip');
 console.log('PASS retro imagegen sprite and world download budgets.');
+
+// Authoring-space bounds guard the expanded player envelope, not only the court.
+const manifest=JSON.parse(fs.readFileSync(new URL('../public/models/worlds/manifest.json',import.meta.url)));
+for(const asset of manifest.assets.filter(a=>a.file!=='lobby.glb')){
+  assert(asset.border_detail_meshes>=30,`${asset.file}: missing border detail`);
+  assert.equal(asset.border_detail_bounds_z_up.length,asset.border_detail_meshes);
+  for(const {min,max} of asset.border_detail_bounds_z_up){
+    assert([...min,...max].every(Number.isFinite));
+    assert(max[0]<=-17||min[0]>=17||max[1]<=-12||min[1]>=12,`${asset.file}: scenery blocks player movement`);
+  }
+}
+console.log('PASS added Kenney scenery stays outside the expanded player movement envelope.');
