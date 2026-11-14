@@ -30,7 +30,14 @@ export function createMenuWorld(root,toon,model,textures,atlas,coarse=false){
       for(let i=0;i<signs.length;i++){
         const s=signs[i],target=(portrait?1.85:camera.aspect>2?1.55:1)*(hover===s.id?1.07:1);s.root.scale.lerp(scale.setScalar(target),1-Math.exp(-dt*12));s.root.quaternion.copy(camera.quaternion);
         if(portrait){s.root.position.copy(base).addScaledVector(up,[10,4,-5,-14][i]);s.icon.scale.setScalar(.55);s.icon.position.set(-5,.15,.25);}
-        else{s.root.position.set(...anchors[s.id]);s.root.position.y+=hover===s.id?.18:0;s.icon.scale.setScalar(1);s.icon.position.set(0,2.6+(reduced?0:Math.sin(t*1.4+i)*.09),.2);}
+        else{
+          s.root.position.set(...anchors[s.id]);s.root.position.y+=hover===s.id?.18:0;
+          // Wide layouts use the outer edge of each lower sign, keeping the
+          // complete icon and its shadow clear of the upper row, even on hover.
+          const beside=camera.aspect>=1.2&&(s.id==='play'||s.id==='shop');
+          s.icon.scale.setScalar(beside?.72:1);
+          s.icon.position.set(beside?(s.id==='play'?-6.1:6.1):0,beside?0:2.6+(reduced?0:Math.sin(t*1.4+i)*.09),.2);
+        }
         s.icon.visible=!['abilities','online'].includes(s.id);s.shadow.visible=s.icon.visible;
         s.shadow.position.copy(s.icon.position).add(shadowOffset);s.shadow.scale.copy(s.icon.scale);
       }
