@@ -15,9 +15,12 @@ export function MatchUI({ state, onAction, onPause, onWalk, touch }) {
     ['swing', serving ? toss ? t('STRIKE') : t('TOSS') : air ? t('SPIKE') : t('BUMP'), t('CLICK'), 'mouse_left'],
     ['set', air ? t('BLOCK') : t('SET'), 'Q', 'keyboard_q'],
     ['jumpSet', t('JUMP SET'), 'E', 'keyboard_e'],
-    ['dive', t('DIVE'), t('CTRL'), null],
+    ['dive', t('DIVE'), 'V', null],
   ];
-  const press = action => event => { event.preventDefault(); onAction(action); };
+  const press = action => event => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    event.preventDefault(); event.currentTarget.setPointerCapture?.(event.pointerId); onAction(action);
+  };
   const releaseStick = event => {
     if (stickPointer.current !== event.pointerId) return;
     stickPointer.current = null; onWalk({ x: 0, z: 0 }, event.pointerId);
@@ -41,12 +44,12 @@ export function MatchUI({ state, onAction, onPause, onWalk, touch }) {
       <button className="ability-button" disabled={!ability?.ready || state.phase !== 'play'} onPointerDown={press('ability')} onClick={event => { if (event.detail === 0) onAction('ability'); }} style={{ '--ability-color': ability?.color || '#ba9eff' }} aria-label={`Use ${ability?.name || 'ability'}`}>
         <span className="ability-key">X</span><div><small>{t('EQUIPPED POWER')}</small><strong>{ability?.name || 'Drawing ability…'}</strong><span>{ability?.active > 0 ? t('ACTIVE') : ability?.charges > 0 ? state.phase === 'play' ? touch ? t('READY · TAP TO USE') : t('HOLD CLICK · USE POWER') : t('READY WHEN RALLY STARTS') : t('USED · NEXT ROUND')}</span></div><Icon name="power"/>
       </button>
-      <div className="action-buttons">{actions.map(([id, name, key, icon]) => <button key={id} className={`action-button action-${id}`} onPointerDown={press(id)} onClick={event => { if (event.detail === 0) onAction(id); }} aria-label={name}><span className="keycap">{icon ? <img src={assetUrl(`kenney/controls/${icon}.png`)} alt={key}/> : key}</span><span className="touch-action-icon" aria-hidden="true"><Icon name={id === "swing" ? "ball" : id === "set" ? "set" : id === "jumpSet" ? "jump" : "dive"}/></span><strong>{t(name)}</strong></button>)}</div>
+      <div className="action-buttons">{actions.map(([id, name, key, icon]) => <button key={id} className={`action-button action-${id}`} onPointerDown={press(id)} onClick={event => { if (event.detail === 0) onAction(id); }} aria-label={name}><span className="keycap">{icon ? <img src={assetUrl(`kenney/controls/${icon}.png`)} alt={key}/> : key}</span><span className="touch-action-icon" aria-hidden="true"><Icon name={id === "swing" ? "bump" : id === "set" ? "set" : id === "jumpSet" ? "jumpSet" : "dive"}/></span><strong>{t(name)}</strong></button>)}</div>
       <div className="movement-actions"><button onPointerDown={press('jump')} onClick={event => { if (event.detail === 0) onAction('jump'); }} aria-label="Jump"><span>{t('SPACE')}</span>{touch ? <Icon name="jump"/> : t("JUMP")}</button><button onPointerDown={press('dash')} onClick={event => { if (event.detail === 0) onAction('dash'); }} aria-label="Dash"><span>{t('SHIFT')}</span>{touch ? <Icon name="dash"/> : t("DASH")}</button></div>
       <div className="energy-track" aria-label={`Stamina ${Math.round(state.energy * 100)} percent`}><i style={{ transform: `scaleX(${state.energy})` }}/></div>
     </footer>
     <div ref={stick} className="touch-stick" aria-label="Movement joystick" role="group"
-      onPointerDown={event => { if (stickPointer.current !== null) return; event.preventDefault(); stickPointer.current = event.pointerId; const box = event.currentTarget.getBoundingClientRect(); origin.current = { x: box.x + box.width / 2, y: box.y + box.height / 2 }; event.currentTarget.setPointerCapture(event.pointerId); const v = stickMovement(event.clientX - origin.current.x, event.clientY - origin.current.y); onWalk(v, event.pointerId); }}
+      onPointerDown={event => { if (stickPointer.current !== null) return; event.preventDefault(); stickPointer.current = event.pointerId; const box = event.currentTarget.getBoundingClientRect(); origin.current = { x: box.x + box.width / 2, y: box.y + box.height / 2 }; event.currentTarget.setPointerCapture(event.pointerId); const v = stickMovement(event.clientX - origin.current.x, event.clientY - origin.current.y); onWalk(v, event.pointerId); stick.current.style.setProperty('--stick-x', `${v.x * 36}px`); stick.current.style.setProperty('--stick-y', `${v.z * 36}px`); }}
       onPointerMove={event => { if (stickPointer.current !== event.pointerId) return; const v = stickMovement(event.clientX - origin.current.x, event.clientY - origin.current.y); onWalk(v, event.pointerId); stick.current.style.setProperty('--stick-x', `${v.x * 36}px`); stick.current.style.setProperty('--stick-y', `${v.z * 36}px`); }}
       onPointerUp={releaseStick} onPointerCancel={releaseStick} onLostPointerCapture={releaseStick}><span/><small>{t('MOVE')}</small></div>
     <p className="look-hint">{touch ? t('DRAG FIELD TO SWING') : `MOUSE · SWING NECK   /   CLICK · RETURN   /   WASD · MOVE`}</p>

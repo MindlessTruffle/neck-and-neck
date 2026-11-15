@@ -41,9 +41,9 @@ export function GameMenu({ menu, mode, difficulty, onMode, onDifficulty, onPlay,
           <div><b>{t('RETURN')}</b>{touch ? <span className="touch-glyph" aria-label="Tap to return"><Icon name="ball"/></span> : <ControlArt names={['mouse_left']} label="Click to return the ball"/>}</div>
           <div><b>{t('SERVE')}</b><span className="control-key serve-prompt">{touch ? 'TAP → STRIKE' : 'TOSS → STRIKE'}</span></div>
           <div><b>{t('MOVE')}</b>{touch ? <span className="touch-glyph" aria-label="Movement joystick"><Icon name="touch"/></span> : <ControlArt names={['keyboard_w', 'keyboard_a', 'keyboard_s', 'keyboard_d']} label="W A S D move"/>}</div>
-          <div><b>{t('SET')}</b>{touch ? <span className="touch-glyph" aria-label="Set action"><Icon name="jump"/></span> : <ControlArt names={['keyboard_q']} label="Q key sets and blocks"/>}</div>
-          <div><b>{t('JUMP SET')}</b>{touch ? <span className="touch-glyph" aria-label="Jump set action"><Icon name="jump"/></span> : <ControlArt names={['keyboard_e']} label="E key jumps and sets"/>}</div>
-          <div><b>{t('DIVE')}</b>{touch ? <span className="touch-glyph" aria-label="Dive action"><Icon name="dive"/></span> : <span className="control-key">{t('CTRL')}</span>}</div>
+          <div><b>{t('SET')}</b>{touch ? <span className="touch-glyph" aria-label="Set action"><Icon name="set"/></span> : <ControlArt names={['keyboard_q']} label="Q key sets and blocks"/>}</div>
+          <div><b>{t('JUMP SET')}</b>{touch ? <span className="touch-glyph" aria-label="Jump set action"><Icon name="jumpSet"/></span> : <ControlArt names={['keyboard_e']} label="E key jumps and sets"/>}</div>
+          <div><b>{t('DIVE')}</b>{touch ? <span className="touch-glyph" aria-label="Dive action"><Icon name="dive"/></span> : <span className="control-key">{'V'}</span>}</div>
           <div><b>{t('JUMP')}</b>{touch ? <span className="touch-glyph" aria-label="Jump action"><Icon name="jump"/></span> : <span className="control-key">{t('SPACE')}</span>}</div>
           <div><b>{t('DASH')}</b>{touch ? <span className="touch-glyph" aria-label="Dash action"><Icon name="dash"/></span> : <span className="control-key">{t('SHIFT')}</span>}</div>
           <div><b>{t('POWER')}</b>{touch ? <span className="touch-glyph" aria-label="Power action"><Icon name="power"/></span> : <span className="control-key">X</span>}</div>

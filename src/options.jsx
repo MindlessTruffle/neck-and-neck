@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS, DEFAULT_BINDINGS } from './settings.js';
 import { Icon } from './icons.jsx';
 import { useT } from './i18n.jsx';
 import './options.css';
+import { isBrowserShortcut } from './controls.js';
 export function Options({ value, onChange, onClose, onFullscreen }) {
   const t = useT(), [tab, setTab] = useState('Controls'), [binding, setBinding] = useState(null);
   const set = (key, next) => onChange({ ...value, [key]: next });
@@ -10,7 +11,8 @@ export function Options({ value, onChange, onClose, onFullscreen }) {
   const toggle = (key, label) => <label className="option-row" key={key}><span>{t(label)}</span><input type="checkbox" checked={value[key]} onChange={e => set(key, e.target.checked)}/></label>;
   const select = (key, label, choices) => <label className="option-row" key={key}><span>{t(label)}</span><select value={value[key]} onChange={e => set(key, e.target.value)}>{choices.map(([id, label]) => <option key={id} value={id}>{t(label)}</option>)}</select></label>;
   return <section className="options-panel" role="dialog" aria-modal="true" aria-label={t('Options')} onKeyDown={event => {
-    if (binding) { event.preventDefault(); event.stopPropagation(); if (event.code === 'Escape') { setBinding(null); return; } if (!/^(Key[A-Z]|Digit[0-9]|Space|ShiftLeft|ControlLeft|Arrow(Up|Down|Left|Right))$/.test(event.code)) return;
+    if (isBrowserShortcut(event)) return;
+    if (binding) { event.preventDefault(); event.stopPropagation(); if (event.code === 'Escape') { setBinding(null); return; } if (!/^(Key[A-Z]|Digit[0-9]|Space|ShiftLeft|Arrow(Up|Down|Left|Right))$/.test(event.code)) return;
       const keys = { ...value.bindings }, other = Object.keys(keys).find(k => keys[k] === event.code); if (other) keys[other] = keys[binding]; keys[binding] = event.code; set('bindings', keys); setBinding(null);
     }
   }}>

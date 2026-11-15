@@ -31,3 +31,19 @@ assert.equal(movement.walk.z, -1);
 console.log('PASS controls: mouse-driven neck target, reverse swings without modifiers, safe pitch limits, camera-relative movement, multi-pointer joystick ownership.');
 
 const slowView={yaw:0,pitch:0},slowNeck={yaw:0,pitch:0};steerLook(slowView,slowNeck,100,10,false,{sensitivity:.5,invertY:true});assert(Math.abs(slowNeck.yaw-.35)<1e-9);assert(slowNeck.pitch>0);console.log('PASS settings controls: sensitivity and inverted vertical aim affect physical neck targets.');
+
+// Old saved Ctrl bindings must migrate; reserved browser keys cannot return.
+const { validateSettings, DEFAULT_BINDINGS } = await import('../src/settings.js');
+assert.equal(DEFAULT_BINDINGS.dive, 'KeyV');
+assert.equal(validateSettings({ bindings: { dive: 'ControlLeft' } }).bindings.dive, 'KeyV');
+assert.equal(validateSettings({ bindings: { dive: 'ControlRight' } }).bindings.dive, 'KeyV');
+assert.equal(validateSettings({ bindings: { dive: 'KeyB' } }).bindings.dive, 'KeyB');
+const { ICON_PATHS } = await import('../src/icon-paths.js');
+assert.equal(new Set(['bump','set','jumpSet','dive','jump','dash'].map(k=>ICON_PATHS[k])).size, 6);
+console.log('PASS touch controls: distinct action glyphs and migration away from reserved Ctrl keys.');
+
+const { isBrowserShortcut } = await import('../src/controls.js');
+for (const event of [{ code:'ControlLeft' }, { code:'ControlRight' }, { code:'KeyV',ctrlKey:true }, { code:'KeyW',ctrlKey:true }, { code:'KeyQ',metaKey:true }]) assert.equal(isBrowserShortcut(event),true);
+assert.equal(isBrowserShortcut({code:'KeyV'}),false);
+assert.equal(isBrowserShortcut({code:'ShiftLeft'}),false);
+console.log('PASS browser shortcuts: Ctrl/Meta chords bypass gameplay and rebinding.');

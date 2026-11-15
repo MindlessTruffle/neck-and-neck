@@ -1,0 +1,29 @@
+/* Thumb-first controls: explicit sizes, no desktop scaling or tiny labels. */
+.match-ui[data-touch=true] .action-deck{width:224px;height:224px;right:max(18px,calc(env(safe-area-inset-right) + 12px));bottom:max(20px,calc(env(safe-area-inset-bottom) + 12px));max-width:none}
+.match-ui[data-touch=true] .action-button,.match-ui[data-touch=true] .movement-actions button,.match-ui[data-touch=true] .ability-button{width:48px;height:48px;border:2px solid #e8faffb3;background:#18354be6;box-shadow:0 3px 0 #10223999,inset 0 2px 0 #ffffff26;transition:transform 80ms,filter 80ms;user-select:none;touch-action:none}
+.match-ui[data-touch=true] .action-button svg,.match-ui[data-touch=true] .movement-actions svg{width:26px;height:26px;filter:drop-shadow(0 1px 0 #10223966)}
+.match-ui[data-touch=true] .movement-actions button:first-child{right:0;bottom:0;width:84px;height:84px;background:#ffe58f;color:#28394f;border:3px solid #fff6ca;box-shadow:0 5px 0 #92712c,inset 0 3px 0 #fff9db}
+.match-ui[data-touch=true] .movement-actions button:first-child svg{width:42px;height:42px}
+.match-ui[data-touch=true] .action-swing{right:0;bottom:98px;width:68px;height:68px;background:#12dcb2;color:#123b42;border:3px solid #b5fff0;box-shadow:0 4px 0 #087c6e,inset 0 3px 0 #79ffe1}
+.match-ui[data-touch=true] .action-dive{right:100px;bottom:0;width:64px;height:64px;background:#ff7055;color:#422a36;border:3px solid #ffcab4;box-shadow:0 4px 0 #a33e3a,inset 0 3px 0 #ffa78c}
+.match-ui[data-touch=true] .action-swing svg,.match-ui[data-touch=true] .action-dive svg{width:34px;height:34px}
+.match-ui[data-touch=true] .action-set{right:82px;bottom:108px}
+.match-ui[data-touch=true] .action-jumpSet{right:140px;bottom:108px}
+.match-ui[data-touch=true] .movement-actions button:last-child{right:104px;bottom:192px}
+.match-ui[data-touch=true] .ability-button{right:46px;bottom:192px;width:48px;height:48px;color:#fff;border-color:#c8b2ff;background:#51407c}
+.match-ui[data-touch=true] .ability-button:disabled{opacity:.4;box-shadow:none}
+.match-ui[data-touch=true] .energy-track{right:7px;bottom:-11px;width:70px;height:4px}
+.match-ui[data-touch=true] .touch-stick{width:112px;height:112px;left:max(22px,calc(env(safe-area-inset-left) + 12px));bottom:max(30px,calc(env(safe-area-inset-bottom) + 20px));border:2px solid #ffffff99;background:#16314444}
+.match-ui[data-touch=true] .touch-stick>span{width:48px;height:48px;margin:-24px;background:#e8fff4b3;box-shadow:0 2px 5px #10223966}
+.match-ui[data-touch=true] .action-button:active,.match-ui[data-touch=true] .movement-actions button:active,.match-ui[data-touch=true] .ability-button:active{transform:scale(.91);filter:brightness(1.25)}
+@media(orientation:landscape){
+ .match-ui[data-touch=true] .movement-actions button:last-child{right:198px;bottom:108px}
+ .match-ui[data-touch=true] .ability-button{right:198px;bottom:50px}
+}
+@media(max-width:430px) and (orientation:portrait){
+ .match-ui[data-touch=true] .action-deck{right:14px}
+ .match-ui[data-touch=true] .touch-stick{left:16px;width:96px;height:96px}
+ .match-ui[data-touch=true] .action-dive{right:94px;bottom:16px;width:58px;height:58px}
+ .match-ui[data-touch=true] .scoreboard-ui .team-name{display:none}
+}
+@media(prefers-reduced-motion:reduce){.match-ui[data-touch=true] button{transition:none}}

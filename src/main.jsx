@@ -12,8 +12,9 @@ import { Shop } from './shop.jsx';
 import { NetworkClient } from './network-client.js';
 import { OnlinePanel } from './online-panel.jsx';
 import { loadProfile, saveProfile, getSkin, award, ABILITY_CATALOG } from './profile.js';
-import { steerLook, cameraRelativeMovement, stickMovement, applyWalk } from './controls.js';
+import { steerLook, cameraRelativeMovement, stickMovement, applyWalk, isBrowserShortcut } from './controls.js';
 import './style.css';
+import './touch-controls.css';
 import { Options } from './options.jsx';
 import { loadSettings, saveSettings, DEFAULT_BINDINGS } from './settings.js';
 import { LanguageContext, translate } from './i18n.jsx';
@@ -255,6 +256,7 @@ function App() {
 
       const mappedKey = code => { const action = Object.keys(DEFAULT_BINDINGS).find(key => settingsRef.current.bindings[key] === code); return action ? DEFAULT_BINDINGS[action] : Object.values(DEFAULT_BINDINGS).includes(code) ? null : code; };
       const keydown = event => {
+        if (isBrowserShortcut(event)) return;
         const code = mappedKey(event.code);
         if (event.target?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target?.tagName)) return;
         if (code === 'KeyF' && !event.repeat) { event.preventDefault(); toggleFullscreen(); return; }
@@ -268,14 +270,14 @@ function App() {
           if (!event.repeat) toggleMouseFocus();
           return;
         }
-        if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyQ', 'KeyE', 'KeyX', 'ControlLeft', 'ControlRight'].includes(code)) event.preventDefault();
+        if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyQ', 'KeyE', 'KeyX', 'KeyV'].includes(code)) event.preventDefault();
         if (event.repeat) return;
         runtime.current.keys.add(code);
         if (code === 'Space') runtime.current.edges.jump = true;
         if (code === 'ShiftLeft' || code === 'ShiftRight') runtime.current.edges.dash = true;
         if (code === 'KeyQ') runtime.current.edges.set = true;
         if (code === 'KeyE') runtime.current.edges.jumpSet = true;
-        if (code === 'ControlLeft' || code === 'ControlRight') runtime.current.edges.dive = true;
+        if (code === 'KeyV') runtime.current.edges.dive = true;
         if (code === 'KeyX') runtime.current.edges.ability = true;
         if (code === 'Escape' || code === 'KeyP') showMenu('pause');
         if (code === 'KeyM') setMuted(value => !value);
@@ -507,7 +509,7 @@ function App() {
   };
 
   return <LanguageContext.Provider value={settings.language}><main ref={stage} className="meadow" data-camera="mouse-shoulder" data-playing={!menu} data-mouse-focus={mouseFocused} data-touch={touch}>
-    <canvas ref={canvas} tabIndex={menu ? -1 : 0} aria-label="Mouse swings physical giraffe neck; high shoulder camera gently follows. WASD moves. Click returns ball or serves. Hold click for equipped power. Q set, E jump set, Ctrl flop dive, X ability, Space jump, Escape pause." onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onLostPointerCapture={pointerUp} onContextMenu={event => event.preventDefault()} />
+    <canvas ref={canvas} tabIndex={menu ? -1 : 0} aria-label="Mouse swings physical giraffe neck; high shoulder camera gently follows. WASD moves. Click returns ball or serves. Hold click for equipped power. Q set, E jump set, V flop dive, X ability, Space jump, Escape pause." onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onLostPointerCapture={pointerUp} onContextMenu={event => event.preventDefault()} />
     {settings.showFps && <div className="fps-counter">{Math.round(runtime.current.world?.performance.averageFps || 60)} FPS</div>}
     {(menuTab === 'options' && menu === 'lobby' || optionsOpen) && <div className="options-overlay"><Options value={settings} onChange={value => setSettings(saveSettings(value))} onClose={() => { setOptionsOpen(false); setMenuTab('home'); }} onFullscreen={toggleFullscreen}/></div>}
     {!menu && <>

@@ -31,3 +31,8 @@ export function applyWalk(state, vector, owner) {
   state.walk = vector;
   state.walkOwner = vector.x || vector.z ? owner : null;
 }
+
+/** Leave browser shortcuts and Ctrl itself entirely outside gameplay. */
+export function isBrowserShortcut(event) {
+  return !!(event.ctrlKey || event.metaKey || event.code?.startsWith('Control'));
+}
