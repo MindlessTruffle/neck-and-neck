@@ -1,4 +1,4 @@
-import { VolleyballGame, BALL_GRAVITY, PLAYER_BOUND_X, PLAYER_BOUND_Z } from './physics.js';
+import { VolleyballGame, BALL_GRAVITY, BALL_RADIUS, PLAYER_BOUND_X, PLAYER_BOUND_Z } from './physics.js';
 import { ACTION_KEYS, snapshotState } from './net-protocol.js';
 
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, Number.isFinite(value) ? value : lo));
@@ -28,7 +28,8 @@ function interpolatePoint(out, a, b, t) {
  * The predictor uses the actual movement/neck solver, never ball contacts or scores.
  */
 export class NetworkMotion {
-  constructor({ delay = 90, extrapolation = 100, maxSnapshots = 40 } = {}) {
+  constructor({ delay = 90, extrapolation = 100, maxSnapshots = 40, onPredictedEvent = () => {} } = {}) {
+    this.onPredictedEvent = onPredictedEvent;
     this.delay = clamp(delay, 60, 150);
     this.extrapolation = clamp(extrapolation, 0, 120);
     this.maxSnapshots = clamp(maxSnapshots, 4, 60);
@@ -68,7 +69,7 @@ export class NetworkMotion {
     player.neckPoints = player.neckPoints.map(q => ({ vx: 0, vy: 0, vz: 0, ...q }));
     player.neck = { ...base.neck, ...local.neck };
     player._previousNeck = player.neckPoints.map(q => ({ x: q.x, y: q.y, z: q.z }));
-    game.players = [player]; game.onEvent = () => {}; game.networkInputs = {};
+    game.players = [player]; game.onEvent = event => { if(['action','dive','jump','dash'].includes(event.type))this.onPredictedEvent({...event,predicted:true}); }; game.networkInputs = {};
     game.phase = state.phase; game.ball = { ...state.ball }; game.paused = false;
     this.ghost = game; this.accumulator = 0; this.pending = {};
     this.correction = { x: 0, y: 0, z: 0 };
@@ -171,16 +172,26 @@ export class NetworkMotion {
         player.neckPoints.forEach((q, index) => interpolatePoint(q, old.neckPoints[index], q, t));
       }
       if (ahead && ['serve', 'play'].includes(source.phase)) {
-        player.x += (player.vx || 0) * ahead; player.z += (player.vz || 0) * ahead;
-        for (const q of player.neckPoints) for (const axis of ['x', 'y', 'z']) q[axis] += clamp(q[`v${axis}`] || 0, -28, 28) * ahead;
+        const dx=clamp(player.x+(player.vx||0)*ahead,player.team?.7:-PLAYER_BOUND_X,player.team?PLAYER_BOUND_X:-.7)-player.x;
+        const dz=clamp(player.z+(player.vz||0)*ahead,-PLAYER_BOUND_Z,PLAYER_BOUND_Z)-player.z;
+        player.x+=dx;player.z+=dz;
+        // Brief packet gaps translate the last complete rig instead of stretching
+        // each neck joint independently into an impossible pose.
+        for (const q of player.neckPoints){q.x+=dx;q.z+=dz;}
         Object.assign(player.head, player.neckPoints.at(-1));
       }
       player.human = player.id === this.localPlayerId;
     }
-    if (compatible && Math.hypot(a.state.ball.x - out.ball.x, a.state.ball.y - out.ball.y, a.state.ball.z - out.ball.z) < 7) interpolatePoint(out.ball, a.state.ball, out.ball, t);
+    if (compatible && a.state.hits===b.state.hits && Math.hypot(a.state.ball.x - out.ball.x, a.state.ball.y - out.ball.y, a.state.ball.z - out.ball.z) < 7) {
+      const span=(b.time-a.time)/1000;
+      if(span>0&&span<=.2&&source.phase==='play'){
+        const t2=t*t,t3=t2*t;
+        for(const axis of ['x','y','z'])out.ball[axis]=(2*t3-3*t2+1)*a.state.ball[axis]+(t3-2*t2+t)*span*(a.state.ball['v'+axis]||0)+(-2*t3+3*t2)*b.state.ball[axis]+(t3-t2)*span*(b.state.ball['v'+axis]||0);
+      }else interpolatePoint(out.ball,a.state.ball,out.ball,t);
+    }
     if (ahead && source.phase === 'play') {
       out.ball.x += (out.ball.vx || 0) * ahead; out.ball.z += (out.ball.vz || 0) * ahead;
-      out.ball.y = Math.max(.34, out.ball.y + (out.ball.vy || 0) * ahead - BALL_GRAVITY * ahead * ahead * .5);
+      out.ball.y = Math.max(BALL_RADIUS, out.ball.y + (out.ball.vy || 0) * ahead - BALL_GRAVITY * ahead * ahead * .5);
       out.ball.vy = (out.ball.vy || 0) - BALL_GRAVITY * ahead;
     }
     if (connected && !paused && now - this.lastArrival <= 250) this._predict(dt, input);

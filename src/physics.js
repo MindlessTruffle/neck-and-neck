@@ -179,7 +179,8 @@ export class VolleyballGame {
   _divePlayer(p,dx=0,dz=0) {
     if(p._diveCooldown>0||p.y>.4)return false;
     const len=Math.hypot(dx,dz);p._diveX=len>.1?dx/len:Math.cos(p.aimYaw);p._diveZ=len>.1?dz/len:Math.sin(p.aimYaw);
-    p._dive=DIVE_DURATION;p._diveCooldown=1.35;p._actionTime=.8;p._actionSerial++;p._contactAction='dive';p.action='dive';
+    p._dive=DIVE_DURATION;p._diveCooldown=p.human?1.08:1.35;p._actionTime=.8;p._actionSerial++;p._contactAction='dive';p.action='dive';
+    if(p.human){p.vx=p._diveX*10.5;p.vz=p._diveZ*10.5;}
     this.emit('dive',{action:'dive',player:p.id,team:p.team,x:p.x,y:p.head.y,z:p.z});return true;
   }
   _useAbility(p,dx=0,dz=0) {
@@ -218,13 +219,28 @@ export class VolleyballGame {
     if(ability==='magnet')p.ability.active=0;
     return ability;
   }
-  _guideReturn(p,action,assisted) {
-    if(!p.human||!assisted||action==='set')return;
-    const b=this.ball,flight=(b.vy+Math.sqrt(b.vy*b.vy+2*G*Math.max(0,b.y-BALL_R)))/G;
-    if(flight<.15)return;
-    const projectedX=b.x+b.vx*flight,projectedZ=b.z+b.vz*flight;
-    const targetX=clamp(projectedX,p.team?-7.6:1.1,p.team?-1.1:7.6),targetZ=clamp(projectedZ,-4.1,4.1);
-    b.vx+=((targetX-b.x)/flight-b.vx)*.88;b.vz+=((targetZ-b.z)/flight-b.vz)*.88;
+  _guideReturn(p,action,assisted,ability=null) {
+    if(!p.human||action==='set')return false;
+    const b=this.ball,forward=p.team?-1:1;
+    const flight=(b.vy+Math.sqrt(b.vy*b.vy+2*G*Math.max(0,b.y-BALL_R)))/G;
+    const projectedX=(b.x+b.vx*flight)*forward;
+    const targetX=forward*clamp(projectedX>1?projectedX:4.5,2.4,7.2);
+    const targetZ=clamp(b.z+b.vz*flight,-3.6,3.6);
+    let best=null,bestCost=Infinity;
+    // Solve bounded ballistic arcs, including low saves and backwards contacts.
+    // Preserve chosen lane/depth; prioritize clearing the tape over raw power.
+    for(let t=.65;t<=2.6;t+=.025){
+      const vx=(targetX-b.x)/t,vz=(targetZ-b.z)/t,vy=(BALL_R-b.y+.5*G*t*t)/t;
+      const speed=Math.hypot(vx,vy,vz),netTime=-b.x/vx;
+      if(ability==='feather'&&vy<8)continue;
+      if(action==='dive'&&vy<7.6)continue;
+      if(speed>MAX_BALL_SPEED||vx*forward<=0)continue;
+      if(netTime>0&&netTime<t&&b.y+vy*netTime-.5*G*netTime*netTime<2.95)continue;
+      const cost=Math.abs(t-clamp(flight,1.15,1.65))+.025*speed;
+      if(cost<bestCost){best={vx,vy,vz};bestCost=cost;}
+    }
+    if(best){Object.assign(b,best);return true;}
+    return false;
   }
   _stepPlayers(dt, frameInput) {
     const b = this.ball, pred = this._predict(), skill = SKILL[this.difficulty], count = this.mode === '1v1' ? 1 : 2;
@@ -304,7 +320,7 @@ export class VolleyballGame {
       const dashWeight = p._dash > 0 ? .8*dashEnvelope : 0;
       let targetX = dx*speed*(1-dashWeight) + p._dashX*10.8*dashWeight;
       let targetZ = dz*speed*(1-dashWeight) + p._dashZ*10.8*dashWeight;
-      p.dive=p._dive>0?Math.sin(Math.PI*(1-p._dive/DIVE_DURATION)):0;
+      p.dive=p._dive>0?Math.sin(Math.PI*(human?Math.min(1,(1-p._dive/DIVE_DURATION)*1.18+.16):1-p._dive/DIVE_DURATION)):0;
       if(p._dive>0){const diveSpeed=(p.ability?.id==='rocket'&&p.ability.active>0?16:12.5)*(0.4+.6*p._dive/DIVE_DURATION);targetX=p._diveX*diveSpeed;targetZ=p._diveZ*diveSpeed;}
       // Acceleration and drag make direction changes gradual; air steering is weaker.
       const response = p._dive>0?30:p._dash > 0 ? 25 : (p.y > .01 ? 5 : (dx || dz ? 16 : 12));
@@ -330,6 +346,7 @@ export class VolleyballGame {
     const yaw=n.yaw, vertical=(Math.sqrt(length*length-reach*reach) + Math.sin(n.pitch)*(human?1:.8))*(1-p.dive*.65)+p.setBounce*.35;
     const base={x:p.x+p._diveX*p.dive*.3,y:1.45+p.y-p.dive*1.1,z:p.z+p._diveZ*p.dive*.3};
     const target={x:base.x+Math.cos(yaw)*reach,y:base.y+vertical,z:base.z+Math.sin(yaw)*reach};
+    if(human){const fx=Math.cos(p.aimYaw),fz=Math.sin(p.aimYaw),forwardReach=(target.x-base.x)*fx+(target.z-base.z)*fz;target.x-=fx*forwardReach*.24;target.z-=fz*forwardReach*.24;}
     Object.assign(points[0],base);
     const previous=p._previousNeck;
     for(let i=1;i<9;i++){const q=points[i],old=previous[i];old.x=q.x;old.y=q.y;old.z=q.z;}
@@ -425,7 +442,7 @@ export class VolleyballGame {
       const forward=p.team?-1:1;
       const forwardFace=Math.cos(p.aimYaw)*forward>.15;
       // Help front/top receives clear the tape. Back-of-head shots retain their direction.
-      const assisted=forwardFace && nx*forward>-.08 && (b.vx*forward>-.7 || ny>.35);
+      let assisted=forwardFace && nx*forward>-.08 && (b.vx*forward>-.7 || ny>.35);
       if(assisted){
         const distance=Math.abs(forward*4.8-b.x),flight=1.2+distance*.045;
         const targetX=(forward*4.8-b.x)/flight;
@@ -441,7 +458,7 @@ export class VolleyballGame {
       const ability=this._shapeShot(p,action);
       const speed=Math.hypot(b.vx,b.vy,b.vz);
       if(speed>MAX_BALL_SPEED){const scale=MAX_BALL_SPEED/speed;b.vx*=scale;b.vy*=scale;b.vz*=scale;}
-      this._guideReturn(p,action,assisted);
+      assisted=this._guideReturn(p,action,assisted,ability)||assisted;
       const guidedSpeed=Math.hypot(b.vx,b.vy,b.vz);if(guidedSpeed>MAX_BALL_SPEED){const scale=MAX_BALL_SPEED/guidedSpeed;b.vx*=scale;b.vy*=scale;b.vz*=scale;}
       b.spin=clamp((h.vz-b.vz)*nx-(h.vx-b.vx)*nz,-15,15);
       this.lastTeam=p.team;this.lastHitter=p.id;this.touchCooldown=.08;p._contactCooldown=.36;p._lastHitActionSerial=p._actionSerial;this.hits++;this.rallyHits++;this.lastAction=action;

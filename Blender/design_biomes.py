@@ -78,6 +78,7 @@ themes={
 'mountain':dict(Ground='#c4d8e7',Cliff='#566d94',Leaf='#286c7b',LeafLight='#5693a1',Accent='#ed8a70',Gold='#ffd386',Wood='#ad7964',WoodDark='#5d526d',Roof='#627fa8',Cream='#f4f6ec',Rock='#7d95ba',Water='#72cae4',Patch='#dbe8ef',Path='#9fb7ca')}
 manifest=[]
 for theme,colors in themes.items():
+    if theme=='beach':continue  # Approved beach GLB stays byte-for-byte unchanged.
     P=palette(theme,colors);current=bpy.data.collections.new('Designed_'+theme);scene.collection.children.link(current)
     # Compact, layered island: no extra empty outer rim, no geometry in play bounds.
     island(31,24,P['Ground'],P['Cliff'])
@@ -134,6 +135,11 @@ for theme,colors in themes.items():
         for x,z in [(-24,0),(21,-15)]:
             box('FlowerBed',(x,.25,z),(4,.5,2.5),P['Cream'],.15)
             for j in range(6):place('redflower' if j%2 else 'flower',x-1.5+j*.6,z,.8,j)
+        # Generous wildflower drifts and shaded picnic corners, not isolated dots.
+        for i,(x,z) in enumerate([(-19,-9),(-20,10),(-8,-15),(7,15)]):
+            for j in range(5):place('redflower' if j%2 else 'flower',x+(j%3)*.65,z+(j//3)*.8,.85+(j%2)*.25,i+j)
+            place('logs',x-1,z+1.8,.75,i)
+        bunting(-20,-10,10,5)
     elif theme=='jungle':
         # A broad waterfall grotto, not another pavilion or lonely arch.
         for z,h in [(-7,5),(-3,8),(2,7),(6,4)]:
@@ -144,6 +150,9 @@ for theme,colors in themes.items():
         category='Water';ribbon('Waterfall',[(24,6.5,-3),(23.8,4,-3),(22.8,.2,-3)],3.2,P['Water']);patch('GrottoPool',23,-3,4,5,P['Water'],.02);category='Scenery'
         for z in [-5,-1,3]:tube('HangingVine',[(24,7,z),(23,5,z+.3),(23.5,3,z)],.07,P['Leaf'])
         for z in [-13,14]:place('plateau',21,z,8,z,1)
+        for j in range(9):box('GrottoBridgePlank',(20.3,.35,-7+j*.55),(2.4,.18,.46),P['Wood'],.04)
+        for z in [-7,-2.6]:
+            for x in [19.2,21.4]:beam('GrottoBridgePost',(x,0,z),(x,1.5,z),.09,P['WoodDark'])
         # Terraria-inspired vertical layers: tangled hanging vines, giant
         # colorful fungi and fern thickets, all beyond playable run-off.
         for i,(x,z) in enumerate([(-23,-8),(-24,7),(23,-12),(23,13),(-8,-19),(8,19)]):
@@ -176,6 +185,15 @@ for theme,colors in themes.items():
             category='Surface';patch('Snowdrift',side*23,12,5,4,P['Cream'],.01);category='Scenery'
         category='Water';patch('FrozenPond',23,-12,4,4,P['Water'],.01);category='Scenery'
         for z in [-9,-3,4,10]:place('pine',22,z,4.5,z,1)
+        # Warm trail lamps and blue ice spires frame the alpine lodge.
+        for x,z in [(-20,-8),(-20,8),(20,-10),(20,10)]:
+            beam('TrailLampPost',(x,0,z),(x,3.1,z),.1,P['WoodDark'])
+            box('TrailLantern',(x,3,z),(.5,.7,.5),P['Gold'],.06)
+            box('LanternSnowCap',(x,3.45,z),(.75,.16,.75),P['Cream'],.04)
+        for j in range(8):
+            x=22+j%3;z=-16+j*.7
+            peak(x,z,.35+(j%2)*.25,1.5+(j%3)*.6,P['Water'])
+        for j in range(10):box('FrozenPondBridge',(21,.3,-15+j*.55),(2.4,.18,.45),P['Wood'],.03)
     else:
         # Dark terraced basalt frames a saturated lava basin and crater.
         n=24;vs=[];faces=[]
@@ -191,7 +209,20 @@ for theme,colors in themes.items():
                 bpy.ops.mesh.primitive_cylinder_add(vertices=6,radius=.8,depth=1+j%3,location=xyz((x,(1+j%3)/2,z)));move_to(bpy.context.object,'BasaltColumn',P['Roof'] if j%3==0 else P['Rock'])
         category='Surface'
         for z in [-17,17]:ribbon('CoolingSeam',[(-17,.0,z),(-8,.0,z+.5),(5,.0,z-1),(18,.0,z)],.22,P['Lava'])
+        category='Water';mesh('LavaSea',[(-90,-1.5,-90),(-90,-1.5,90),(90,-1.5,90),(90,-1.5,-90)],[(0,1,2,3)],P['Lava'])
         category='Scenery'
+        # Playful bleached giant fossils: spine, paired curved ribs and skull.
+        for x,z,scale in [(-22,-5,1),(22,11,.8),(-9,-18,.85)]:
+            beam('FossilSpine',(x,1,z-3*scale),(x,1,z+3*scale),.14*scale,P['Cream'])
+            for j in range(5):
+                rz=z-2*scale+j*scale
+                for side in [-1,1]:
+                    pts=[(x,1,rz),(x+side*.8*scale,1.9*scale,rz),(x+side*1.5*scale,1.4*scale,rz),(x+side*1.6*scale,.2,rz)]
+                    for a,b in zip(pts,pts[1:]):beam('FossilRib',a,b,.11*scale,P['Cream'])
+            ellipsoid('FossilSkull',(x,1,z-3.4*scale),(.85*scale,.65*scale,1.1*scale),P['Cream'])
+            for side in [-1,1]:
+                ellipsoid('FossilEye',(x+side*.55*scale,1.45,z-3.8*scale),(.23*scale,.12*scale,.3*scale),P['WoodDark'])
+                beam('FossilHorn',(x+side*.55*scale,1.45,z-3*scale),(x+side*.7*scale,2.2,z-2.8*scale),.1*scale,P['Cream'])
     # Validate every authored scenery mesh, including landmark and canopy bounds.
     bpy.context.view_layer.update();detail_bounds=[]
     for o in current.objects:
@@ -202,6 +233,6 @@ for theme,colors in themes.items():
         detail_bounds.append({'min':lo,'max':hi})
     entry=export(current,theme);entry['border_detail_meshes']=len(detail_bounds);entry['border_detail_bounds_z_up']=detail_bounds;entry['art_direction']=theme;manifest.append(entry);current.hide_render=True
 bpy.data.libraries.write(BASE+'/Blender/designed-biomes.blend',{scene},compress=True)
-old=json.loads(Path(OUT+'/manifest.json').read_text());old['assets']=[*manifest,*[a for a in old['assets'] if a['file']=='lobby.glb']];old['generator']='Blender MCP / art-directed biomes';Path(OUT+'/manifest.json').write_text(json.dumps(old,indent=2))
+old=json.loads(Path(OUT+'/manifest.json').read_text());old['assets']=[*manifest,*[a for a in old['assets'] if a['file'] in ['lobby.glb','beach.glb']]];old['generator']='Blender MCP / art-directed biomes';Path(OUT+'/manifest.json').write_text(json.dumps(old,indent=2))
 result={'assets':[{k:v for k,v in a.items() if 'bounds' not in k} for a in manifest]}
 

@@ -76,7 +76,7 @@ console.log('PASS: landing/recovery buffers, expired inputs, directional eased d
 const fast=new VolleyballGame({mode:'1v1'});fast.start();fast.phase='play';fast.lastHitter=null;fast.touchCooldown=0;
 Object.assign(fast.players[0].head,{x:-4,y:3,z:0,vx:0,vy:0,vz:0});
 Object.assign(fast.ball,{x:-5.2,y:3,z:0,vx:300,vy:0,vz:0});fast._ballStep(.01);
-assert.equal(fast.hits,1,'fast ball cannot tunnel through head');assert(fast.ball.vx<0);
+assert.equal(fast.hits,1,'fast ball cannot tunnel through head');assert(fast.ball.vx>0,'rescued contact is guided toward opponent court');
 const falling=new VolleyballGame({mode:'1v1'});falling.start();falling.phase='play';falling.lastHitter=null;falling.touchCooldown=0;
 Object.assign(falling.players[0].head,{x:-4,y:3,z:0,vx:0,vy:0,vz:0});
 Object.assign(falling.ball,{x:-4,y:5,z:0,vx:0,vy:-600,vz:0});falling._ballStep(.01);
@@ -119,11 +119,11 @@ const landTime=(returned.vy+Math.sqrt(returned.vy**2+2*BALL_GRAVITY*(returned.y-
 assert(returned.x+returned.vx*landTime>1,'soft front receive reaches opposing court');
 const netTime=-returned.x/returned.vx;
 assert(returned.y+returned.vy*netTime-.5*BALL_GRAVITY*netTime**2>2.6,'assisted arc clears tape');
-const back=paddedHit({offset:.8,backward:true});assert.equal(back.event.assisted,false);assert(back.game.ball.vx<0,'backward contact is not reversed by autoaim');
+const back=paddedHit({offset:.8,backward:true});assert.equal(back.event.assisted,true);assert(back.game.ball.vx>0,'backward contacts also receive court guidance');
 assert(BALL_GRAVITY<18&&BALL_GRAVITY>0,'ball floats longer without changing player jump gravity');
 const serveFloat=new VolleyballGame({mode:'1v1'});serveFloat.start();serveFloat.update(1/120,{serve:true});serveFloat.update(1/120,{serve:true});
 assert(Math.hypot(serveFloat.ball.vx,serveFloat.ball.vz)<7,'serve horizontal speed is reduced');
-console.log('PASS: generous bounded contact, active-swing forgiveness, padded momentum, gentle speed cap, forward-only aim help and floating serves');
+console.log('PASS: generous bounded contact, active-swing forgiveness, padded momentum, gentle speed cap, all-contact aim help and floating serves');
 
 // Players can chase saves well outside regulation lines; scoring still uses court dimensions.
 {

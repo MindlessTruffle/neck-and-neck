@@ -39,7 +39,8 @@ export class NetworkClient {
     this._lastInputAt = -Infinity; this._paused = false; this._blurred = false;
     this._inputTimer = this._heartbeatTimer = this._reconnectTimer = this._welcomeTimer = null;
     this._attempt = 0; this._connectPending = null; this._pings = new Map(); this._pingId = 0; this._lastHeard = 0;
-    this.motion = new NetworkMotion();
+    this._predictedActions = new Map();
+    this.motion = new NetworkMotion({onPredictedEvent:event=>{this._predictedActions.set(event.type,this.clock());this._emit(event);}});
     this.state = { status: 'idle', connection: 'idle', endpoint: null, error: null, rtt: 0, room: null, queue: null, match: null, localPlayerId: null, localTeam: null, memberId: null };
     this.options = { name: 'Tall Friend', loadout: normalizeLoadout() };
     this._blur = () => { this._blurred = true; this.neutralize(); };
@@ -172,6 +173,7 @@ export class NetworkClient {
       case 'room': this.state.room = clone(packet.room); this._notify(); break;
       case 'queue': this.state.queue = { status: packet.status, mode: packet.mode, partySize: packet.partySize }; this._notify(); break;
       case 'match': {
+        this._predictedActions.clear();
         if (typeof packet.matchId !== 'string' || !Number.isSafeInteger(packet.playerId) || ![0, 1].includes(packet.localTeam ?? packet.team)) return;
         const fresh = this.state.match?.matchId !== packet.matchId;
         if (fresh) { this.motion.clear(); this._events.clear(); this._eventOrder = []; this._pendingEdges = []; this._latestInput = normalizeControls({}); }
@@ -194,7 +196,10 @@ export class NetworkClient {
           if (!event || typeof event.type !== 'string' || !Number.isSafeInteger(event.id)) continue;
           const key = `${packet.matchId}:${event.id}`;
           if (this._events.has(key)) continue;
-          this._rememberEvent(key); this._emit(event);
+          this._rememberEvent(key);
+          const cueType=event.type==='smash'?'action':event.type;
+          if(event.player===this.localPlayerId&&this.clock()-(this._predictedActions.get(cueType)??-Infinity)<300)continue;
+          this._emit(event);
         }
         break;
       case 'match.end': {
@@ -292,7 +297,9 @@ export class NetworkClient {
       }
     }
     this._flushInput();
-    return this.motion.sample(dt, inactive ? normalizeControls({}) : controls, now, { paused: inactive, connected: this.state.status === 'connected' });
+    const view=this.motion.sample(dt, inactive ? normalizeControls({}) : controls, now, { paused: inactive, connected: this.state.status === 'connected' });
+    if(view)view.matchId=this.state.match?.matchId;
+    return view;
   }
 
   setPaused(value) { const next = !!value; if (next && !this._paused) this.neutralize(); this._paused = next; }

@@ -24,4 +24,16 @@ Start `npm run dev:online`. Game: http://127.0.0.1:5173/ . Gallery: http://127.0
 
 Regression and asset budgets: `npm test`. Production build: `npm run build`. Each map must stay below 40,000 triangles and 25 material batches. Desktop browser review settles near 60 FPS; this is not a physical-mobile performance guarantee. No additional postprocessing, shadow lights, or per-frame scene construction were added.
 
-Release authorized for GitHub Pages and the existing Oracle multiplayer service. Pages serves the visual assets; Oracle hosts authoritative matches and redirects its web root to Pages. This art-only release requires no multiplayer restart.
+Pages serves the visual assets; Oracle hosts authoritative matches and redirects its web root to Pages.
+
+## November 15 gameplay and scenery pass
+
+- Beach export is deliberately skipped by the builder. Its SHA-256 remains `4a15d318e297e165564884d0876503ab44dd6f8c352c419a03208469f3326565`.
+- Meadow gains larger flower drifts, log seating and a second pennant line among its existing groves. Jungle gains a grotto boardwalk. Mountain gains trail lamps, an ice-spire cluster and pond bridge. Volcano gains three giant fossil skeletons and an animated lava sea with drifting crust patches. All scenery remains outside expanded movement bounds.
+- Blender MCP could not connect to its interactive server. The installed Blender 5.2 executable rebuilt the authored scenes in background mode; the beach and lobby exports were preserved.
+- Bump contact has a dedicated large comic label. Swing attempts have larger arcs and a camera-facing ripple; sparks and success labels require real contact. Online local action cues are predicted, with short server-echo suppression. Stable match identity prevents each network render snapshot from erasing trails and labels.
+- Human dives launch immediately with faster cooldown and earlier flop pose. Forward/back neck reach is reduced 24% relative to camera aim; sideways target reach is unchanged. Ball return guidance solves speed-capped, net-clearing arcs into the opponent court for bumps, spikes, blocks and dives. Sets retain teammate-targeted behavior, and Feather retains its lift.
+- Network ball positions use velocity-aware interpolation during continuous flight, skip interpolation across hit discontinuities, and preserve remote rig shape during brief extrapolation. Scores and contacts remain authoritative.
+- Regression, network, 120-match simulation and asset-budget suites pass. Local eight-court load check measured approximately 120 Hz physics and 20 Hz snapshots, with no dropped simulation time. This is not an Oracle or physical-phone capacity guarantee.
+
+This release changes shared physics and requires deploying `src/physics.js` to Oracle as well as the Pages client.

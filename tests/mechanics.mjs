@@ -101,7 +101,7 @@ standingClick.g.update(tick,{swing:true});assert.equal(standingClick.p._jumpV,0,
 
 // New movement is expressive, without changing the gentle ball speed limit.
 const longDive=live();longDive.p.x=-8;longDive.g._initNeck(longDive.p);const diveStart=longDive.p.x;
-longDive.g.update(tick,{dive:true,x:1});for(let i=0;i<86;i++)longDive.g.update(tick);
+longDive.g.update(tick,{dive:true,x:1});assert(longDive.p.vx>10&&longDive.p.dive>.4,'dive launches and flops on the first simulation tick');for(let i=0;i<86;i++)longDive.g.update(tick);
 assert(longDive.p.x-diveStart>5.5&&longDive.p.x-diveStart<=7.3,'longer flop dive covers most of a half court without crossing the net');
 const bouncySet=live();bouncySet.g.update(tick,{set:true});for(let i=0;i<20;i++)bouncySet.g.update(tick);
 assert(bouncySet.p.setBounce>.5,'set has a visible squash/rebound envelope');
@@ -113,6 +113,23 @@ assert(whipPeak>3);assert(longNeck.p.neckPoints.every(p=>[p.x,p.y,p.z,p.vx,p.vy,
 const guided=live();Object.assign(guided.g.ball,{x:-3,y:3,z:3.5,vx:10,vy:5,vz:9});
 guided.g._guideReturn(guided.p,'bump',true);const flight=(guided.g.ball.vy+Math.sqrt(guided.g.ball.vy**2+2*BALL_GRAVITY*(guided.g.ball.y-BALL_RADIUS)))/BALL_GRAVITY;
 assert(guided.g.ball.z+guided.g.ball.vz*flight<6,'court assistance steers wide balls substantially inward');
+for(const team of [0,1])for(const action of ['bump','spike','block','dive'])for(const z of [-6,0,6]){
+  const g=new VolleyballGame({mode:'1v1'});g.start();const p=g.players.find(p=>p.team===team);p.human=true;
+  const forward=team?-1:1;
+  Object.assign(g.ball,{x:-forward*5,y:3,z,vx:-forward*7,vy:2,vz:z});
+  assert(g._guideReturn(p,action,false),'all return actions receive assistance even on backwards contact');
+  const b=g.ball,t=(b.vy+Math.sqrt(b.vy*b.vy+2*BALL_GRAVITY*(b.y-BALL_RADIUS)))/BALL_GRAVITY;
+  const tx=b.x+b.vx*t,tz=b.z+b.vz*t,netTime=-b.x/b.vx;
+  assert(tx*forward>2&&tx*forward<8&&Math.abs(tz)<4,'guided return lands safely inside opposing court');
+  assert(b.y+b.vy*netTime-.5*BALL_GRAVITY*netTime*netTime>=2.94,'guided return clears net');
+  assert(Math.hypot(b.vx,b.vy,b.vz)<=11.5,'guidance preserves gentle speed cap');
+}
+const reach=[];
+for(const yaw of [0,Math.PI/2]){
+  const s=live();s.g.phase='serve';for(let i=0;i<360;i++)s.g.update(tick,{aimYaw:0,neckYaw:yaw,extension:.5});
+  reach.push(yaw?Math.abs(s.p.head.z-s.p.z):Math.abs(s.p.head.x-s.p.x));
+}
+assert(reach[1]>reach[0]*1.12,'lateral neck swing retains more reach than forward/back motion');
 
 // Equipped powers persist and refill; network humans receive isolated, one-shot inputs.
 const equipped=new VolleyballGame({equippedAbility:'feather'});equipped.start();assert.equal(equipped.players[0].ability.id,'feather');

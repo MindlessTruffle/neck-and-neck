@@ -14,7 +14,7 @@ const visible = name => root.children.filter(object => object.name === name && o
 effects.impact({ type: 'smash', x: 0, y: 3, z: 0, team: 0 });
 assert.equal(visible('Effect_slash'), 1);
 assert.equal(visible('Effect_spark'), 0);
-assert.equal(visible('Effect_ring'), 0);
+assert.equal(visible('Effect_ring'), 1, 'swing attempt has a visible readiness ripple');
 assert.equal(visible('Effect_lightning'), 0);
 assert.equal(effects.cameraImpulse(), 0, 'missed swing must never shake camera');
 
@@ -66,11 +66,20 @@ game.paused = true; effects.update(.01, game);
 assert.equal(visible('VolleyComicCallout'), 0, 'pause clears stale callouts');
 assert.equal(root.getObjectByName('RallyBallAura_0').visible, false);
 game.paused = false;
+// Network render snapshots are new objects each frame, not new matches.
+const onlineFrame={...game,network:true,matchId:'feedback-match',paused:false,phase:'play',hits:3};
+effects.update(.02,onlineFrame);
+effects.impact({type:'hit',action:'bump',power:.2,rallyHits:1,x:1,y:3,z:0});
+for(let i=0;i<6;i++)effects.update(.02,{...onlineFrame,ball:{...onlineFrame.ball,x:onlineFrame.ball.x+i*.1}});
+assert(root.children.some(o=>o.name==='VolleyComicCallout'&&o.visible&&o.userData.text==='BUMP!'),'online snapshots cannot erase bump confirmation');
+assert(trail.geometry.drawRange.count>0,'online ball trail survives fresh render snapshots');
+effects.update(.02,{...onlineFrame,matchId:'next-match'});
+assert.equal(visible('VolleyComicCallout'),0,'a genuinely new online match clears old feedback');
 effects.setReducedMotion(true);
 assert.equal(effects.cameraImpulse(), 0);
 assert.equal(trail.geometry.drawRange.count, 0);
 effects.update(1, game);
-for (const action of ['set', 'spike', 'block', 'dive']) {
+for (const action of ['bump', 'set', 'spike', 'block', 'dive']) {
   effects.impact({ type: 'hit', action, rallyHits: 1, power: .15, x: 1, y: 3, z: 0 });
   assert(root.children.some(object => object.name === 'VolleyComicCallout' && object.visible && object.userData.text === `${action.toUpperCase()}!`));
   assert.equal(effects.cameraImpulse(), 0);

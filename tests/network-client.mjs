@@ -89,7 +89,8 @@ client.setPaused(true); assert.equal(socket.sent.at(-1).controls.x, 0); assert.e
 client.sample(.01, { x: 1, swing: true }); assert.equal(client._pendingEdges.length, 0); client.setPaused(false);
 client._blur(); assert.equal(socket.sent.at(-1).controls.x, 0); client._focus();
 socket.receive({ type: 'events', matchId: 'match-1', events: [{ id: 3, type: 'hit' }, { id: 2, type: 'jump' }, { id: 3, type: 'hit' }] });
-assert.equal(events.length, 2, 'events deduplicate while preserving unseen reordered events');
+assert(events.some(e=>e.predicted&&e.type==='action'),'local swing cue arrives without waiting for server');
+assert.equal(events.filter(e=>!e.predicted).length, 2, 'server events deduplicate while preserving unseen reordered events');
 socket.receive({ type: 'error', code: 'ROOM_FULL', message: 'That court is full.' }); assert.equal(client.getState().error.code, 'ROOM_FULL');
 timers.advance(5000);
 const ping = socket.sent.find(packet => packet.type === 'ping'); assert(ping);
@@ -197,6 +198,23 @@ for (const team of [0, 1]) for (const zSign of [-1, 1]) {
   assert.equal(final.z, zSign * PLAYER_BOUND_Z, 'both sidelines retain full online run-off');
 }
 console.log('PASS online run-off: both teams cross old walls, reconcile outside court and stop at shared arena bounds.');
+
+// Continuous ball flight follows its parabola; contacts never blend through a hit.
+{
+ const smoother=new NetworkMotion(),a=state(),b=structuredClone(a);
+ a.phase=b.phase='play';a.hits=b.hits=0;
+ Object.assign(a.ball,{x:-3,y:4,z:0,vx:4,vy:3,vz:0});
+ Object.assign(b.ball,{x:-2.6,y:4.246,z:0,vx:4,vy:1.92,vz:0});
+ smoother.push(snapshot(1,0,a),0);smoother.push(snapshot(2,100,b),100);
+ const mid=smoother.sample(0,{},140).ball;
+ assert(Math.abs(mid.y-4.1365)<1e-6,'Hermite interpolation preserves ballistic midpoint');
+ const contact=structuredClone(b);contact.hits=1;contact.ball.x=-2.5;contact.ball.vx=-5;
+ smoother.push(snapshot(3,150,contact),150);
+ assert.equal(smoother.sample(0,{},215).ball.x,contact.ball.x,'contact discontinuity does not interpolate through impact');
+ const before=smoother.sample(0,{},240).players[0];
+ const after=smoother.sample(0,{},280).players[0];
+ for(let i=1;i<9;i++)assert(Math.abs(Math.hypot(after.neckPoints[i].x-after.neckPoints[i-1].x,after.neckPoints[i].y-after.neckPoints[i-1].y,after.neckPoints[i].z-after.neckPoints[i-1].z)-Math.hypot(before.neckPoints[i].x-before.neckPoints[i-1].x,before.neckPoints[i].y-before.neckPoints[i-1].y,before.neckPoints[i].z-before.neckPoints[i-1].z))<1e-8,'packet-gap extrapolation preserves remote neck shape');
+}
 
 // Deterministic delayed interpolation, finite extrapolation and a bounded buffer.
 const motion = new NetworkMotion(); motion.setLocal(1, 1);

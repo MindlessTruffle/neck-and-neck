@@ -5,7 +5,7 @@ const IVORY = '#fff5d4', GOLD = '#ffd35c', TEAL = '#5edbcc', CORAL = '#ff8d70';
 const UP = new THREE.Vector3(0, 1, 0);
 const vector = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const TRAIL_SAMPLES = 24;
-const ACTION_LABELS = { set: 'SET!', spike: 'SPIKE!', block: 'BLOCK!', dive: 'DIVE!' };
+const ACTION_LABELS = { bump: 'BUMP!', set: 'SET!', spike: 'SPIKE!', block: 'BLOCK!', dive: 'DIVE!' };
 const ABILITIES = {
   feather: { text: 'FEATHER FLOAT!', color: '#d8f4ee' },
   spring: { text: 'SPRING STEP!', color: '#ffd56c' },
@@ -264,10 +264,10 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
         return { hitstop: 0 };
       }
       if (!reducedMotion) {
-        const slash = acquire('slash', point, tint, .18);
+        const slash = acquire('slash', point, IVORY, .3);
         if (slash) {
           slash.object.rotation.set(.4, event.team === 1 ? Math.PI / 2 : -Math.PI / 2, -.4);
-          slash.initialScale = .28; slash.growth = 1.4;
+          slash.initialScale = .65; slash.growth = 2.4;
           slash.object.scale.setScalar(slash.initialScale);
         }
         if (action === 'bump' || action === 'spike') {
@@ -275,6 +275,8 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
           if (puff) { puff.initialScale = .45; puff.growth = 2.2; }
         }
       }
+      // Camera-facing readiness ripple remains readable even with reduced motion.
+      shock(point, camera ? camera.position.clone().sub(point).normalize() : UP, TEAL, .7);
       return { hitstop: 0 };
     }
     if (type === 'serve' || type === 'net') {
@@ -288,7 +290,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
     successPulse = 1;
     const callout = volleyCount > 12 ? 'EPIC RALLY!' : volleyCount > 1 ? `VOLLEY ${volleyCount}!` : event.assisted || event.softContact ? 'GOOD SAVE!' : 'NICE!';
     if (ACTION_LABELS[event.action]) {
-      announce(ACTION_LABELS[event.action], point);
+      announce(ACTION_LABELS[event.action], point, .85, { width: event.action==='bump'?3.7:3 });
       if (volleyCount >= 3) announce(callout, point, .72, { height: 1.65, width: 2.3 });
     } else announce(callout, point);
     tintTrail(ability?.color || (volleyCount >= 5 ? GOLD : lastHitTeam ? CORAL : TEAL));
@@ -353,12 +355,13 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
   }
   function updateTrail(dt, game) {
     const ball = game?.ball, paused = !!game?.paused;
-    if ((previousGame && game !== previousGame) || (game?.hits ?? 0) < previousHits) {
+    const identity=game?.network?`online:${game.matchId??'current'}`:game;
+    if ((previousGame && identity !== previousGame) || (game?.hits ?? 0) < previousHits) {
       volleyCount = 0; successPulse = 0;
       for (const label of callouts) { label.life = 0; label.object.visible = false; }
     }
-    const reset = game !== previousGame || game?.phase !== previousPhase || paused !== previousPaused || (game?.hits ?? 0) < previousHits || (game?.rally ?? 0) !== previousRally;
-    previousGame = game; previousPhase = game?.phase; previousPaused = paused;
+    const reset = identity !== previousGame || game?.phase !== previousPhase || paused !== previousPaused || (game?.hits ?? 0) < previousHits || (game?.rally ?? 0) !== previousRally;
+    previousGame = identity; previousPhase = game?.phase; previousPaused = paused;
     previousHits = game?.hits ?? 0; previousRally = game?.rally ?? 0;
     if (reset) clearTrail();
     if (game?.phase === 'serve' || game?.phase === 'attract' || game?.phase === 'point' || game?.phase === 'finished') { volleyCount = 0; successPulse = 0; }

@@ -131,6 +131,15 @@ document.querySelector('#biome').addEventListener('change',()=>{if(world&&game)r
 pointButton.addEventListener('click', () => launchPoint(false));
 matchButton.addEventListener('click', () => launchPoint(true));
 swingButton.addEventListener('click', launchSwing);
+document.querySelector('#contact').addEventListener('click',async()=>{
+  if(!world||!game)return;await audio.unlock();resetMatch();game.phase='play';
+  const p=game.players.find(p=>p.human);game.lastHitter=null;game.touchCooldown=0;
+  Object.assign(game.ball,{x:p.head.x+1.1,y:p.head.y,z:p.head.z,vx:-4,vy:0,vz:0});
+  game._swing(p,'bump');game._ballStep(1/120);eventLabel='bump contact';eventTime=time;autoFreezeAt=.16;
+});
+document.querySelector('#dive-test').addEventListener('click',()=>{
+  if(!world||!game)return;resetMatch();const p=game.players.find(p=>p.human);game._divePlayer(p,0,1);eventLabel='dive response';eventTime=time;autoFreezeAt=.12;
+});
 freezeButton.addEventListener('click', toggleFreeze);
 resetButton.addEventListener('click', resetMatch);
 freezeDelay.addEventListener('input', () => { freezeDelayValue.textContent = `${Number(freezeDelay.value).toFixed(2)} s`; });
