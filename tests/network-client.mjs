@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { WebSocket } from 'ws';
 import { NetworkClient, defaultEndpoint, validateEndpoint } from '../src/network-client.js';
 import { NetworkMotion, validSnapshot } from '../src/network-motion.js';
-import { VolleyballGame } from '../src/physics.js';
+import { VolleyballGame, PLAYER_BOUND_X, PLAYER_BOUND_Z } from '../src/physics.js';
 import { snapshotState } from '../src/net-protocol.js';
 import { createGameServer } from '../server/game-server.mjs';
 
@@ -171,6 +171,32 @@ exitSocket.receive({ type: 'welcome', version: 1, id: 'fresh-player', sessionTok
 await reconnectExit; exiting.client.disconnect();
 assert.equal(exitSocket.sent.at(-1).type, 'room.leave', 'Connected disconnect explicitly releases its room before closing');
 exiting.client.dispose();
+
+// Online prediction and reconciliation must preserve the same run-off as solo.
+for (const team of [0, 1]) for (const zSign of [-1, 1]) {
+  const game = new VolleyballGame({ mode: '1v1' }); game.start();
+  const player = game.players.find(p => p.team === team), direction = team ? 1 : -1;
+  player.human = true; player.x = direction * 13; player.z = zSign * 9;
+  const runOff = new NetworkMotion(); runOff.setLocal(player.id, team);
+  runOff.push({ seq: 1, time: 0, state: snapshotState(game) }, 0);
+  runOff.push({ seq: 2, time: 50, state: snapshotState(game) }, 50);
+  const stationary = runOff.sample(1 / 60, {}, 50).players.find(p => p.id === player.id);
+  assert.equal(stationary.x, player.x, 'reconciliation must not pull a stationary player back to old baseline');
+  assert.equal(stationary.z, player.z, 'reconciliation must not pull a stationary player back to old sideline');
+  const input = { x: direction, z: zSign };
+  for (let frame = 1; frame <= 300; frame++) {
+    game.networkInputs = { [player.id]: input };
+    game._stepPlayers(1 / 120, input); game._stepPlayers(1 / 120, input);
+    const now = 50 + frame * 1000 / 60;
+    if (frame % 3 === 0) runOff.push({ seq: 2 + frame / 3, time: now, state: snapshotState(game) }, now, 60);
+    const view = runOff.sample(1 / 60, input, now).players.find(p => p.id === player.id);
+    assert(Math.abs(view.x) <= PLAYER_BOUND_X && Math.abs(view.z) <= PLAYER_BOUND_Z, 'prediction respects outer arena limits');
+  }
+  const final = runOff.view.players.find(p => p.id === player.id);
+  assert.equal(final.x, direction * PLAYER_BOUND_X, 'both teams can reach the outer baseline run-off online');
+  assert.equal(final.z, zSign * PLAYER_BOUND_Z, 'both sidelines retain full online run-off');
+}
+console.log('PASS online run-off: both teams cross old walls, reconcile outside court and stop at shared arena bounds.');
 
 // Deterministic delayed interpolation, finite extrapolation and a bounded buffer.
 const motion = new NetworkMotion(); motion.setLocal(1, 1);

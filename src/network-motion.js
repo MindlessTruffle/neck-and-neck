@@ -1,4 +1,4 @@
-import { VolleyballGame, BALL_GRAVITY } from './physics.js';
+import { VolleyballGame, BALL_GRAVITY, PLAYER_BOUND_X, PLAYER_BOUND_Z } from './physics.js';
 import { ACTION_KEYS, snapshotState } from './net-protocol.js';
 
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, Number.isFinite(value) ? value : lo));
@@ -81,10 +81,10 @@ export class NetworkMotion {
     if (discontinuity) { this._resetGhost(local, state); return; }
     this.ghost.phase = state.phase; this.ghost.ball = { ...state.ball };
     const lead = clamp(rtt / 2000, 0, .1);
-    const targetX = clamp(local.x + (local.vx || 0) * lead, local.team ? .7 : -8.6, local.team ? 8.6 : -.7);
+    const targetX = clamp(local.x + (local.vx || 0) * lead, local.team ? .7 : -PLAYER_BOUND_X, local.team ? PLAYER_BOUND_X : -.7);
     this.correction.x = clamp(targetX - current.x, -2, 2);
     this.correction.y = clamp(local.y - current.y, -1, 1);
-    this.correction.z = clamp(clamp(local.z + (local.vz || 0) * lead, -4.6, 4.6) - current.z, -2, 2);
+    this.correction.z = clamp(clamp(local.z + (local.vz || 0) * lead, -PLAYER_BOUND_Z, PLAYER_BOUND_Z) - current.z, -2, 2);
     local.neckPoints.forEach((q, index) => {
       for (const axis of ['x', 'y', 'z']) this.neckCorrection[index][axis] = index ? clamp(q[axis] + (q[`v${axis}`] || 0) * lead - current.neckPoints[index][axis] - this.correction[axis], -.5, .5) : 0;
     });
@@ -124,8 +124,8 @@ export class NetworkMotion {
     }
     const alpha = 1 - Math.exp(-clamp(dt, 0, .1) * 8);
     const shift = { x: this.correction.x * alpha, y: this.correction.y * alpha, z: this.correction.z * alpha };
-    shift.x = clamp(p.x + shift.x, p.team ? .7 : -8.6, p.team ? 8.6 : -.7) - p.x;
-    shift.z = clamp(p.z + shift.z, -4.6, 4.6) - p.z;
+    shift.x = clamp(p.x + shift.x, p.team ? .7 : -PLAYER_BOUND_X, p.team ? PLAYER_BOUND_X : -.7) - p.x;
+    shift.z = clamp(p.z + shift.z, -PLAYER_BOUND_Z, PLAYER_BOUND_Z) - p.z;
     shift.y = Math.max(-p.y, shift.y);
     for (const key of ['x', 'y', 'z']) {
       p[key] += shift[key]; p.head[key] += shift[key]; this.correction[key] -= shift[key];
