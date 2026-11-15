@@ -81,3 +81,20 @@ assert.equal(compact.state.pixelRatio, 1);
 assert.ok(!compact.resize(1));
 assert.ok(!compact.resize(NaN));
 console.log('Performance checks passed: caps, device budgets, sustained adaptation, floors and background-tab safety.');
+
+const { renderPixelRatio } = await import('../src/performance.js');
+const dpr4k = renderPixelRatio(2, 3840, 2160);
+assert.ok(3840*2160*dpr4k*dpr4k <= 3000001, '4K auto rendering stays under the pixel budget');
+assert.equal(renderPixelRatio(1,1280,720),1,'Ordinary viewport resolution remains unchanged');
+assert.ok(renderPixelRatio(2,3840,2160,false,'high') > dpr4k,'High quality allows a larger pixel budget');
+assert.ok(renderPixelRatio(2,1920,1080,true)**2*1920*1080 <= 1500001);
+const { versionedAssetPath } = await import('../src/assets.js');
+assert.equal(versionedAssetPath('/models/worlds/beach.glb', {'models/worlds/beach.glb':'unchanged'}),'models/worlds/beach.glb?v=unchanged');
+assert.equal(versionedAssetPath('/textures/fresh.png', {'textures/fresh.png':'newhash'}),'textures/fresh.png?v=newhash');
+assert.equal(versionedAssetPath('/missing.png'), 'missing.png');
+console.log('PASS large-display pixel budgets and content-versioned asset URLs.');
+
+const inactive = createRenderPerformance({nativeDpr:2});
+for(let i=0;i<1000;i++)inactive.update(1/15,false);
+assert.equal(inactive.state.qualityLevel,0,'Hidden/unfocused browser throttling must not permanently degrade image quality');
+console.log('PASS inactive render samples ignored.');

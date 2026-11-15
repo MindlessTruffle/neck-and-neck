@@ -105,7 +105,14 @@ function animate(now) {
       frozen = true; autoFreezeAt = null; freezeButton.textContent = 'Resume effect';
     }
   }
-  if(world&&document.querySelector('#overview').checked){world.camera.position.set(-38,31,38);world.camera.lookAt(0,1,0);world.scene.getObjectByName('PaintedSkyDome').position.copy(world.camera.position);}
+  // Reproducible court-level sightlines catch scenery holes hidden by overview shots.
+  const reviewViews = {
+    overview: [[-38,31,38],[0,1,0]], reverse: [[38,31,-38],[0,1,0]],
+    home: [[-15,5.8,-3],[10,3,1]], away: [[15,5.8,3],[-10,3,-1]],
+    north: [[-3,5.8,-10],[3,3,17]], south: [[3,5.8,10],[-3,3,-17]],
+  };
+  const reviewView=reviewViews[document.querySelector('#viewpoint').value];
+  if(world&&reviewView){world.camera.position.set(...reviewView[0]);world.camera.lookAt(...reviewView[1]);world.scene.getObjectByName('PaintedSkyDome').position.copy(world.camera.position);}
   world?.renderer.render(world.scene, world.camera);
   if (Math.floor(now / 100) !== Math.floor((now - dt * 1000) / 100)) updateStatus();
 }

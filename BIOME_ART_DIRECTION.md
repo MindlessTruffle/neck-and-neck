@@ -1,39 +1,32 @@
-# Biome art direction
+# Worldbuilding release
 
-This pass replaces all five arena compositions. The lobby, menu layout, physics, cosmetics and networking remain unchanged.
+Four arena compositions were rebuilt from zero in Blender; the approved beach and lobby exports are preserved. Gameplay, expanded run-off, menus, cosmetics and multiplayer rules remain unchanged.
 
-- Meadow: emerald lawns, berry blossom grove, original Kenney pavilion, flower terraces, fencing and festival pennants.
-- Jungle: layered teal canopy, dense fern beds, hanging vine curtains, oversized coral/gold mushrooms, waterfall grotto, carved ruin gate and pool. The added vertical vegetation takes inspiration from Terraria's jungle without copying its assets.
-- Beach: peach sand, turquoise sea, striped coral cabana and parasols, palm clusters and boardwalk.
-- Volcano: plum basalt, hexagonal columns, orange crater and lava cascade, cooling seams instead of garden paths.
-- Mountain: continuous snow-capped ridge, warm timber lodge, pine groups, snowdrifts and frozen pond.
+- Meadow: an open anime-inspired valley, smooth layered hills, irregular oak/blossom groves, painted grass and flower swathes, stream and pavilion landmarks.
+- Jungle: a connected multi-depth canopy, broad fern beds, hanging leafy vine curtains, mossy stone guardians and broken ruins, water and irregular mushroom colonies. GPU moths/fireflies and soft canopy light shafts add motion without hiding the court.
+- Volcano: a broad lava sea, distant broken caldera, layered basalt faces, glowing rim and descending lava tributaries, fossil skeletons and fractured columns. Lava uses dark crust, irregular molten channels and emission tied to hot areas.
+- Mountain: connected alpine ridgelines, broken snow gullies, layered crags, pine belts, glacier water and a warm lodge. Painted blue/lavender mineral and frost variation breaks up large faces.
 
-The arena footprint is smaller (31 by 24 radius), with clear playable run-off retained. Unequal groves and low planted beds frame the court. Broad surface patches, coordinated pigments, restrained material fill and a painted terrain atlas replace flat color slabs. Texture repeat mirrors inside each atlas quadrant to prevent neighboring-biome bleed.
+## Authoring and assets
 
-## Editable source
+`Blender/design_biomes.py` builds the four worlds using the credited Kenney/Quaternius source assets plus original Blender-authored landscape and landmark meshes. `Blender/designed-biomes.blend` preserves the editable scene. Each world is merged by material to bound draw calls. Tall scenery stays outside the x +/-17, z +/-12 movement envelope. Groundcover is noncolliding and must leave the regulation court clear.
 
-Blender MCP runs `Blender/design_biomes.py`, creating `Blender/designed-biomes.blend` and the five runtime `public/models/worlds/*.glb` files. The script imports the existing credited Kenney and Quaternius source assets. Original authoring scenes and lobby export are preserved. Each map is batched by surface, scenery, water and material. Every scenery bounding box is checked against the expanded movement envelope; invalid meshes are rejected before export.
+`public/textures/world-paint-v2.png` is a new original imagegen albedo atlas: meadow grass, jungle moss/earth, volcanic basalt and alpine snow. It is not an official Kenney asset. The approved beach continues to use `biome-paint-atlas.png`; its model SHA-256 remains `4a15d318e297e165564884d0876503ab44dd6f8c352c419a03208469f3326565`.
 
-`public/textures/biome-paint-atlas.png` is original built-in imagegen output, copied unchanged. It is not an official Kenney asset. Exact prompt:
+Texture prompt: four equal top-down painted quadrants, no gutters or text; anime adventure gouache grass in jade/yellow-green, humid emerald jungle floor, charcoal-aubergine basalt and blue-white alpine snow. Broad harmonious pigment variation, no baked shadows or scenery. Original generated PNG copied unchanged into the repository.
 
-> Game environment texture atlas, exactly four equal square quadrants in a 2x2 grid, no borders, no text. Orthographic top-down hand-painted Nintendo-inspired stylized terrain materials, subtle diffuse albedo only, no baked lighting or shadows. Top left: rich emerald meadow grass, broad soft tufts with occasional tiny clover shapes. Top right: warm pale peach beach sand, gently raked ripples and tiny shell flecks. Bottom left: cool deep plum basalt gravel, broad dark stone plates and thin aubergine seams, no lava. Bottom right: clean powder blue-white alpine snow with soft wind-swept brush marks. Each quadrant fills its entire square, low-frequency texture and restrained contrast so a ball and court lines remain readable. High-quality painterly game material, no objects, no perspective, no scenery. Square canvas.
+## Rendering and performance
 
-## Review
+Only one world is visible. Each nonbeach biome adds one GPU particle draw; jungle adds one soft shaft draw. Mobile particle counts are reduced. No full-screen postprocessing or additional shadow lights. Leaf motion and atmosphere use shared time uniforms. Terrain and cliff pigment are evaluated in existing material passes.
 
-Start `npm run dev:online`. Game: http://127.0.0.1:5173/ . Gallery: http://127.0.0.1:5173/tests/visual.html?gallery . Select each biome; turn off Overview camera to inspect gameplay framing.
+The frame loop samples actual frame time before physics clamping and ignores hidden/unfocused browser throttling. Hidden pages stop rendering; paused courts and unfocused previews redraw at 30 Hz. Large displays use explicit drawing-buffer pixel budgets (Auto 3M desktop, High 5M, Low/mobile 1.5M); CSS UI stays at native resolution. These budgets follow the rationale in the [Three.js responsive rendering guide](https://threejs.org/manual/pages/responsive.html).
 
-Regression and asset budgets: `npm test`. Production build: `npm run build`. Each map must stay below 40,000 triangles and 25 material batches. Desktop browser review settles near 60 FPS; this is not a physical-mobile performance guarantee. No additional postprocessing, shadow lights, or per-frame scene construction were added.
+Public model, image and audio URLs now include content hashes on production builds. Changed assets cannot reuse stale cached bytes; unchanged beach assets retain the same version. No cookies, progress or settings are cleared. Canvas diagnostics expose actual GPU, frame/CPU timings and render pixels for local troubleshooting; they are not uploaded.
 
-Pages serves the visual assets; Oracle hosts authoritative matches and redirects its web root to Pages.
+## Review and checks
 
-## November 15 gameplay and scenery pass
+The visual critic reviewed both baselines and both sidelines, and required revisions for buried trees, repeated mushroom rows, overly angular hills, flat lava and sparse mountain faces. Use `tests/visual.html?gallery&map=jungle&view=home`; supported views include home, away, north, south, overview, reverse and gameplay. The gallery preserves map/view selections on reload.
 
-- Beach export is deliberately skipped by the builder. Its SHA-256 remains `4a15d318e297e165564884d0876503ab44dd6f8c352c419a03208469f3326565`.
-- Meadow gains larger flower drifts, log seating and a second pennant line among its existing groves. Jungle gains a grotto boardwalk. Mountain gains trail lamps, an ice-spire cluster and pond bridge. Volcano gains three giant fossil skeletons and an animated lava sea with drifting crust patches. All scenery remains outside expanded movement bounds.
-- Blender MCP could not connect to its interactive server. The installed Blender 5.2 executable rebuilt the authored scenes in background mode; the beach and lobby exports were preserved.
-- Bump contact has a dedicated large comic label. Swing attempts have larger arcs and a camera-facing ripple; sparks and success labels require real contact. Online local action cues are predicted, with short server-echo suppression. Stable match identity prevents each network render snapshot from erasing trails and labels.
-- Human dives launch immediately with faster cooldown and earlier flop pose. Forward/back neck reach is reduced 24% relative to camera aim; sideways target reach is unchanged. Ball return guidance solves speed-capped, net-clearing arcs into the opponent court for bumps, spikes, blocks and dives. Sets retain teammate-targeted behavior, and Feather retains its lift.
-- Network ball positions use velocity-aware interpolation during continuous flight, skip interpolation across hit discontinuities, and preserve remote rig shape during brief extrapolation. Scores and contacts remain authoritative.
-- Regression, network, 120-match simulation and asset-budget suites pass. Local eight-court load check measured approximately 120 Hz physics and 20 Hz snapshots, with no dropped simulation time. This is not an Oracle or physical-phone capacity guarantee.
+Required checks: `npm test`, `npm run build`, CI simulation/network suites and live asset verification. Each arena stays below 40,000 authored triangles and 25 authored material batches. Browser performance observations are not a guarantee of FPS on all devices.
 
-This release changes shared physics and requires deploying `src/physics.js` to Oracle as well as the Pages client.
+Local preview: `npm run dev:online` then http://127.0.0.1:5173/ . Pages serves visual assets; Oracle remains the authoritative multiplayer server. This release changes client art/rendering only and does not require restarting active Oracle matches.

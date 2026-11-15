@@ -174,8 +174,14 @@ function App() {
       let last = performance.now(), telemetryAt = 0, fpsAt = last, frameCount = 0, lastRound = -1, revealUntil = 0;
       const loop = now => {
         if (disposed) return;
-        const dt = Math.max(0, Math.min((now - last) / 1000, .1));
+        const rawDt = Math.max(0, (now - last) / 1000);
+        if (document.hidden) { frame = 0; last = now; return; }
+        // Paused courts and unfocused previews do not need full-rate animation.
+        const idleFrame = menuRef.current === 'pause' || !document.hasFocus();
+        if (idleFrame && rawDt < 1 / 30 - .001) { frame = requestAnimationFrame(loop); return; }
+        const dt = Math.min(rawDt, .1);
         last = now;
+        const cpuStart = performance.now();
         const { keys, edges } = runtime.current;
         const aim = neckAim.current;
         const view = cameraAim.current;
@@ -211,6 +217,8 @@ function App() {
         const localPlayer = displayGame.players.find(player => player.id === localId) || displayGame.players[0];
         view.distance = settingsRef.current.cameraDistance;
         world.setCamera?.(view);
+        // Sample actual frame duration, before the physics/animation safety clamp.
+        world.updatePerformance(idleFrame ? 0 : rawDt);
         world.update(Math.min(dt, .05), renderGame, now / 1000);
         world.renderer.render(world.scene, world.camera);
         frameCount++;
@@ -220,6 +228,8 @@ function App() {
         }
         if (now - telemetryAt > 100) {
           telemetryAt = now;
+          canvas.current.dataset.frameMs = (rawDt * 1000).toFixed(1);
+          canvas.current.dataset.cpuMs = (performance.now() - cpuStart).toFixed(1);
           canvas.current.dataset.neckAim = `${aim.yaw.toFixed(3)},${aim.pitch.toFixed(3)},${aim.extension.toFixed(3)}`;
           canvas.current.dataset.cameraAim = `${view.yaw.toFixed(3)},${view.pitch.toFixed(3)},${view.distance.toFixed(2)}`;
           canvas.current.dataset.phase = displayGame.phase;
@@ -320,7 +330,10 @@ function App() {
         if (!menuRef.current && runtime.current.started) showMenu('pause');
         else clearInput();
       };
-      const visibility = () => { if (document.hidden) blur(); };
+      const visibility = () => {
+        if (document.hidden) { blur(); cancelAnimationFrame(frame); frame = 0; }
+        else if (!frame && !disposed) { last = performance.now(); fpsAt = last; frameCount = 0; frame = requestAnimationFrame(loop); }
+      };
       const contextLost = event => { event.preventDefault(); showMenu('pause'); setError('Graphics paused by your device. Reload to return to the court.'); };
       const fullscreenchange = () => {
         setIsFullscreen(Boolean(document.fullscreenElement));

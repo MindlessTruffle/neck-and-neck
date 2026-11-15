@@ -23,9 +23,9 @@ export function createRenderPerformance({ coarse = false, nativeDpr = 1, hardwar
     state.decorationScale = Math.max(.45, 1 - state.qualityLevel * .12);
     state.shadowSize = state.qualityLevel >= 3 ? (coarse ? 512 : 1024) : budget.shadowSize;
   }
-  function update(dt) {
+  function update(dt, active = true) {
     // Background tabs and long browser interruptions are not GPU measurements.
-    if (!Number.isFinite(dt) || dt <= 0 || dt > .25) return false;
+    if (!active || !Number.isFinite(dt) || dt <= 0 || dt > .25) return false;
     elapsed += dt; cooldown = Math.max(0, cooldown - dt);
     frameAverage += (dt - frameAverage) * (1 - Math.exp(-dt * 2));
     state.averageFps = Math.round(10 / Math.max(.001, frameAverage)) / 10;
@@ -40,4 +40,11 @@ export function createRenderPerformance({ coarse = false, nativeDpr = 1, hardwar
     deviceDpr = Math.max(.5, nextDpr); state.minimumPixelRatio = Math.min(Math.min(cap, deviceDpr), coarse ? .75 : .8); apply(); return true;
   }
   return { budget, state, update, resize };
+}
+
+/** Bound fragment work on ultrawide/4K monitors without relying on DPR alone. */
+export function renderPixelRatio(requested, width, height, coarse = false, quality = 'auto') {
+  const pixels = Math.max(1, width) * Math.max(1, height);
+  const budget = coarse ? 1500000 : quality === 'high' ? 5000000 : quality === 'low' ? 1500000 : 3000000;
+  return Math.max(.25, Math.min(requested, Math.sqrt(budget / pixels)));
 }

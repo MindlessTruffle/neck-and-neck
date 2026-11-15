@@ -31,3 +31,7 @@ Kenney logos are not used. No remote asset requests occur during gameplay.
 - Retro ability/player atlas: original built-in imagegen art, `public/ui/power-icons-retro.png`; exact prompt in `RELIC_RELEASE_ART.md`.
 
 - Art-directed biome redesign: `Blender/design_biomes.py` / `Blender/designed-biomes.blend`, using the existing credited Kenney and Quaternius sources. Original imagegen terrain atlas: `public/textures/biome-paint-atlas.png`. Exact prompt and composition notes: `BIOME_ART_DIRECTION.md`.
+
+## Worldbuilding terrain atlas
+
+`public/textures/world-paint-v2.png`: original OpenAI imagegen artwork created for this project (meadow grass, jungle forest floor, basalt and alpine snow). Not an official Kenney asset. Existing Kenney/Quaternius attributions above continue to apply to their source models.
