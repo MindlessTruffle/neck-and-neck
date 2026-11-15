@@ -108,13 +108,13 @@ export function createWorld({canvas,onProgress=()=>{},onLoadProgress=()=>{},redu
   const loader=new GLTFLoader(),loadedSources=[];let loaded=0;
   const reportLoad=()=>{const progress=loaded/totalAssets;onProgress(progress);onLoadProgress(loaded,totalAssets);};
   function load(url){return loader.loadAsync(assetUrl(url)).then(asset=>{loadedSources.push(asset.scene);if(disposed){asset.scene.traverse(object=>{object.geometry?.dispose();for(const mat of object.material?(Array.isArray(object.material)?object.material:[object.material]):[])mat.dispose();});return asset.scene;}loaded++;reportLoad();asset.scene.traverse(object=>{if(object.isMesh){object.castShadow=!adaptive.state.coarse;object.receiveShadow=!adaptive.state.coarse;if(object.material){const mats=Array.isArray(object.material)?object.material:[object.material];mats.forEach(m=>{m.roughness=.85;});}}});return asset.scene;});}
-  const totalAssets=13;
+  const totalAssets=14;
   const texLoader=new THREE.TextureLoader();
   function loadTexture(url,repeat=false){return texLoader.loadAsync(assetUrl(url)).then(t=>{t.colorSpace=THREE.SRGBColorSpace;if(repeat)t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=adaptive.state.coarse?2:4;loaded++;reportLoad();return t;});}
-  const ready=Promise.all([load('/models/giraffe-athlete.glb'),...['meadow','jungle','beach','volcano','mountain','lobby'].map(id=>load(`/models/worlds/${id}.glb`)),loadTexture('/textures/painted-meadow.jpg',true),loadTexture('/textures/painted-honey-wood.png',true),loadTexture('/textures/painted-sky-stone.png',true),loadTexture('/ui/destination-pixel-atlas.png'),loadTexture('/textures/painted-sky.png'),document.fonts.load('24px "Lilita One"').then(()=>{loaded++;reportLoad();})]).then(([source,...assets])=>{
+  const ready=Promise.all([load('/models/giraffe-athlete.glb'),...['meadow','jungle','beach','volcano','mountain','lobby'].map(id=>load(`/models/worlds/${id}.glb`)),loadTexture('/textures/painted-meadow.jpg',true),loadTexture('/textures/painted-honey-wood.png',true),loadTexture('/textures/painted-sky-stone.png',true),loadTexture('/ui/destination-pixel-atlas.png'),loadTexture('/textures/painted-sky.png'),loadTexture('/textures/biome-paint-atlas.png'),document.fonts.load('24px "Lilita One"').then(()=>{loaded++;reportLoad();})]).then(([source,...assets])=>{
     if(disposed)return;
-    const [meadow,jungle,beach,volcano,mountain,lobby,ground,wood,stone,atlas,skyPaint]=assets;
-    template=source;const textures={ground,wood,stone};environments.setModels([meadow,jungle,beach,volcano,mountain],textures);
+    const [meadow,jungle,beach,volcano,mountain,lobby,ground,wood,stone,atlas,skyPaint,terrain]=assets;
+    template=source;const textures={ground,wood,stone,terrain};environments.setModels([meadow,jungle,beach,volcano,mountain],textures);
     menuWorld=createMenuWorld(lobbyRoot,toon,lobby,textures,atlas,adaptive.state.coarse);lobbyModel=lobbyRoot;menuWorld.setVisible(menuFocus==='play');
     skyMaterial.uniforms.skyPaint.value=skyPaint;skyMaterial.uniforms.hasPaint.value=1;
     createLobbyActors();createMapChunks();captureMapBatches();onProgress(1);

@@ -27,6 +27,12 @@
       #error { display: none; margin-top: 10px; color: #ffb0a0; font: 12px ui-monospace, monospace; white-space: pre-wrap; }
       .help { position: absolute; z-index: 1; right: 16px; bottom: 14px; max-width: min(420px, calc(100vw - 32px)); padding: 8px 11px; border-radius: 9px; background: #152a2bbc; color: #f4ead2; font-size: 11px; }
       @media (max-width: 600px) { .panel { top: 8px; left: 8px; width: min(360px, calc(100vw - 16px)); padding: 12px; } .help { right: 8px; bottom: 8px; } }
+    body.gallery .panel { width:auto; max-width:calc(100vw - 32px); top:auto; bottom:16px; padding:12px 18px; }
+      body.gallery .panel > :not(label):not(#render-metrics) { display:none; }
+      body.gallery .help, body.gallery .freeze-delay { display:none; }
+      body.gallery label { font-size:18px; margin-right:16px; }
+      body.gallery select { font-size:18px; padding:8px; }
+      body.gallery #render-metrics { margin-top:8px; font-size:13px; }
     </style>
   </head>
   <body>
@@ -54,6 +60,7 @@
       <div id="inspection"></div><div id="error"></div>
     </section>
     <div class="help">Point explosion launches a normal score. Match explosion sets a 6–0 fixture and awards point seven. Auto-freeze captures the selected time; Freeze holds or resumes manually.</div>
+    <script>if(new URLSearchParams(location.search).has('gallery')) { document.body.classList.add('gallery'); document.querySelector('#overview').checked=true; }</script>
     <script type="module" src="/tests/visual.mjs"></script>
   </body>
 </html>

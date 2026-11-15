@@ -29,3 +29,5 @@ Kenney logos are not used. No remote asset requests occur during gameplay.
 - Kenney restoration: `Blender/restore_kenney_worlds.py` / `Blender/kenney-restored-worlds.blend` recompose the credited Kenney Nature Kit and original pavilion across five arenas. Native pigments and original cel lighting restored.
 - Bubble badge: user-supplied image, `public/ui/player-power-bubble.png`, copied unchanged; not claimed as original or CC0.
 - Retro ability/player atlas: original built-in imagegen art, `public/ui/power-icons-retro.png`; exact prompt in `RELIC_RELEASE_ART.md`.
+
+- Art-directed biome redesign: `Blender/design_biomes.py` / `Blender/designed-biomes.blend`, using the existing credited Kenney and Quaternius sources. Original imagegen terrain atlas: `public/textures/biome-paint-atlas.png`. Exact prompt and composition notes: `BIOME_ART_DIRECTION.md`.

@@ -150,3 +150,7 @@ The supplied circular bubble contains either the equipped retro imagegen power i
 Border scenery now includes clustered shrubs, flowers, mushrooms, extra trees, log-and-stump seating, coastal fences and volcanic rock beds. New mesh bounds are recorded in the world manifest and tested against the full movement envelope. Geometry remains below 40,000 triangles per map; material batch counts are unchanged.
 
 All four destination icons sit above their boards. Wide-screen Play/Style boards and icons move down together; status bubbles sit beside the upper destinations. Portrait menus use a vertically spaced stack.
+
+### Current biome redesign
+
+All five arenas now use the compositions and coordinated palettes documented in [BIOME_ART_DIRECTION.md](BIOME_ART_DIRECTION.md). Editable source: `Blender/designed-biomes.blend`; builder: `Blender/design_biomes.py`. Earlier restoration notes above describe the previous build. Preview each map at `http://127.0.0.1:5173/tests/visual.html?gallery` after `npm run dev:online`. Jungle adds dense fern beds, hanging vines and oversized colorful mushrooms. Pages serves the art assets for both solo and Oracle-hosted online matches.

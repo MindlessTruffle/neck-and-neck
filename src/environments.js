@@ -49,20 +49,27 @@ export function prepareWorldModel(model,textures,coarse,time={value:0},waterMate
     for(const m of Array.isArray(o.material)?o.material:[o.material]){
       if(seen.has(m))continue;seen.add(m);m.roughness=.88;m.metalness=0;
       if(m.map)m.map.anisotropy=coarse?2:4;
+      if(/^Release_(meadow|jungle|beach|volcano|mountain)_/.test(m.name)&&!/Water|Lava/.test(m.name)){m.emissive.copy(m.color);m.emissiveIntensity=/Ground|Cliff/.test(m.name)?.04:.16;}
 
       const isWater=/Water|Lava/.test(m.name),isGround=/Ground/.test(m.name),isWood=/Wood/.test(m.name),isCliff=/Cliff/.test(m.name);
-      if(isGround||isWood||isCliff){m.map=isWood?textures.wood:isCliff?textures.stone:textures.ground;m.needsUpdate=true;}
-      if(isWater){m.roughness=.34;m.emissive.copy(m.color);m.emissiveIntensity=.16;m.transparent=true;m.depthWrite=false;m.fog=false;waterMaterials.push(m);}
+      const biomePaint=isGround&&!/lobby/.test(m.name)&&textures.terrain;
+      const tile=/beach/.test(m.name)?[.5,.5]:/volcano/.test(m.name)?[0,0]:/mountain/.test(m.name)?[.5,0]:[0,.5];
+      if(isGround||isWood||isCliff){m.map=isWood?textures.wood:isCliff?textures.stone:biomePaint||textures.ground;m.needsUpdate=true;}
+      if(isWater){m.roughness=.34;m.emissive.copy(m.color);m.emissiveIntensity=/Lava/.test(m.name)?.7:.22;m.transparent=true;m.depthWrite=false;m.fog=false;waterMaterials.push(m);}
       m.onBeforeCompile=shader=>{
         shader.uniforms.worldTime=time;
         shader.vertexShader='varying vec3 worldPaint;\n'+shader.vertexShader;
         shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n worldPaint=position;');
         shader.fragmentShader='uniform float worldTime; varying vec3 worldPaint;\n'+shader.fragmentShader;
         if(isGround||isWood||isCliff)shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`vec3 pigment=diffuseColor.rgb;\n#include <map_fragment>\n diffuseColor.rgb=mix(pigment,diffuseColor.rgb,${isWood?'.22':'.20'});`);
+        if(biomePaint){
+          // Mirror each repeat inside one atlas cell; inset UVs prevent biome bleed.
+          shader.fragmentShader=shader.fragmentShader.replace(/vec3 pigment=diffuseColor.rgb;[\s\S]*?diffuseColor.rgb=mix\(pigment,diffuseColor.rgb,[^;]+;/,`vec2 paintUV=1.0-abs(mod(worldPaint.xz*.065,2.0)-1.0); vec3 terrainPigment=texture2D(map,vec2(${tile[0]},${tile[1]})+.002+paintUV*.496).rgb; diffuseColor.rgb=mix(diffuseColor.rgb,terrainPigment,.32);`);
+        }
         if(isWater)shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\n float crest=pow(.5+.5*sin(worldPaint.x*2.7+worldPaint.z*1.9+sin(worldPaint.z*3.0-worldTime)*.7-worldTime*1.1),16.0);diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.93,.99,.91),crest*.12);diffuseColor.a*=1.0-smoothstep(48.0,79.0,max(abs(worldPaint.x),abs(worldPaint.z)));');
         shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>','float rim=pow(1.0-max(0.0,dot(normal,normalize(vViewPosition))),3.0);outgoingLight+=vec3(.12,.085,.045)*rim;\n#include <opaque_fragment>');
       };
-      m.customProgramCacheKey=()=>`painted-world-v2-${isGround}-${isWood}-${isCliff}-${isWater}`;
+      m.customProgramCacheKey=()=>`painted-world-v3-${isGround}-${isWood}-${isCliff}-${isWater}-${!!biomePaint}-${tile}`;
     }
   });
 }
