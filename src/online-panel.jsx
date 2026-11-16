@@ -1,3 +1,4 @@
+import { migrateServerEndpoint } from './server-endpoint.js';
 import React, { useState } from 'react';
 import { getSkin } from './profile.js';
 import { assetUrl } from './assets.js';
@@ -11,7 +12,7 @@ const localHost = () => ['localhost', '127.0.0.1', '[::1]'].includes(location.ho
 
 export function OnlinePanel({ client, state = {}, profile }) {
   const t=useT();
-  const [endpoint, setEndpoint] = useState(() => read('neck.server', import.meta.env.VITE_SERVER_URL || (localHost() ? 'ws://127.0.0.1:8787' : '')));
+  const [endpoint, setEndpoint] = useState(() => migrateServerEndpoint(read('neck.server', import.meta.env.VITE_SERVER_URL || (localHost() ? 'ws://127.0.0.1:8787' : ''))));
   const [name, setName] = useState(() => read('neck.name', 'Tall Friend'));
   const [code, setCode] = useState('');
   const [notice, setNotice] = useState('');

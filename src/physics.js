@@ -176,7 +176,11 @@ export class VolleyballGame {
     const event={action,player:p.id,team:p.team,x:p.head.x,y:p.head.y,z:p.head.z};
     this.emit('action',event);if(action==='bump'||action==='spike')this.emit('smash',event);
   }
+  _isServingPlayer(p) {
+    return this.phase==='serve' && p.id===this.server*(this.mode==='1v1'?1:2);
+  }
   _divePlayer(p,dx=0,dz=0) {
+    if(this._isServingPlayer(p))return false;
     if(p._diveCooldown>0||p.y>.4)return false;
     const len=Math.hypot(dx,dz);p._diveX=len>.1?dx/len:Math.cos(p.aimYaw);p._diveZ=len>.1?dz/len:Math.sin(p.aimYaw);
     p._dive=DIVE_DURATION;p._diveCooldown=p.human?1.08:1.35;p._actionTime=.8;p._actionSerial++;p._contactAction='dive';p.action='dive';
@@ -245,7 +249,13 @@ export class VolleyballGame {
   _stepPlayers(dt, frameInput) {
     const b = this.ball, pred = this._predict(), skill = SKILL[this.difficulty], count = this.mode === '1v1' ? 1 : 2;
     for (const p of this.players) {
-      const human = p.human && this.phase !== 'attract',input=this._inputForPlayer(p,frameInput);let dx = 0, dz = 0;
+      const human = p.human && this.phase !== 'attract',serveLocked=this._isServingPlayer(p);
+      let input=this._inputForPlayer(p,frameInput),dx=0,dz=0;
+      if(serveLocked){
+        // Keep aiming live, but never bank movement or action impulses during a serve.
+        input={...input,x:0,z:0};for(const key of ACTION_KEYS)input[key]=false;
+        for(const key of ['vx','vz','y','jump','_jumpV','_jumpBuffer','_dash','_dashBuffer','_dive','dive','_swingBuffer','_setBuffer','_jumpSetBuffer','_setBounceTime','setBounce'])p[key]=0;
+      }
       p.energy = clamp(p.energy + dt*.13, 0, 1); p._dash = Math.max(0,p._dash-dt); p._swingCooldown = Math.max(0,p._swingCooldown-dt);
       p._dashCooldown = Math.max(0,p._dashCooldown-dt);
       p._jumpBuffer = Math.max(0,p._jumpBuffer-dt); p._dashBuffer = Math.max(0,p._dashBuffer-dt); p._swingBuffer = Math.max(0,p._swingBuffer-dt);

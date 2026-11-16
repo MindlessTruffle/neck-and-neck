@@ -1,3 +1,4 @@
+import { migrateServerEndpoint } from './server-endpoint.js';
 import { ACTION_KEYS, INPUT_RATE, PROTOCOL_VERSION, normalizeControls, normalizeLoadout, normalizeName } from './net-protocol.js';
 import { NetworkMotion } from './network-motion.js';
 
@@ -15,7 +16,7 @@ export function validateEndpoint(endpoint, location = globalThis.location) {
   const value = endpoint || defaultEndpoint(location);
   if (!value) throw failure('MISSING_ENDPOINT', 'Online play needs a running game server. Enter its secure WebSocket address.');
   let parsed;
-  try { parsed = new URL(value); } catch { throw failure('INVALID_ENDPOINT', 'Enter a valid ws:// or wss:// game server address.'); }
+  try { parsed = new URL(migrateServerEndpoint(value)); } catch { throw failure('INVALID_ENDPOINT', 'Enter a valid ws:// or wss:// game server address.'); }
   if (!['ws:', 'wss:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) throw failure('INVALID_ENDPOINT', 'Use a WebSocket address without credentials, query parameters, or fragments.');
   if (location?.protocol === 'https:' && parsed.protocol === 'ws:' && !loopback(parsed.hostname)) throw failure('INSECURE_ENDPOINT', 'This HTTPS page requires a secure wss:// server connection.');
   return parsed.href;
@@ -120,7 +121,7 @@ export class NetworkClient {
         const error = failure('SESSION_MOVED', 'Your session continued in another tab. Connect again here to take control.');
         this._connectPending?.reject(error); this._connectPending = null; this._status('offline', error); return;
       }
-      this._failed(failure('CONNECTION_CLOSED', this.state.match ? 'Connection lost. Rejoining your match…' : 'The game server disconnected.'));
+      this._failed(failure('CONNECTION_CLOSED', this.state.match ? 'Connection lost. Rejoining your match…' : this.state.status==='connecting' ? 'Secure connection failed. Try another network or check the server address in Advanced.' : 'The game server disconnected.'));
     };
     this._welcomeTimer = this.timers.setTimeout(() => {
       if (!active() || this.state.status === 'connected') return;

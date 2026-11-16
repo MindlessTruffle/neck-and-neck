@@ -175,7 +175,7 @@ exiting.client.dispose();
 
 // Online prediction and reconciliation must preserve the same run-off as solo.
 for (const team of [0, 1]) for (const zSign of [-1, 1]) {
-  const game = new VolleyballGame({ mode: '1v1' }); game.start();
+  const game = new VolleyballGame({ mode: '1v1' }); game.start(); game.phase='play';
   const player = game.players.find(p => p.team === team), direction = team ? 1 : -1;
   player.human = true; player.x = direction * 13; player.z = zSign * 9;
   const runOff = new NetworkMotion(); runOff.setLocal(player.id, team);
@@ -258,7 +258,10 @@ try {
   a.sample(.016, { x: 1, serve: true });
   await until(() => a.motion.snapshots.at(-1)?.state.serveStage === 'toss');
   for (let frame = 0; frame < 12; frame++) { a.sample(1 / 60, { x: 1 }); b.sample(1 / 60, {}); await new Promise(resolve => setTimeout(resolve, 16)); }
-  assert(a.motion.snapshots.at(-1).state.players[0].x > before, 'the server, not only prediction, applies movement');
+  assert.equal(a.motion.snapshots.at(-1).state.players[0].x,before,'Server holds serving player during toss');
+  a.sample(.016,{serve:true});await until(()=>a.motion.snapshots.at(-1)?.state.phase==='play');
+  for(let frame=0;frame<12;frame++){a.sample(1/60,{x:1});await new Promise(resolve=>setTimeout(resolve,16));}
+  assert(a.motion.snapshots.at(-1).state.players[0].x>before,'Server unlocks movement after strike');
   assert(a.motion.snapshots.at(-1).ack >= 1);
   assert.equal(b.sample(0, {}).players.find(p => p.human).id, b.localPlayerId);
   const identity = a.localPlayerId, priorSnapshot = a.motion.latestSeq;
@@ -272,3 +275,31 @@ try {
   assert(server.metrics().physicsSteps > 0);
 } finally { a.dispose(); b.dispose(); await server.close(); }
 console.log('PASS Native WebSocket integration: two browser clients create/join room, update equipped power, start opposed teams, receive authoritative snapshots, toss and move with acknowledgements.');
+
+// Both serving teams stay fixed locally and authoritatively, including toss time.
+for(const mode of ['1v1','2v2'])for(const team of [0,1]){
+ const game=new VolleyballGame({mode});game.start();game.server=team;game.players.forEach(p=>p.human=true);
+ const server=game.players.find(p=>p.team===team), origin={x:server.x,y:server.y,z:server.z};
+ const locked=new NetworkMotion();locked.setLocal(server.id,team);
+ locked.push({seq:1,time:0,state:snapshotState(game)},0);
+ const controls={x:1,z:1,jump:true,dash:true,dive:true,jumpSet:true,set:true,ability:true,neckYaw:.4,aimYaw:.4};
+ for(let i=0;i<30;i++){
+   game.update(1/120,{[server.id]:controls});locked.sample(1/120,controls,i*1000/120);
+ }
+ for(const p of [server,locked.ghost.players[0]]){
+   assert.deepEqual({x:p.x,y:p.y,z:p.z},origin);assert.equal(p._dive,0);assert.equal(p._jumpBuffer,0);assert.equal(p._dashBuffer,0);assert.equal(p.neck.yaw,.4);
+ }
+ assert.equal(game._divePlayer(server,1,0),false);
+ game.update(1/120,{[server.id]:{serve:true}});
+ for(let i=0;i<30;i++)game.update(1/120,{[server.id]:controls});
+ assert.equal(game.serveStage,'toss');assert.deepEqual({x:server.x,y:server.y,z:server.z},origin);
+ const receiver=game.players.find(p=>p.id!==server.id),before=receiver.z;
+ game.update(1/120,{[receiver.id]:{z:1,dive:true}});assert(receiver.z>before,'Other players may move during serve');
+ game.update(1/120,{[server.id]:{serve:true}});assert.equal(game.phase,'play');
+ game.update(1/120,{[server.id]:{z:1,dive:true}});assert(server.z>origin.z,'Movement unlocks after strike');
+}
+console.log('PASS serve lock: both teams/modes, predicted pose, toss, discarded actions and rally unlock.');
+
+assert.equal(validateEndpoint('wss://neck-club.147.5.119.55.sslip.io'), 'wss://neck-club.147.5.119.55.nip.io/');
+assert.equal(validateEndpoint('wss://custom.example/'), 'wss://custom.example/');
+assert.throws(()=>validateEndpoint('wss://user@neck-club.147.5.119.55.sslip.io'),{code:'INVALID_ENDPOINT'});

@@ -26,12 +26,12 @@ waiting.update(1/60,{serve:true});assert.equal(waiting.serveStage,'toss');waitin
 const botServe=new VolleyballGame({mode:'1v1'});botServe.start();botServe.players[0].human=false;
 for(let i=0;i<90;i++)botServe.update(1/60);assert.equal(botServe.phase,'play');
 // Ground movement builds speed and coasts to a stop; airborne steering is weaker.
-const motion=new VolleyballGame({mode:'1v1'});motion.start();const m=motion.players[0];m.x=-8;
+const motion=new VolleyballGame({mode:'1v1'});motion.start();motion.phase='play';const m=motion.players[0];m.x=-8;
 motion.update(.05,{x:1});assert(m.vx>0&&m.vx<5.5);const first=m.vx;
 for(let i=0;i<10;i++)motion.update(.05,{x:1});assert(m.vx>first&&m.vx<5.51);
 motion.update(.05,{});assert(m.vx>0&&m.vx<5.5);for(let i=0;i<30;i++)motion.update(.05,{});assert(Math.abs(m.vx)<.01);
 m.x=-.7;m.vx=4;motion.update(.05,{x:1});assert.equal(m.x,-.7);assert.equal(m.vx,0);
-const ground=new VolleyballGame({mode:'1v1'}), air=new VolleyballGame({mode:'1v1'});ground.start();air.start();air.players[0].y=1;air.players[0]._jumpV=0;
+const ground=new VolleyballGame({mode:'1v1'}), air=new VolleyballGame({mode:'1v1'});ground.start();ground.phase='play';air.start();air.phase='play';air.players[0].y=1;air.players[0]._jumpV=0;
 ground.update(.05,{z:1});air.update(.05,{z:1});assert(air.players[0].vz<ground.players[0].vz);
 console.log('PASS: human serve waits, bot serves, ground acceleration/friction, air control, boundary velocity');
 
@@ -52,7 +52,7 @@ console.log('PASS: independent neck control, chain length, overshoot, whip veloc
 
 // Ability presses shortly before landing/recovery are retained, then consumed once.
 const abilities=[];
-const buffered=new VolleyballGame({mode:'1v1',onEvent:e=>abilities.push(e)});buffered.start();
+const buffered=new VolleyballGame({mode:'1v1',onEvent:e=>abilities.push(e)});buffered.start();buffered.phase='play';
 const bp=buffered.players[0];bp.y=.05;bp._jumpV=-2;
 buffered.update(1/120,{jump:true});
 for(let i=0;i<15;i++)buffered.update(1/120);
@@ -61,10 +61,10 @@ assert(bp.y>.2&&bp._jumpV>0,'buffered jump takes off after landing');
 bp._swingCooldown=.06;buffered.phase='play';buffered.update(1/120,{swing:true});
 for(let i=0;i<15;i++)buffered.update(1/120);
 assert.equal(abilities.filter(e=>e.type==='smash').length,1,'recovery-buffered swing fires once');
-const expired=new VolleyballGame({mode:'1v1'});expired.start();expired.players[0].y=2;
+const expired=new VolleyballGame({mode:'1v1'});expired.start();expired.phase='play';expired.players[0].y=2;
 expired.update(1/120,{jump:true});for(let i=0;i<120;i++)expired.update(1/120);
 assert.equal(expired.players[0].y,0,'early airborne jump expires instead of auto-bouncing');
-const dashGame=new VolleyballGame({mode:'1v1'});dashGame.start();const dp=dashGame.players[0];
+const dashGame=new VolleyballGame({mode:'1v1'});dashGame.start();dashGame.phase='play';const dp=dashGame.players[0];
 const dashStart=dp.z;dashGame.update(1/120,{neckYaw:Math.PI/2,dash:true});
 let peakDash=0;for(let i=0;i<35;i++){dashGame.update(1/120,{neckYaw:-Math.PI/2});peakDash=Math.max(peakDash,dp.vz);}
 assert(dp.z>dashStart+.8,'idle dash travels along initial neck aim');
@@ -127,12 +127,12 @@ console.log('PASS: generous bounded contact, active-swing forgiveness, padded mo
 
 // Players can chase saves well outside regulation lines; scoring still uses court dimensions.
 {
- const g=new VolleyballGame({mode:'1v1'});g.start();const p=g.players[0];
+ const g=new VolleyballGame({mode:'1v1'});g.start();g.phase='play';const p=g.players[0];
  p.x=-8.8;p.z=4.8;
- for(let i=0;i<180;i++)g.update(1/120,{x:-1,z:1});
+ for(let i=0;i<180;i++)g._stepPlayers(1/120,{x:-1,z:1});
  assert(p.x < -12 && p.z > 8, 'movement crosses old court walls');
- for(let i=0;i<600;i++)g.update(1/120,{x:-1,z:1});
+ for(let i=0;i<600;i++)g._stepPlayers(1/120,{x:-1,z:1});
  assert.equal(p.x,-17);assert.equal(p.z,12);assert.equal(p.vx,0);assert.equal(p.vz,0);
- p.x=-.7;p.vx=5;g.update(1/120,{x:1});assert.equal(p.x,-.7,'net separation stays enforced');
+ p.x=-.7;p.vx=5;g._stepPlayers(1/120,{x:1});assert.equal(p.x,-.7,'net separation stays enforced');
  console.log('PASS expanded run-off: players cross court lines, stop at outer arena bounds, and cannot cross the net.');
 }

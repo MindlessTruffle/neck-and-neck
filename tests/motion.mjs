@@ -4,7 +4,7 @@ import { SmoothSimulation } from '../src/motion.js';
 
 function runAt(hz) {
   const game = new VolleyballGame({ mode: '1v1' });
-  game.start();
+  game.start(); game.phase='play';
   const motion = new SmoothSimulation(game);
   for (let i = 0; i < hz * 2; i++) motion.advance(1 / hz, { z: .3, neckYaw: .6, neckPitch: .1 });
   return { game, motion };
@@ -20,7 +20,7 @@ for (const hz of [30, 60, 90, 144, 240]) {
 // Actions between simulation ticks survive exactly once, even at fast refresh rates.
 let jumps = 0;
 const game = new VolleyballGame({ onEvent: e => { if (e.type === 'jump' && e.player === 0) jumps++; } });
-game.start();
+game.start(); game.phase='play';
 const motion = new SmoothSimulation(game);
 motion.advance(1 / 480, { jump: true });
 assert.equal(jumps, 0);
@@ -31,7 +31,7 @@ assert.notEqual(motion.renderState.players[0].head, game.players[0].head);
 assert.notEqual(motion.renderState.players[0].neckPoints, game.players[0].neckPoints);
 
 // Pause clears pending inputs and accumulated time. Reset never smears teleports.
-game.reset(); game.start(); motion.reset();
+game.reset(); game.start(); game.phase='play'; motion.reset();
 motion.advance(1 / 480, { jump: true });
 game.paused = true; motion.advance(10);
 game.paused = false; motion.advance(1 / 60);

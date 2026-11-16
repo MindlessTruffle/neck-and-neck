@@ -70,7 +70,7 @@ export class NetworkMotion {
     player.neck = { ...base.neck, ...local.neck };
     player._previousNeck = player.neckPoints.map(q => ({ x: q.x, y: q.y, z: q.z }));
     game.players = [player]; game.onEvent = event => { if(['action','dive','jump','dash'].includes(event.type))this.onPredictedEvent({...event,predicted:true}); }; game.networkInputs = {};
-    game.phase = state.phase; game.ball = { ...state.ball }; game.paused = false;
+    game.server = state.server; game.phase = state.phase; game.ball = { ...state.ball }; game.paused = false;
     this.ghost = game; this.accumulator = 0; this.pending = {};
     this.correction = { x: 0, y: 0, z: 0 };
     this.neckCorrection.forEach(q => { q.x = q.y = q.z = 0; });
@@ -80,7 +80,7 @@ export class NetworkMotion {
     const current = this.ghost?.players[0];
     const discontinuity = !current || reconnect || previous?.phase !== state.phase || previous?.rally !== state.rally || Math.hypot(local.x - current.x, local.y - current.y, local.z - current.z) > 3.5;
     if (discontinuity) { this._resetGhost(local, state); return; }
-    this.ghost.phase = state.phase; this.ghost.ball = { ...state.ball };
+    this.ghost.server = state.server; this.ghost.phase = state.phase; this.ghost.ball = { ...state.ball };
     const lead = clamp(rtt / 2000, 0, .1);
     const targetX = clamp(local.x + (local.vx || 0) * lead, local.team ? .7 : -PLAYER_BOUND_X, local.team ? PLAYER_BOUND_X : -.7);
     this.correction.x = clamp(targetX - current.x, -2, 2);

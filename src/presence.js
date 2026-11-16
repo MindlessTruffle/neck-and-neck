@@ -1,5 +1,6 @@
+import { migrateServerEndpoint } from './server-endpoint.js';
 import { useEffect, useState } from 'react';
-export function presenceUrl(endpoint){try{const u=new URL(endpoint);if(!['ws:','wss:'].includes(u.protocol)||u.username||u.password)return null;u.protocol=u.protocol==='wss:'?'https:':'http:';u.pathname='/api/presence';u.search='';u.hash='';return u.href;}catch{return null;}}
+export function presenceUrl(endpoint){try{const u=new URL(migrateServerEndpoint(endpoint));if(!['ws:','wss:'].includes(u.protocol)||u.username||u.password)return null;u.protocol=u.protocol==='wss:'?'https:':'http:';u.pathname='/api/presence';u.search='';u.hash='';return u.href;}catch{return null;}}
 export function usePresence(active){
  const [presence,setPresence]=useState(null);
  useEffect(()=>{if(!active)return;let disposed=false,timer,controller;

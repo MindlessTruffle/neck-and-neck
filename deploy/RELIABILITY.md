@@ -83,3 +83,15 @@ they do not establish a 100% uptime SLA or replace long-duration observation.
 References: [systemd resource limits](https://freedesktop.org/software/systemd/man/latest/systemd.resource-control.html),
 [systemd runtime watchdog](https://www.freedesktop.org/software/systemd/man/257/systemd-system.conf.html),
 [Oracle systemd timers](https://docs.oracle.com/en/operating-systems/oracle-linux/9/systemd/WorkingWithTimers.html).
+
+
+## Public hostname migration (2026-11-15)
+
+Primary game endpoint: `wss://neck-club.147.5.119.55.nip.io`.
+Keep `neck-club.147.5.119.55.sslip.io` as a Caddy alias for existing clients and the watchdog.
+Both hostnames must have valid automatically renewed HTTPS certificates and proxy to the same server.
+An affected home-network user confirmed the new `/health` URL works while the old hostname fails TLS.
+Client endpoint migration updates saved legacy addresses, the multiplayer panel, and presence polls;
+custom server addresses remain unchanged. No certificate validation is disabled.
+The live native Caddy configuration is `/etc/caddy/Caddyfile` (not the Docker template here).
+Its site label includes both hostnames, comma-separated. Preserve both when editing it.

@@ -41,7 +41,7 @@ try {
   a.send('room.start');const [ma,mb]=await Promise.all([a.next('match'),b.next('match')]);assert.equal(ma.playerId,0);assert.equal(mb.playerId,1);assert.equal(mb.team,1);assert.equal(ma.mapId,mb.mapId);assert(['meadow','jungle','beach','volcano','mountain'].includes(ma.mapId));assert.equal(ma.partyCode,room.code);
   const initial=await a.next('snapshot');assert.equal(initial.state.mapId,ma.mapId);assert.equal(initial.state.players.length,2);assert.ok(initial.state.players.every(p=>p.human));allFinite(initial.state);
   a.send('input',{seq:1,controls:{x:99,z:0,neckYaw:1e99,neckPitch:99,extension:9},score:[999,0],position:{x:1000}});
-  const moved=await a.next('snapshot',m=>m.ack===1&&m.state.players[0].x>initial.state.players[0].x+.15);assert.equal(moved.state.score[0],0);assert.ok(moved.state.players[0].x<0);assert.ok(moved.state.players[0].neck.pitch<=1.35);allFinite(moved.state);
+  const moved=await a.next('snapshot',m=>m.ack===1);assert.equal(moved.state.players[0].x,initial.state.players[0].x,'Server rejects movement during serve');assert.equal(moved.state.score[0],0);assert.ok(moved.state.players[0].x<0);assert.ok(moved.state.players[0].neck.pitch<=1.35);allFinite(moved.state);
   a.send('input',{seq:2,controls:{serve:true,aimYaw:0,neckYaw:0,x:0}});const toss=await a.next('snapshot',m=>m.ack===2);assert.equal(toss.state.serveStage,'toss');assert.equal(toss.state.phase,'serve');
   a.send('input',{seq:2,controls:{serve:true}});await sleep(80);const duplicate=await a.next('snapshot',m=>m.seq>toss.seq);assert.equal(duplicate.state.phase,'serve','duplicate sequence cannot strike serve');
   a.send('input',{seq:3,controls:{serve:true}});const play=await a.next('snapshot',m=>m.ack===3);assert.equal(play.state.phase,'play');
