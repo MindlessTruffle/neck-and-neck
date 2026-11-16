@@ -27,3 +27,14 @@
  .match-ui[data-touch=true] .scoreboard-ui .team-name{display:none}
 }
 @media(prefers-reduced-motion:reduce){.match-ui[data-touch=true] button{transition:none}}
+
+/* Same high-contrast timing cue on mouse and touch; no fast flashing. */
+.perfect-spike-prompt{display:none;position:absolute;left:50%;top:22%;transform:translateX(-50%);pointer-events:none;text-align:center;color:#fff1a0;filter:drop-shadow(0 3px 0 #442846);text-shadow:2px 0 #442846,-2px 0 #442846,0 -2px #442846;z-index:4;white-space:nowrap}
+.perfect-spike-prompt strong{display:block;font:clamp(30px,5vw,48px)/1 var(--display)}
+.perfect-spike-prompt span{display:block;font:900 18px/1.4 var(--display);color:#fff}
+.match-ui[data-perfect-spike=true] .perfect-spike-prompt{display:block}
+.spike-button-label{display:none}
+.match-ui[data-perfect-spike=true] .action-swing{background:#ffe04b;color:#382540;border-color:#fff9c4;box-shadow:0 0 0 5px #593152,0 0 0 8px #fff0a3,0 0 24px #ffce36;}
+.match-ui[data-touch=true][data-perfect-spike=true] .action-swing .touch-action-icon{display:none}
+.match-ui[data-touch=true][data-perfect-spike=true] .action-swing .spike-button-label{display:block;font:900 17px/1 var(--display);color:#382540;position:absolute;inset:0;align-content:center;text-align:center}
+@media(max-height:500px){.perfect-spike-prompt{top:25%}.perfect-spike-prompt strong{font-size:28px}.perfect-spike-prompt span{font-size:16px}}

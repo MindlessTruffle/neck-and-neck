@@ -16,7 +16,11 @@ const emptyActions=input=>{for(const key of ACTION_KEYS)input[key]=false;};
 const noControls=()=>({x:0,z:0});
 const LOOPBACK=new Set(['127.0.0.1','::1','::ffff:127.0.0.1']);
 const token=()=>randomBytes(32).toString('base64url');
-const code=()=>randomBytes(5).toString('hex').toUpperCase();
+export function createRoomCode(isReserved,random=randomInt) {
+  const start=random(0,10000);
+  for(let i=0;i<10000;i++){const value=String((start+i)%10000).padStart(4,'0');if(!isReserved(value))return value;}
+  throw new Error('Party code capacity reached');
+}
 function privateAddress(address='') {const ip=address.replace(/^::ffff:/,'');return LOOPBACK.has(address)||ip.startsWith('10.')||ip.startsWith('192.168.')||/^172\.(1[6-9]|2\d|3[01])\./.test(ip)||/^(fc|fd)[0-9a-f]{2}:/i.test(ip);}
 
 /** Authoritative rooms, matchmaking and 120 Hz physics. No client position/score writes. */
@@ -90,7 +94,7 @@ export function createGameServer(options={}) {
     if(notify)tell(session,{type:'room',room:null});
   }
   function makeRoom(mode,members=[]) {
-    let roomCode;do{roomCode=code();}while(rooms.has(roomCode));
+    const roomCode=createRoomCode(value=>rooms.has(value)||[...matches.values()].some(m=>m.parties.some(p=>p.code===value)));
     const room={code:roomCode,mode,members,hostId:members[0]?.id||null,queued:false,matchId:null,activity:Date.now()};rooms.set(roomCode,room);
     for(const s of members)s.roomCode=roomCode;
     return room;

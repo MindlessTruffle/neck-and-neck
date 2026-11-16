@@ -13,7 +13,7 @@ const LANDMARKS = [
   { id: 'play', name: 'PLAY',  x: 25, y: 52 },
   { id: 'shop', name: 'STYLE',  x: 73, y: 48 },
   { id: 'abilities', name: 'POWERS',  x: 48, y: 69 },
-  { id: 'online', name: 'MULTIPLAYER',  x: 83, y: 72 },
+  { id: 'online', name: 'PARTY',  x: 83, y: 72 },
 ];
 
 function LandmarkIcon({ id }) {
@@ -40,7 +40,7 @@ export function CloudLobby({ error, onReload, profile, skinName, abilityName, ho
             <span className="landmark-icon"><LandmarkIcon id={item.id}/></span><strong>{t(item.name)}</strong>
           </button>;
         })}</nav>
-        <div className="sky-live-bubbles">{hotspots?.abilities?.visible&&<button className="sky-power-bubble" style={{left:hotspots.abilities.x+hotspots.abilities.width/2+28,top:hotspots.abilities.y,backgroundImage:`url("${assetUrl('ui/player-power-bubble.png')}")`}} onClick={()=>onSelect('abilities')} aria-label={`Equipped: ${abilityName}. Open powers`} title={abilityName}><PowerIcon id={profile.equippedAbility} color={getAbility(profile.equippedAbility).color}/></button>}{hotspots?.online?.visible&&<button className="sky-player-count" style={{left:hotspots.online.x+hotspots.online.width/2+28,top:hotspots.online.y,backgroundImage:`url("${assetUrl('ui/player-power-bubble.png')}")`}} onClick={()=>onSelect('online')} aria-label={presence?.unavailable?'Player count unavailable. Open multiplayer':`${presence?.total??0} players: ${presence?.queued??0} queuing, ${presence?.playing??0} in matches. Open multiplayer`}><PowerIcon id="players"/><b>{presence&&!presence.unavailable?presence.total:'—'}</b></button>}</div>
+        <div className="sky-live-bubbles">{hotspots?.abilities?.visible&&<button className="sky-power-bubble" style={{left:hotspots.abilities.x+hotspots.abilities.width/2+28,top:hotspots.abilities.y,backgroundImage:`url("${assetUrl('ui/player-power-bubble.png')}")`}} onClick={()=>onSelect('abilities')} aria-label={`Equipped: ${abilityName}. Open powers`} title={abilityName}><PowerIcon id={profile.equippedAbility} color={getAbility(profile.equippedAbility).color}/></button>}{hotspots?.play?.visible&&<button className="sky-player-count" style={{left:hotspots.play.x+hotspots.play.width/2+28,top:hotspots.play.y,backgroundImage:`url("${assetUrl('ui/player-power-bubble.png')}")`}} onClick={()=>onSelect('play')} aria-label={presence?.unavailable?'Player count unavailable. Open Play':`${presence?.total??0} players: ${presence?.queued??0} queuing, ${presence?.playing??0} in matches. Open Play`}><PowerIcon id="players"/><b>{presence&&!presence.unavailable?presence.total:'—'}</b></button>}</div>
         <div className="sky-loadout"><span>{skinName}</span><Icon name="power" size={20}/><span>{abilityName}</span></div>
         <footer className="sky-settings"><button onClick={() => onSelect("options")} aria-label={t("Options")}><Icon name="settings"/></button>
           <button onClick={() => onSelect('controls')} aria-label={t("How to play")}><Icon name="help"/></button>

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { perfectSpikeReady } from './spike-timing.js';
 import { createEnvironments } from './environments.js';
 import { createMenuWorld } from './menu-world.js';
 import { assetUrl } from './assets.js';
@@ -88,6 +89,11 @@ export function createWorld({canvas,onProgress=()=>{},onLoadProgress=()=>{},redu
   const locator=new THREE.Group();locator.name='BallWorldLocator';locator.scale.setScalar(BALL_RADIUS/.258);scene.add(locator);locator.renderOrder=1000;
   for(const [inner,outer,color,opacity] of [[.350,.369,'#fff1b2',.98],[.383,.398,'#ad6a24',.85]]){const geometry=new THREE.RingGeometry(inner,outer,64);geometries.push(geometry);const ring=mesh(geometry,new THREE.MeshBasicMaterial({color,transparent:true,opacity,side:THREE.DoubleSide,depthTest:false,depthWrite:false}),locator,false);ring.renderOrder=1000;}
   const chevronGeometry=new THREE.BufferGeometry().setFromPoints([V(-.075,.58,0),V(0,.515,0),V(.075,.58,0)]);geometries.push(chevronGeometry);const chevron=new THREE.Line(chevronGeometry,new THREE.LineBasicMaterial({color:'#fff1b2',transparent:true,opacity:.9,depthTest:false,depthWrite:false}));chevron.renderOrder=1001;locator.add(chevron);
+  const spikeTarget=new THREE.Group();spikeTarget.name='PerfectSpikeTarget';locator.add(spikeTarget);spikeTarget.visible=false;
+  for(const [inner,outer,color] of [[.50,.60,'#3d2245'],[.525,.575,'#ffe04b']]){const geometry=new THREE.RingGeometry(inner,outer,48);const ring=mesh(geometry,new THREE.MeshBasicMaterial({color,side:THREE.DoubleSide,depthTest:false,depthWrite:false}),spikeTarget,false);ring.renderOrder=1002;}
+  const spikeVertices=[];for(let i=0;i<4;i++){const a=i*Math.PI/2,c=Math.cos(a),s=Math.sin(a);for(const [r,w] of [[.59,0],[.76,-.08],[.76,.08]])spikeVertices.push(c*r-s*w,s*r+c*w,0);}
+  const spikeArrows=new THREE.BufferGeometry();spikeArrows.setAttribute('position',new THREE.Float32BufferAttribute(spikeVertices,3));
+  const spikeArrowMesh=mesh(spikeArrows,new THREE.MeshBasicMaterial({color:'#fff8c9',side:THREE.DoubleSide,depthTest:false,depthWrite:false}),spikeTarget,false);spikeArrowMesh.renderOrder=1003;
   const landing=new THREE.Group();scene.add(landing);const ringGeo=new THREE.RingGeometry(.46,.49,64);geometries.push(ringGeo);const landingRing=mesh(ringGeo,new THREE.MeshBasicMaterial({color:'#ffe5a2',transparent:true,opacity:.65,side:THREE.DoubleSide,depthWrite:false}),landing,false);landingRing.rotation.x=-Math.PI/2;
   for(let i=0;i<4;i++){const marker=box(landing,'#ffd775',Math.cos(i*Math.PI/2)*.61,.008,Math.sin(i*Math.PI/2)*.61,.13,.013,.045);marker.rotation.y=-i*Math.PI/2;marker.castShadow=false;}
   const serveLane=new THREE.Group();serveLane.name='ServePositionLane';scene.add(serveLane);serveLane.visible=false;
@@ -175,6 +181,8 @@ export function createWorld({canvas,onProgress=()=>{},onLoadProgress=()=>{},redu
     if(menuScene){updateLobbyActors(dt,t);updateMenuCamera(dt);menuWorld?.update(dt,t,camera,reducedMotion);}else if(mapMotion.active&&mapMotion.final){menuEye.set(52,48,54);menuLook.set(0,10,0);cameraPosition.lerp(menuEye,1-Math.exp(-dt*3));cameraTarget.lerp(menuLook,1-Math.exp(-dt*3));camera.position.copy(cameraPosition);camera.lookAt(cameraTarget);}
     sky.position.copy(camera.position);for(const texture of waterMaps)texture.offset.y=-t*.16;
     const b=game?.ball||fallbackBall;ball.visible=game?.phase!=='attract';ball.position.set(b.x,Math.max(BALL_RADIUS,b.y),b.z);core.rotation.x+=dt*2;ball.rotation.z+=dt*1.8;halo.rotation.y=t*1.6;locator.visible=ball.visible;locator.position.copy(ball.position);locator.quaternion.copy(camera.quaternion);
+    const spikeReady=!menuScene&&perfectSpikeReady(game,human);spikeTarget.visible=spikeReady;ballMat.emissiveIntensity=spikeReady?.75:.18;
+    spikeTarget.scale.setScalar(reducedMotion?1:1+Math.sin(t*5)*.035);
     const landingTime=Math.max(0,((b.vy||0)+Math.sqrt((b.vy||0)**2+2*BALL_GRAVITY*Math.max(0,b.y-BALL_RADIUS)))/BALL_GRAVITY);landing.position.set(THREE.MathUtils.clamp(b.x+(b.vx||0)*landingTime,-10,10),.018,THREE.MathUtils.clamp(b.z+(b.vz||0)*landingTime,-6,6));landing.visible=ball.visible;landing.rotation.y=t*.35;landingRing.material.opacity=.43+Math.sin(t*4)*.08;
     const servingPlayer=selectRenderPlayer(game);serveLane.visible=!menuScene&&game?.phase==='serve'&&game?.serveStage==='ready'&&servingPlayer?.id===game.server*(game.mode==='1v1'?1:2);
     if(serveLane.visible){serveLane.position.set(servingPlayer.x,.035,0);laneMaterial.opacity=reducedMotion?.28:.25+Math.sin(t*3)*.045;}

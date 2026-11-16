@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createWorld } from './art.js';
+import { perfectSpikeReady } from './spike-timing.js';
 import { VolleyballGame } from './physics.js';
 import { SmoothSimulation } from './motion.js';
 import { requestGameCapture } from './capture.js';
@@ -29,6 +30,7 @@ function App() {
   const canvas = useRef(null);
   const stage = useRef(null);
   const reticle = useRef(null);
+  const spikeReadyRef = useRef(false);
   const runtime = useRef({ game: null, world: null, audio: null, motion: null, keys: new Set(), edges: {}, started: false });
   const neckAim = useRef({ yaw: 0, pitch: .15, extension: .35 });
   const cameraAim = useRef({ yaw: 0, pitch: 0, distance: 7.2 });
@@ -39,6 +41,7 @@ function App() {
   const fullscreenPreference = useRef(true);
   const [profile, setProfile] = useState(loadProfile);
   const [menuTab, setMenuTab] = useState('home');
+  const [playTab,setPlayTab]=useState('online');
   const menuTabRef = useRef(menuTab); menuTabRef.current = menuTab;
   const [hotspots, setHotspots] = useState(null);
   const [onlineStatus, setOnlineStatus] = useState({ connection: 'offline' });
@@ -215,6 +218,8 @@ function App() {
         const displayGame = renderGame || game;
         const localId = runtime.current.onlineActive ? runtime.current.localPlayerId : 0;
         const localPlayer = displayGame.players.find(player => player.id === localId) || displayGame.players[0];
+        const spikeReady=!menuRef.current&&perfectSpikeReady(displayGame,localPlayer);
+        if(spikeReady!==spikeReadyRef.current){spikeReadyRef.current=spikeReady;setMatch(previous=>({...previous,perfectSpikeReady:spikeReady}));}
         view.distance = settingsRef.current.cameraDistance;
         world.setCamera?.(view);
         // Sample actual frame duration, before the physics/animation safety clamp.
@@ -249,7 +254,7 @@ function App() {
           if (menuRef.current === 'lobby') setHotspots(world.projectMenuHotspots?.() || null);
           if (!menuRef.current) {
             const player = localPlayer;
-            setMatch({ score: [...displayGame.score], mode: displayGame.mode, phase: displayGame.phase, server: displayGame.server,
+            setMatch({ perfectSpikeReady:spikeReady, score: [...displayGame.score], mode: displayGame.mode, phase: displayGame.phase, server: displayGame.server,
               playerTeam: player.team, isServer: displayGame.players.find(p => p.team === displayGame.server)?.id === player.id, round: displayGame.round, touches: [...(displayGame.touches || [0, 0])], touchTeam: displayGame.touchTeam,
               rallyHits: displayGame.rallyHits, message: displayGame.message, serveStage: displayGame.serveStage, serveCharge: displayGame.serveCharge,
               airborne: player.y > .2, energy: player.energy, ability: player.ability ? { ...player.ability } : null,
@@ -387,7 +392,7 @@ function App() {
     document.documentElement.lang=settings.language;
     runtime.current.world?.setOptions(settings);
     runtime.current.world?.setReducedMotion(settings.reducedMotion);
-    runtime.current.world?.setMenuLabels(Object.fromEntries([['play','PLAY'],['shop','STYLE'],['abilities','POWERS'],['online','MULTIPLAYER']].map(([key,text])=>[key,translate(text,settings.language)])));
+    runtime.current.world?.setMenuLabels(Object.fromEntries([['play','PLAY'],['shop','STYLE'],['abilities','POWERS'],['online','PARTY']].map(([key,text])=>[key,translate(text,settings.language)])));
     runtime.current.audio?.setVolumes(settings.masterVolume,settings.musicVolume);
     if(settings.touchMode!=='auto'){touchOverride.current=settings.touchMode==='on';setTouch(settings.touchMode==='on');}else{touchOverride.current=null;setTouch(window.matchMedia('(pointer:coarse)').matches||innerWidth<700);}
   },[settings,ready]);
@@ -458,7 +463,7 @@ function App() {
     if (wasOnline && menuRef.current !== 'finished') runtime.current.online?.leaveRoom();
     runtime.current.onlineActive = false; runtime.current.onlineView = null;
     runtime.current.started = false;
-    setMenuTab(wasOnline ? 'online' : 'home');
+    setMenuTab(wasOnline ? runtime.current.online?.getState().room ? 'online' : 'play' : 'home');setPlayTab('online');
     runtime.current.game?.reset({ mode, difficulty });
     neckAim.current = { yaw: 0, pitch: .15, extension: .35 };
     cameraAim.current = { yaw: 0, pitch: 0, distance: 7.2 };
@@ -478,7 +483,7 @@ function App() {
     runtime.current.audio?.unlock();
   };
 
-  const selectMenu = view => { runtime.current.audio?.unlock(); runtime.current.audio?.event('menu'); setMenuTab(view); };
+  const selectMenu = view => { if(view==='play')setPlayTab('online'); runtime.current.audio?.unlock(); runtime.current.audio?.event('menu'); setMenuTab(view); };
   const pointerDown = event => {
     if (menuRef.current) {
       if (menuRef.current === 'lobby' && menuTabRef.current === 'home') { const box=canvas.current.getBoundingClientRect(); const id=runtime.current.world?.pickMenu(event.clientX-box.left,event.clientY-box.top); if(id) selectMenu(id); }
@@ -537,12 +542,13 @@ function App() {
       <MatchUI state={match} onAction={action} onPause={() => showMenu('pause')} onWalk={(walk, id) => applyWalk(interaction.current, walk, `stick:${id}`)} touch={touch}/>
     </>}
     {menu === 'lobby' && <CloudLobby error={error} onReload={() => location.reload()} profile={profile} skinName={getSkin(profile.equippedSkin).name} abilityName={ABILITY_CATALOG.find(item => item.id === profile.equippedAbility)?.name || profile.equippedAbility} hotspots={hotspots} onFocus={id => runtime.current.world?.hoverMenu(id)}
-      onSelect={selectMenu} view={menuTab} onClose={() => { if (menuTab === 'online') runtime.current.online?.disconnect(); setMenuTab('home'); }}
+      onSelect={selectMenu} view={menuTab} onClose={() => { if (menuTab === 'online'||menuTab==='play') { runtime.current.online?.cancelQueue(); if(!runtime.current.online?.getState().room)runtime.current.online?.disconnect(); } setMenuTab('home'); }}
       muted={muted} music={music} touch={touch} onMuted={() => setMuted(value => !value)} onMusic={() => setMusic(value => !value)}
       onTouch={() => { touchOverride.current = !touch; setTouch(!touch); }} onFullscreen={toggleFullscreen} ready={ready} progress={loadingProgress} panelRef={panel}>
       {(menuTab === 'shop' || menuTab === 'abilities') && <Shop reducedMotion={settings.reducedMotion} view={menuTab === 'shop' ? 'skins' : 'abilities'} profile={profile} onChange={next => setProfile(saveProfile(next))} onClose={() => setMenuTab('home')} onSound={event => runtime.current.audio?.event(event || 'menu')}/>}
-      {menuTab === 'online' && <OnlinePanel client={runtime.current.online} state={onlineStatus} profile={profile} onClose={() => setMenuTab('home')}/>}
-      {(menuTab === 'play' || menuTab === 'controls') && <GameMenu onOptions={() => setOptionsOpen(true)} key={menuTab} startHelp={menuTab === 'controls'} menu={menu} mode={mode} difficulty={difficulty} onMode={setMode} onDifficulty={setDifficulty} onPlay={begin} onBack={() => setMenuTab('home')} ready={ready} error={error} result={result} muted={muted} music={music} onMuted={() => setMuted(value => !value)} onMusic={() => setMusic(value => !value)} captureFailed={captureFailed} onReload={() => location.reload()} panelRef={panel} onFullscreen={toggleFullscreen} isFullscreen={isFullscreen} touch={touch} onTouch={() => { touchOverride.current = !touch; setTouch(!touch); }} onMenuSound={unlock => { if (unlock) runtime.current.audio?.unlock(); runtime.current.audio?.event('menu'); }}/> }
+      {menuTab === 'play' && <nav className="play-tabs" aria-label="Play type">{['online','bots'].map(tab=><button key={tab} aria-pressed={playTab===tab} disabled={tab==='bots'&&onlineStatus.queue?.status==='waiting'} onClick={()=>setPlayTab(tab)}>{translate(tab==='online'?'ONLINE':'BOTS',settings.language)}</button>)}</nav>}
+      {(menuTab === 'online'||(menuTab==='play'&&playTab==='online')) && <OnlinePanel key={menuTab} partyOnly={menuTab==='online'} client={runtime.current.online} state={onlineStatus} profile={profile} onClose={() => setMenuTab('home')}/>}
+      {((menuTab === 'play'&&playTab==='bots') || menuTab === 'controls') && <GameMenu onOptions={() => setOptionsOpen(true)} key={menuTab} startHelp={menuTab === 'controls'} menu={menu} mode={mode} difficulty={difficulty} onMode={setMode} onDifficulty={setDifficulty} onPlay={begin} onBack={() => setMenuTab('home')} ready={ready} error={error} result={result} muted={muted} music={music} onMuted={() => setMuted(value => !value)} onMusic={() => setMusic(value => !value)} captureFailed={captureFailed} onReload={() => location.reload()} panelRef={panel} onFullscreen={toggleFullscreen} isFullscreen={isFullscreen} touch={touch} onTouch={() => { touchOverride.current = !touch; setTouch(!touch); }} onMenuSound={unlock => { if (unlock) runtime.current.audio?.unlock(); runtime.current.audio?.event('menu'); }}/> }
     </CloudLobby>}
     {menu && menu !== 'lobby' && <GameMenu onOptions={() => setOptionsOpen(true)} hasParty={onlineStatus.room?.status === 'lobby'}
       online={Boolean(runtime.current.onlineActive)} menu={menu} mode={mode} difficulty={difficulty} onMode={setMode} onDifficulty={setDifficulty}

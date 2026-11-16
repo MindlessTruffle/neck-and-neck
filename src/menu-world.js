@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { prepareWorldModel } from './environments.js';
 
-export const MENU_ITEMS=[['play','PLAY','#f3bc63'],['shop','STYLE','#ee9b98'],['abilities','POWERS','#b9a0e5'],['online','MULTIPLAYER','#8ed6c6']];
+export const MENU_ITEMS=[['play','PLAY','#f3bc63'],['shop','STYLE','#ee9b98'],['abilities','POWERS','#b9a0e5'],['online','PARTY','#8ed6c6']];
 export function createMenuWorld(root,toon,model,textures,atlas,coarse=false){
   prepareWorldModel(model,textures,coarse);root.add(model);
   const shadowOffset=new THREE.Vector3(.16,-.22,-.04);

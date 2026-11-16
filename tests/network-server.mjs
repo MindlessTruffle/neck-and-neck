@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { WebSocket } from 'ws';
-import { createGameServer } from '../server/game-server.mjs';
+import { createGameServer, createRoomCode } from '../server/game-server.mjs';
 import { normalizeControls, normalizeLoadout } from '../src/net-protocol.js';
 
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -34,7 +34,7 @@ try {
   const health=await fetch(`http://127.0.0.1:${address.port}/health`).then(r=>r.json());assert.equal(health.ok,true);assert.equal('sessions' in health,false);
   const bad=new WebSocket(address.url,{origin:'https://untrusted.example'});await assert.rejects(once(bad,'open'),/403/);
   const a=await connect(address.url,{name:'Alfa'}),b=await connect(address.url,{name:'Bravo'});peers.push(a,b);
-  a.send('room.create',{mode:'1v1'});const room=(await a.next('room',m=>m.room?.mode==='1v1')).room;assert.match(room.code,/^[A-F0-9]{10}$/);
+  a.send('room.create',{mode:'1v1'});const room=(await a.next('room',m=>m.room?.mode==='1v1')).room;assert.match(room.code,/^[0-9]{4}$/);
   a.send('room.start');assert.equal((await a.next('error')).code,'PLAYERS_REQUIRED');
   b.send('room.join',{code:room.code});await b.next('room',m=>m.room?.members.length===2);
   b.send('room.start');assert.equal((await b.next('error')).code,'HOST_REQUIRED');
@@ -125,3 +125,6 @@ try{
  assert.equal(counted.metrics().queued,2);
  console.log('PASS queue counts: mode-specific, includes self, updates on join/cancel/disconnect.');
 }finally{countedPeers.forEach(p=>p.close());await counted.close();}
+
+assert.equal(createRoomCode(v=>['0000','0001'].includes(v),()=>0),'0002');
+assert.equal(createRoomCode(v=>v==='9999',()=>9999),'0000');

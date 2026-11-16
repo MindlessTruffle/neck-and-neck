@@ -11,8 +11,9 @@ export function MatchUI({ state, onAction, onPause, onWalk, touch }) {
   const serving = state.phase === 'serve' && (state.isServer ?? state.server === 0);
   const toss = serving && state.serveStage === 'toss';
   const air = state.airborne;
+  const spikeReady=state.phase==='play'&&state.perfectSpikeReady;
   const actions = [
-    ['swing', serving ? toss ? t('STRIKE') : t('TOSS') : air ? t('SPIKE') : t('BUMP'), t('CLICK'), 'mouse_left'],
+    ['swing', serving ? toss ? t('STRIKE') : t('TOSS') : spikeReady || air ? t('SPIKE') : t('BUMP'), t('CLICK'), 'mouse_left'],
     ['set', air ? t('BLOCK') : t('SET'), 'Q', 'keyboard_q'],
     ['jumpSet', t('JUMP SET'), 'E', 'keyboard_e'],
     ['dive', t('DIVE'), 'V', null],
@@ -26,7 +27,8 @@ export function MatchUI({ state, onAction, onPause, onWalk, touch }) {
     stickPointer.current = null; onWalk({ x: 0, z: 0 }, event.pointerId);
     stick.current?.style.setProperty('--stick-x', '0px'); stick.current?.style.setProperty('--stick-y', '0px');
   };
-  return <div className="match-ui" data-touch={touch}>
+  return <div className="match-ui" data-touch={touch} data-perfect-spike={!!spikeReady}>
+    <div className="perfect-spike-prompt" aria-hidden={!spikeReady}><strong>{t('SPIKE!')}</strong><span>{touch?t('TAP SPIKE'):t('CLICK NOW')}</span></div>
     <header className="match-top">
       <div className="scoreboard-ui" aria-label={`Meadow ${state.score[0]}, Ember ${state.score[1]}`}>
         <span className="team-name home">{t('MEADOW')}</span><b>{state.score[0]}</b>
@@ -44,7 +46,7 @@ export function MatchUI({ state, onAction, onPause, onWalk, touch }) {
       <button className="ability-button" disabled={!ability?.ready || state.phase !== 'play'} onPointerDown={press('ability')} onClick={event => { if (event.detail === 0) onAction('ability'); }} style={{ '--ability-color': ability?.color || '#ba9eff' }} aria-label={`Use ${ability?.name || 'ability'}`}>
         <span className="ability-key">X</span><div><small>{t('EQUIPPED POWER')}</small><strong>{ability?.name || 'Drawing ability…'}</strong><span>{ability?.active > 0 ? t('ACTIVE') : ability?.charges > 0 ? state.phase === 'play' ? touch ? t('READY · TAP TO USE') : t('HOLD CLICK · USE POWER') : t('READY WHEN RALLY STARTS') : t('USED · NEXT ROUND')}</span></div><Icon name="power"/>
       </button>
-      <div className="action-buttons">{actions.map(([id, name, key, icon]) => <button key={id} className={`action-button action-${id}`} onPointerDown={press(id)} onClick={event => { if (event.detail === 0) onAction(id); }} aria-label={name}><span className="keycap">{icon ? <img src={assetUrl(`kenney/controls/${icon}.png`)} alt={key}/> : key}</span><span className="touch-action-icon" aria-hidden="true"><Icon name={id === "swing" ? "bump" : id === "set" ? "set" : id === "jumpSet" ? "jumpSet" : "dive"}/></span><strong>{t(name)}</strong></button>)}</div>
+      <div className="action-buttons">{actions.map(([id, name, key, icon]) => <button key={id} className={`action-button action-${id}`} onPointerDown={press(id)} onClick={event => { if (event.detail === 0) onAction(id); }} aria-label={name}><span className="keycap">{icon ? <img src={assetUrl(`kenney/controls/${icon}.png`)} alt={key}/> : key}</span><span className="touch-action-icon" aria-hidden="true"><Icon name={id === "swing" ? "bump" : id === "set" ? "set" : id === "jumpSet" ? "jumpSet" : "dive"}/></span><strong>{t(name)}</strong>{id==='swing'&&<span className="spike-button-label" aria-hidden="true">{t('SPIKE!')}</span>}</button>)}</div>
       <div className="movement-actions"><button onPointerDown={press('jump')} onClick={event => { if (event.detail === 0) onAction('jump'); }} aria-label="Jump"><span>{t('SPACE')}</span>{touch ? <Icon name="jump"/> : t("JUMP")}</button><button onPointerDown={press('dash')} onClick={event => { if (event.detail === 0) onAction('dash'); }} aria-label="Dash"><span>{t('SHIFT')}</span>{touch ? <Icon name="dash"/> : t("DASH")}</button></div>
       <div className="energy-track" aria-label={`Stamina ${Math.round(state.energy * 100)} percent`}><i style={{ transform: `scaleX(${state.energy})` }}/></div>
     </footer>

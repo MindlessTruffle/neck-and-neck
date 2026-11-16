@@ -10,13 +10,13 @@ const read = (key, fallback) => { try { return localStorage.getItem(key) || fall
 const save = (key, value) => { try { localStorage.setItem(key, value); } catch {} };
 const localHost = () => ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
 
-export function OnlinePanel({ client, state = {}, profile }) {
+export function OnlinePanel({ client, state = {}, profile, partyOnly=false }) {
   const t=useT();
   const [endpoint, setEndpoint] = useState(() => migrateServerEndpoint(read('neck.server', import.meta.env.VITE_SERVER_URL || (localHost() ? 'ws://127.0.0.1:8787' : ''))));
   const [name, setName] = useState(() => read('neck.name', 'Tall Friend'));
   const [code, setCode] = useState('');
   const [notice, setNotice] = useState('');
-  const [partyMenu, setPartyMenu] = useState(false);
+  const [partyMenu, setPartyMenu] = useState(partyOnly);
   const room = state.room;
   const connected = state.connection === 'connected';
   const busy = ['connecting', 'reconnecting'].includes(state.connection);
@@ -31,7 +31,7 @@ export function OnlinePanel({ client, state = {}, profile }) {
   const ensureConnected = async () => { if (!connected) await connect(); };
   const setQueue = mode => { setPartyMenu(false); return invoke(async () => { await ensureConnected(); await client.joinQueue(mode); }); };
   return <section className="party-panel" role="dialog" aria-modal="true" aria-labelledby="party-title">
-    <header className="party-heading"><h1 id="party-title">{t('MULTIPLAYER')}</h1><span className="post-stamp" data-online={connected}>{connected ? '●' : busy ? '…' : '○'}</span></header>
+    <header className="party-heading"><h1 id="party-title">{t(partyOnly?'PARTY':'ONLINE')}</h1><span className="post-stamp" data-online={connected}>{connected ? '●' : busy ? '…' : '○'}</span></header>
     {connected && <div className="party-name-badge">{name}</div>}
     {!connected && <div className="party-connect">
       <label className="party-name-label">{t('YOUR NAME')}<input aria-label="Your multiplayer name" value={name} maxLength={24} onChange={event => setName(event.target.value)} placeholder="Tall Friend" autoComplete="nickname"/></label>
@@ -47,15 +47,15 @@ export function OnlinePanel({ client, state = {}, profile }) {
       <button className="post-text" onClick={() => invoke(() => client.leaveRoom())}>{t('LEAVE PARTY')}</button>
     </div> : <>
       {busy && <p className="connect-status" role="status">{t('CONNECTING…')}</p>}
-      {!partyMenu ? <div className="party-options" aria-label="Choose multiplayer mode">
+      {!partyMenu && !partyOnly ? <div className="party-options" data-queue-only="true" aria-label="Choose multiplayer mode">
         <button className="mode-choice mode-one" disabled={busy || !name.trim() || !endpoint.trim()} onClick={() => setQueue('1v1')}><span>1v1</span></button>
         <button className="mode-choice mode-two" disabled={busy || !name.trim() || !endpoint.trim()} onClick={() => setQueue('2v2')}><span>2v2</span></button>
-        <button className="mode-choice mode-party" disabled={busy || !name.trim() || !endpoint.trim()} onClick={() => setPartyMenu(true)}><span>{t('PARTY')}</span></button>
+
       </div> : <div className="party-create">
-        <h2>{t('PARTY')}</h2>
+        {!partyOnly&&<h2>{t('PARTY')}</h2>}
         <div className="post-pair"><button disabled={busy || !name.trim() || !endpoint.trim()} onClick={() => invoke(async () => { await ensureConnected(); await client.createRoom('1v1'); })}>CREATE 1v1</button><button disabled={busy || !name.trim() || !endpoint.trim()} onClick={() => invoke(async () => { await ensureConnected(); await client.createRoom('2v2'); })}>CREATE 2v2</button></div>
-        <div className="post-join"><input aria-label="Party invite code" value={code} maxLength={10} onChange={event => setCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="INVITE CODE"/><button disabled={!code || busy || !endpoint.trim()} onClick={() => invoke(async () => { await ensureConnected(); await client.joinRoom(code); })}>{t('JOIN')}</button></div>
-        <button className="party-back-button" style={{ backgroundImage: `url("${assetUrl('kenney/ui/back-button-red.png')}")` }} aria-label="Back to multiplayer modes" onClick={() => setPartyMenu(false)}><img src={assetUrl('kenney/ui/back-arrow-red.png')} alt=""/></button>
+        <div className="post-join"><input aria-label="Party invite code" value={code} maxLength={4} inputMode="numeric" pattern="[0-9]{4}" onChange={event => setCode(event.target.value.replace(/[^0-9]/g, ''))} placeholder="0000"/><button disabled={code.length!==4 || busy || !endpoint.trim()} onClick={() => invoke(async () => { await ensureConnected(); await client.joinRoom(code); })}>{t('JOIN')}</button></div>
+        {!partyOnly&&<button className="party-back-button" style={{ backgroundImage: `url("${assetUrl('kenney/ui/back-button-red.png')}")` }} aria-label="Back to multiplayer modes" onClick={() => setPartyMenu(false)}><img src={assetUrl('kenney/ui/back-arrow-red.png')} alt=""/></button>}
       </div>}
       {connected && <button className="post-text" onClick={() => client.disconnect()}>{t('DISCONNECT')}</button>}
     </>}

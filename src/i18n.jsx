@@ -1,6 +1,8 @@
 import { createContext, useContext } from 'react';
 export const LanguageContext = createContext('en');
 const entries = {
+  'ONLINE':['EN LÍNEA','EN LIGNE'],'BOTS':['BOTS','BOTS'],
+  'SPIKE!':['¡REMATE!','SMASH !'],'TAP SPIKE':['TOCA REMATE','TOUCHEZ SMASH'],'CLICK NOW':['HAZ CLIC','CLIQUEZ'],
   'PLAYERS IN QUEUE':['JUGADORES EN COLA','JOUEURS EN ATTENTE'],
   'Current power':['Poder actual','Pouvoir actuel'],'Rolling…':['Tirando…','Tirage…'],'Good luck!':['¡Buena suerte!','Bonne chance !'],'Your powers':['Tus poderes','Vos pouvoirs'],'Locked':['Bloqueado','Verrouillé'],'New power!':['¡Nuevo poder!','Nouveau pouvoir !'],'Spin':['Tirar','Tirer'],'Spinning…':['Tirando…','Tirage…'],'Spin left':['Tirada restante','Tirage restant'],'Spins left':['Tiradas restantes','Tirages restants'],'Return to lobby':['Volver al vestíbulo','Retour au salon'],'Duplicate':['Repetido','Doublon'],
   'Wider receives':['Recepciones más amplias','Réceptions facilitées'],'Floating returns':['Devoluciones flotantes','Retours flottants'],'Higher jumps':['Saltos más altos','Sauts plus hauts'],'Longer dives':['Lanzadas más largas','Plongeons plus longs'],'Wider blocks':['Bloqueos más amplios','Blocs plus larges'],'Copied':['Copiado','Copié'],'Join meadow':['Unirse a Pradera','Rejoindre Prairie'],'Join ember':['Unirse a Brasa','Rejoindre Braise'],
