@@ -42,11 +42,14 @@ try {
   const initial=await a.next('snapshot');assert.equal(initial.state.mapId,ma.mapId);assert.equal(initial.state.players.length,2);assert.ok(initial.state.players.every(p=>p.human));allFinite(initial.state);
   a.send('input',{seq:1,controls:{x:99,z:0,neckYaw:1e99,neckPitch:99,extension:9},score:[999,0],position:{x:1000}});
   const moved=await a.next('snapshot',m=>m.ack===1);assert.equal(moved.state.players[0].x,initial.state.players[0].x,'Server rejects movement during serve');assert.equal(moved.state.score[0],0);assert.ok(moved.state.players[0].x<0);assert.ok(moved.state.players[0].neck.pitch<=1.35);allFinite(moved.state);
-  a.send('input',{seq:2,controls:{serve:true,aimYaw:0,neckYaw:0,x:0}});const toss=await a.next('snapshot',m=>m.ack===2);assert.equal(toss.state.serveStage,'toss');assert.equal(toss.state.phase,'serve');
-  a.send('input',{seq:2,controls:{serve:true}});await sleep(80);const duplicate=await a.next('snapshot',m=>m.seq>toss.seq);assert.equal(duplicate.state.phase,'serve','duplicate sequence cannot strike serve');
-  a.send('input',{seq:3,controls:{serve:true}});const play=await a.next('snapshot',m=>m.ack===3);assert.equal(play.state.phase,'play');
-  a.send('input',{seq:4,controls:{jump:true}});const jump=await a.next('snapshot',m=>m.ack===4);assert.ok(jump.state.players[0]._jumpV>0);const jumpEvents=await a.next('events',m=>m.events.some(e=>e.type==='jump'));assert.equal(jumpEvents.events.filter(e=>e.type==='jump').length,1);
-  a.send('input',{seq:5,controls:{neckYaw:'infinite'}});assert.equal((await a.next('error')).code,'INPUT');
+  // Let the deliberately extreme clamped neck pose settle before testing serve sequence replay.
+  a.send('input',{seq:2,controls:{neckYaw:0,neckPitch:0,extension:0}});
+  await a.next('snapshot',m=>m.ack===2);await sleep(600);
+  a.send('input',{seq:3,controls:{serve:true,aimYaw:0,neckYaw:0,x:0}});const toss=await a.next('snapshot',m=>m.ack===3);assert.equal(toss.state.serveStage,'toss');assert.equal(toss.state.phase,'serve');
+  a.send('input',{seq:3,controls:{serve:true}});await sleep(80);const duplicate=await a.next('snapshot',m=>m.seq>toss.seq);assert.equal(duplicate.state.phase,'serve','duplicate sequence cannot strike serve');
+  a.send('input',{seq:4,controls:{serve:true}});const play=await a.next('snapshot',m=>m.ack===4);assert.equal(play.state.phase,'play');
+  a.send('input',{seq:5,controls:{jump:true}});const jump=await a.next('snapshot',m=>m.ack===5);assert.ok(jump.state.players[0]._jumpV>0);const jumpEvents=await a.next('events',m=>m.events.some(e=>e.type==='jump'));assert.equal(jumpEvents.events.filter(e=>e.type==='jump').length,1);
+  a.send('input',{seq:6,controls:{neckYaw:'infinite'}});assert.equal((await a.next('error')).code,'INPUT');
   a.ws.send('{');assert.equal((await a.next('error')).code,'FORMAT');a.send('invented');assert.equal((await a.next('error')).code,'COMMAND');
   a.send('ping',{id:42,clientTime:123});const pong=await a.next('pong');assert.equal(pong.id,42);assert.equal(pong.clientTime,123);
   const oldToken=b.welcome.sessionToken;b.close();await sleep(35);
