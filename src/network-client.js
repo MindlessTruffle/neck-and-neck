@@ -172,7 +172,7 @@ export class NetworkClient {
         break;
       }
       case 'room': this.state.room = clone(packet.room); this._notify(); break;
-      case 'queue': this.state.queue = { status: packet.status, mode: packet.mode, partySize: packet.partySize }; this._notify(); break;
+      case 'queue': this.state.queue = { status: packet.status, mode: packet.mode, partySize: packet.partySize, players: Number.isSafeInteger(packet.players)&&packet.players>=0?packet.players:null }; this._notify(); break;
       case 'match': {
         this._predictedActions.clear();
         if (typeof packet.matchId !== 'string' || !Number.isSafeInteger(packet.playerId) || ![0, 1].includes(packet.localTeam ?? packet.team)) return;

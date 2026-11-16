@@ -154,3 +154,23 @@ console.log('PASS overhaul: manual-only feet, long flop dives, set bounce, extre
 const waiting = new VolleyballGame({mode:'1v1'});waiting.start();const waitPlayer=waiting.players[0],waitX=waitPlayer.x;waiting.update(tick,{dive:true,x:1});for(let i=0;i<25;i++)waiting.update(tick);assert.equal(waitPlayer.x,waitX,'Serving player cannot dive before the toss');assert.equal(waiting.phase,'serve');
 // Isolate a middle-neck contact far below the head.
 const neckHit=live();neckHit.g.lastHitter=null;neckHit.g.touchCooldown=0;Object.assign(neckHit.p.head,{x:-4,y:5,z:0,vx:0,vy:0,vz:0});neckHit.p.neckPoints.forEach((q,i)=>Object.assign(q,{x:-4,y:1+i*.5,z:0,vx:0,vy:0,vz:0}));Object.assign(neckHit.g.ball,{x:-3.3,y:2.1,z:0,vx:-5,vy:0,vz:0});neckHit.g._ballStep(.001);assert.equal(neckHit.g.hits,1,'Middle of neck returns the ball');assert(Math.hypot(neckHit.g.ball.vx,neckHit.g.ball.vy,neckHit.g.ball.vz)<=MAX_BALL_SPEED);console.log('PASS expanded controls: serve movement lock, longer bounded dives and neck-segment returns.');
+
+// Perfect spikes require a deliberate head swing just underneath the ball.
+function spikeContact(height,active=true,action='bump'){
+ const events=[],g=new VolleyballGame({mode:'1v1',onEvent:e=>events.push(e)});g.start();g.phase='play';g.touchCooldown=0;g.lastHitter=null;
+ const p=g.players[0];Object.assign(p.head,{x:-4,y:3.5,z:0,vx:0,vy:0,vz:0});
+ p._actionTime=active?.4:0;p._swingTime=active?.35:0;p._contactAction=action;p.aimYaw=0;
+ Object.assign(g.ball,{x:-3.2,y:3.5+height,z:0,vx:-4,vy:-1,vz:0});g._ballStep(.001);
+ return {event:events.find(e=>e.type==='hit'),g};
+}
+const sweet=spikeContact(.4);assert.equal(sweet.event?.perfectSpike,true);assert.equal(sweet.event.action,'spike');
+assert(Math.hypot(sweet.g.ball.vx,sweet.g.ball.vy,sweet.g.ball.vz)<=MAX_BALL_SPEED,'Perfect stays within gentle speed cap');
+for(const sample of [spikeContact(-.3),spikeContact(1.1),spikeContact(.4,false),spikeContact(.4,true,'set')])assert.notEqual(sample.event?.perfectSpike,true);
+for(const direction of [-1,1]){
+ const g=new VolleyballGame({mode:'1v1'});g.start();const p=g.players[0],x=p.x;
+ for(let i=0;i<600;i++)g.update(1/120,{x:direction,z:direction,dive:true,jump:true,dash:true});
+ assert.equal(p.x,x);assert.equal(p.z,direction*4.4);assert.equal(p.y,0);assert.equal(p._dive,0);
+ g.update(1/120,{serve:true});const z=p.z;
+ for(let i=0;i<25;i++)g.update(1/120,{z:-direction});assert.equal(p.z,z,'Toss freezes chosen serve position');
+}
+console.log('PASS perfect spike sweet spot and bounded sideways serve positioning.');

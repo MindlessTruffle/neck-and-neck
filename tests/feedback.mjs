@@ -349,3 +349,10 @@ assert(generatedBytes < 3 * 1024 * 1024);
 assert(fs.readFileSync(new URL('../CREDITS.md', import.meta.url), 'utf8').includes('not labelled CC0'));
 console.log('PASS Generated audio: five distinct music scenes, twelve original SFX, authenticated generation manifest, valid local MP3 files under 3 MiB.');
 
+
+const perfectScene=new THREE.Scene(),perfectEffects=createVFX(perfectScene,{camera});
+perfectEffects.impact({type:'hit',action:'spike',perfectSpike:true,power:.2,x:0,y:4,z:0});
+const perfectRoot=perfectScene.getObjectByName('AnimeSportsEffects');
+assert(perfectRoot.children.some(o=>o.name==='VolleyComicCallout'&&o.visible&&o.userData.text==='PERFECT SPIKE!'));
+assert.equal(perfectRoot.children.filter(o=>o.name==='Effect_lightning'&&o.visible).length,5);
+assert(perfectEffects.cameraImpulse()>.06);perfectEffects.dispose();

@@ -287,10 +287,13 @@ for(const mode of ['1v1','2v2'])for(const team of [0,1]){
    game.update(1/120,{[server.id]:controls});locked.sample(1/120,controls,i*1000/120);
  }
  for(const p of [server,locked.ghost.players[0]]){
-   assert.deepEqual({x:p.x,y:p.y,z:p.z},origin);assert.equal(p._dive,0);assert.equal(p._jumpBuffer,0);assert.equal(p._dashBuffer,0);assert.equal(p.neck.yaw,.4);
+   assert.equal(p.x,origin.x);assert.equal(p.y,origin.y);assert(p.z>origin.z&&p.z<=4.4,'Serve positioning stays sideways within lane');assert.equal(p._dive,0);assert.equal(p._jumpBuffer,0);assert.equal(p._dashBuffer,0);assert.equal(p.neck.yaw,.4);
  }
  assert.equal(game._divePlayer(server,1,0),false);
+ origin.z=server.z;
  game.update(1/120,{[server.id]:{serve:true}});
+ locked.push({seq:2,time:250,state:snapshotState(game)},250);
+ locked.sample(1/120,controls,258);assert.equal(locked.ghost.players[0].vz,0,'Toss locks predicted sideways movement');
  for(let i=0;i<30;i++)game.update(1/120,{[server.id]:controls});
  assert.equal(game.serveStage,'toss');assert.deepEqual({x:server.x,y:server.y,z:server.z},origin);
  const receiver=game.players.find(p=>p.id!==server.id),before=receiver.z;
@@ -303,3 +306,10 @@ console.log('PASS serve lock: both teams/modes, predicted pose, toss, discarded 
 assert.equal(validateEndpoint('wss://neck-club.147.5.119.55.sslip.io'), 'wss://neck-club.147.5.119.55.nip.io/');
 assert.equal(validateEndpoint('wss://custom.example/'), 'wss://custom.example/');
 assert.throws(()=>validateEndpoint('wss://user@neck-club.147.5.119.55.sslip.io'),{code:'INVALID_ENDPOINT'});
+
+const queueCountClient=await connected();
+queueCountClient.socket.receive({type:'queue',status:'waiting',mode:'2v2',partySize:2,players:3});
+assert.equal(queueCountClient.client.getState().queue.players,3);
+queueCountClient.socket.receive({type:'queue',status:'waiting',mode:'2v2',partySize:2,players:-1});
+assert.equal(queueCountClient.client.getState().queue.players,null,'Invalid counts remain unknown');
+queueCountClient.client.dispose();

@@ -5,6 +5,7 @@ export const MAX_BALL_SPEED = 11.5;
 export const BALL_RADIUS = .41;
 export const PLAYER_BOUND_X = 17;
 export const PLAYER_BOUND_Z = 12;
+export const SERVE_LANE_Z = 4.4;
 const G = BALL_GRAVITY;
 const BALL_R = BALL_RADIUS;
 const HEAD_R = .68;
@@ -223,7 +224,7 @@ export class VolleyballGame {
     if(ability==='magnet')p.ability.active=0;
     return ability;
   }
-  _guideReturn(p,action,assisted,ability=null) {
+  _guideReturn(p,action,assisted,ability=null,perfectSpike=false) {
     if(!p.human||action==='set')return false;
     const b=this.ball,forward=p.team?-1:1;
     const flight=(b.vy+Math.sqrt(b.vy*b.vy+2*G*Math.max(0,b.y-BALL_R)))/G;
@@ -240,7 +241,7 @@ export class VolleyballGame {
       if(action==='dive'&&vy<7.6)continue;
       if(speed>MAX_BALL_SPEED||vx*forward<=0)continue;
       if(netTime>0&&netTime<t&&b.y+vy*netTime-.5*G*netTime*netTime<2.95)continue;
-      const cost=Math.abs(t-clamp(flight,1.15,1.65))+.025*speed;
+      const cost=Math.abs(t-clamp(flight,perfectSpike?.85:1.15,perfectSpike?1.2:1.65))+.025*speed;
       if(cost<bestCost){best={vx,vy,vz};bestCost=cost;}
     }
     if(best){Object.assign(b,best);return true;}
@@ -252,9 +253,11 @@ export class VolleyballGame {
       const human = p.human && this.phase !== 'attract',serveLocked=this._isServingPlayer(p);
       let input=this._inputForPlayer(p,frameInput),dx=0,dz=0;
       if(serveLocked){
-        // Keep aiming live, but never bank movement or action impulses during a serve.
-        input={...input,x:0,z:0};for(const key of ACTION_KEYS)input[key]=false;
-        for(const key of ['vx','vz','y','jump','_jumpV','_jumpBuffer','_dash','_dashBuffer','_dive','dive','_swingBuffer','_setBuffer','_jumpSetBuffer','_setBounceTime','setBounce'])p[key]=0;
+        // Allow sideways positioning before the toss, without banking action impulses.
+        input={...input,x:0,z:this.serveStage==='ready'?input.z:0};
+        if(this.serveStage!=='ready')p.vz=0;
+        for(const key of ACTION_KEYS)input[key]=false;
+        for(const key of ['vx','y','jump','_jumpV','_jumpBuffer','_dash','_dashBuffer','_dive','dive','_swingBuffer','_setBuffer','_jumpSetBuffer','_setBounceTime','setBounce'])p[key]=0;
       }
       p.energy = clamp(p.energy + dt*.13, 0, 1); p._dash = Math.max(0,p._dash-dt); p._swingCooldown = Math.max(0,p._swingCooldown-dt);
       p._dashCooldown = Math.max(0,p._dashCooldown-dt);
@@ -338,6 +341,7 @@ export class VolleyballGame {
       p.vx += (targetX-p.vx)*blend; p.vz += (targetZ-p.vz)*blend;
       const minX=p.team?.7:-PLAYER_BOUND_X, maxX=p.team?PLAYER_BOUND_X:-.7;
       p.x=clamp(p.x+p.vx*dt,minX,maxX);p.z=clamp(p.z+p.vz*dt,-PLAYER_BOUND_Z,PLAYER_BOUND_Z);
+      if(serveLocked){p.z=clamp(p.z,-SERVE_LANE_Z,SERVE_LANE_Z);if(Math.abs(p.z)>=SERVE_LANE_Z)p.vz=0;}
       if ((p.x<=minX&&p.vx<0)||(p.x>=maxX&&p.vx>0)) p.vx=0;
       if ((p.z<=-PLAYER_BOUND_Z&&p.vz<0)||(p.z>=PLAYER_BOUND_Z&&p.vz>0)) p.vz=0;
       if (Math.abs(dx)>.1) p.heading=dx>0?1:-1;
@@ -424,7 +428,7 @@ export class VolleyballGame {
         }
       }
       const physicalRadius=BALL_R+contactRadius, forgiveness=human ? (p._actionTime>0?.62:.48) : 0;
-      const action=p._dive>0?'dive':p._blockTime>0?'block':p._actionTime>0?p._contactAction:'bump';
+      let action=p._dive>0?'dive':p._blockTime>0?'block':p._actionTime>0?p._contactAction:'bump';
       const abilityReach=p.ability?.active>0?(p.ability.id==='magnet'?.65:p.ability.id==='shield'?.55:0):0;
       const min=physicalRadius+forgiveness+abilityReach+(action==='dive'?.4:action==='block'?.3:0);
       // Sweep the ball against the moving head so a fast whip cannot tunnel through it.
@@ -443,6 +447,8 @@ export class VolleyballGame {
       if(d<.0001)continue;
       const nx=dx/d,ny=dy/d,nz=dz/d, relative=(b.vx-h.vx)*nx+(b.vy-h.vy)*ny+(b.vz-h.vz)*nz;
       if(relative>=0)continue;
+      const perfectSpike=h===p.head&&p._swingTime>0&&['bump','spike'].includes(action)&&dy>=.12&&dy<=.85&&Math.hypot(dx,dz)<=1.4&&Math.cos(p.aimYaw)*(p.team?-1:1)>.15;
+      if(perfectSpike)action='spike';
       if(!this._registerTouch(p,action))return;
       // A padded volleyball absorbs most whip speed instead of becoming a cannonball.
       const paddedRelative=(b.vx-h.vx*.38)*nx+(b.vy-h.vy*.38)*ny+(b.vz-h.vz*.38)*nz;
@@ -468,12 +474,12 @@ export class VolleyballGame {
       const ability=this._shapeShot(p,action);
       const speed=Math.hypot(b.vx,b.vy,b.vz);
       if(speed>MAX_BALL_SPEED){const scale=MAX_BALL_SPEED/speed;b.vx*=scale;b.vy*=scale;b.vz*=scale;}
-      assisted=this._guideReturn(p,action,assisted,ability)||assisted;
+      assisted=this._guideReturn(p,action,assisted,ability,perfectSpike)||assisted;
       const guidedSpeed=Math.hypot(b.vx,b.vy,b.vz);if(guidedSpeed>MAX_BALL_SPEED){const scale=MAX_BALL_SPEED/guidedSpeed;b.vx*=scale;b.vy*=scale;b.vz*=scale;}
       b.spin=clamp((h.vz-b.vz)*nx-(h.vx-b.vx)*nz,-15,15);
       this.lastTeam=p.team;this.lastHitter=p.id;this.touchCooldown=.08;p._contactCooldown=.36;p._lastHitActionSerial=p._actionSerial;this.hits++;this.rallyHits++;this.lastAction=action;
       const tip=p.neckPoints[8],recoil=Math.min(2.5,impulse*.09);tip.vx-=nx*recoil;tip.vy-=ny*recoil;tip.vz-=nz*recoil;
-      this.emit('hit',{player:p.id,team:p.team,action,ability,touches:[...this.touches],x:b.x,y:b.y,z:b.z,power:clamp(.18+impulse/18,0,1),incomingSpeed:-relative,impact:impulse,rallyHits:this.rallyHits,assisted,softContact:d>physicalRadius,outgoingSpeed:Math.hypot(b.vx,b.vy,b.vz),normal:{x:nx,y:ny,z:nz},velocity:{x:b.vx,y:b.vy,z:b.vz}});break;
+      this.emit('hit',{player:p.id,team:p.team,action,perfectSpike,ability,touches:[...this.touches],x:b.x,y:b.y,z:b.z,power:clamp(.18+impulse/18,0,1),incomingSpeed:-relative,impact:impulse,rallyHits:this.rallyHits,assisted,softContact:d>physicalRadius,outgoingSpeed:Math.hypot(b.vx,b.vy,b.vz),normal:{x:nx,y:ny,z:nz},velocity:{x:b.vx,y:b.vy,z:b.vz}});break;
     }
     if(b.y<=BALL_R){const out=Math.abs(b.x)>9 || Math.abs(b.z)>5;const side=b.x<0?0:1;this._point(out?(this.lastTeam===null?1-side:1-this.lastTeam):1-side,out?'out':'floor');return;}
     if(Math.abs(b.x)>13||Math.abs(b.z)>9||b.y>22){this._point(this.lastTeam===null?0:1-this.lastTeam,'out');}

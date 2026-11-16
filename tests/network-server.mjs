@@ -72,7 +72,7 @@ try {
 
   group[0].send('room.create',{mode:'1v1'});const party=(await group[0].next('room',m=>m.room?.members.length===1)).room;
   group[1].send('room.join',{code:party.code});await group[1].next('room',m=>m.room?.members.length===2);group[0].send('room.mode',{mode:'2v2'});await group[0].next('room',m=>m.room?.code===party.code&&m.room.mode==='2v2');
-  group[0].send('queue.join',{mode:'2v2'});await group[1].next('queue',m=>m.status==='waiting');group[1].send('queue.cancel');await group[0].next('queue',m=>m.status==='cancelled');assert.equal(app.metrics().queued,0);
+  group[0].send('queue.join',{mode:'2v2'});assert.equal((await group[1].next('queue',m=>m.status==='waiting')).players,2,'Party members count as players');group[1].send('queue.cancel');await group[0].next('queue',m=>m.status==='cancelled');assert.equal(app.metrics().queued,0);
   group[0].send('queue.join',{mode:'2v2'});await group[0].next('queue',m=>m.status==='waiting');group[2].send('queue.join',{mode:'2v2'});group[3].send('queue.join',{mode:'2v2'});
   const queuedMatches=await Promise.all(group.map(p=>p.next('match')));assert.equal(new Set(queuedMatches.map(m=>m.matchId)).size,1);assert.equal(queuedMatches[0].team,queuedMatches[1].team);assert.notEqual(queuedMatches[0].team,queuedMatches[2].team);assert.equal(app.metrics().queued,0);assert.equal(queuedMatches[0].partyCode,party.code);assert.equal(queuedMatches[1].partyCode,party.code);assert.equal(queuedMatches[2].partyCode,null);
   group[0].send('room.leave');await group[1].next('match.end',()=>true,4000);for(const p of group){p.send('room.leave');await p.next('room',m=>m.room===null);}
@@ -109,3 +109,19 @@ try{
   const spoof=new WebSocket(where.url,{origin:'https://example.test',headers:{'x-forwarded-for':'203.0.113.99, 198.51.100.1'}});await assert.rejects(once(spoof,'open'),/403/);
   assert.equal(proxied.metrics().connections,2);console.log('PASS proxy: explicit trusted private proxy preserves per-user limits and ignores spoofed XFF prefixes.');
 }finally{for(const p of proxyPeers)p.close();await proxied.close();}
+
+// Queue counts include yourself, exclude other modes and update on leave/disconnect.
+const counted=createGameServer({port:0,maxConnectionsPerIP:8});const countedPeers=[];
+try{
+ const where=await counted.start();
+ for(let i=0;i<4;i++)countedPeers.push(await connect(where.url));
+ const [one,two,three,other]=countedPeers;
+ one.send('queue.join',{mode:'2v2'});assert.equal((await one.next('queue')).players,1);
+ other.send('queue.join',{mode:'1v1'});assert.equal((await other.next('queue')).players,1);
+ two.send('queue.join',{mode:'2v2'});await one.next('queue',m=>m.players===2);assert.equal((await two.next('queue')).players,2);
+ three.send('queue.join',{mode:'2v2'});await one.next('queue',m=>m.players===3);
+ three.send('queue.cancel');await one.next('queue',m=>m.players===2);
+ two.close();await one.next('queue',m=>m.players===1);
+ assert.equal(counted.metrics().queued,2);
+ console.log('PASS queue counts: mode-specific, includes self, updates on join/cancel/disconnect.');
+}finally{countedPeers.forEach(p=>p.close());await counted.close();}

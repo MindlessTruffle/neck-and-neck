@@ -6,7 +6,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { GiraffeRig } from './rig.js';
 import { createVFX } from './vfx.js';
 import { createToonStyle } from './toon.js';
-import { BALL_GRAVITY, BALL_RADIUS } from './physics.js';
+import { BALL_GRAVITY, BALL_RADIUS, SERVE_LANE_Z } from './physics.js';
 import { createRenderPerformance, renderPixelRatio } from './performance.js';
 
 const V = (x=0,y=0,z=0) => new THREE.Vector3(x,y,z);
@@ -90,6 +90,10 @@ export function createWorld({canvas,onProgress=()=>{},onLoadProgress=()=>{},redu
   const chevronGeometry=new THREE.BufferGeometry().setFromPoints([V(-.075,.58,0),V(0,.515,0),V(.075,.58,0)]);geometries.push(chevronGeometry);const chevron=new THREE.Line(chevronGeometry,new THREE.LineBasicMaterial({color:'#fff1b2',transparent:true,opacity:.9,depthTest:false,depthWrite:false}));chevron.renderOrder=1001;locator.add(chevron);
   const landing=new THREE.Group();scene.add(landing);const ringGeo=new THREE.RingGeometry(.46,.49,64);geometries.push(ringGeo);const landingRing=mesh(ringGeo,new THREE.MeshBasicMaterial({color:'#ffe5a2',transparent:true,opacity:.65,side:THREE.DoubleSide,depthWrite:false}),landing,false);landingRing.rotation.x=-Math.PI/2;
   for(let i=0;i<4;i++){const marker=box(landing,'#ffd775',Math.cos(i*Math.PI/2)*.61,.008,Math.sin(i*Math.PI/2)*.61,.13,.013,.045);marker.rotation.y=-i*Math.PI/2;marker.castShadow=false;}
+  const serveLane=new THREE.Group();serveLane.name='ServePositionLane';scene.add(serveLane);serveLane.visible=false;
+  const laneMaterial=new THREE.MeshBasicMaterial({color:'#7fffe1',transparent:true,opacity:.26,depthWrite:false,side:THREE.DoubleSide});
+  const lane=mesh(new THREE.PlaneGeometry(.9,SERVE_LANE_Z*2),laneMaterial,serveLane,false);lane.rotation.x=-Math.PI/2;
+  for(const x of [-.45,.45]){const rail=mesh(new THREE.PlaneGeometry(.045,SERVE_LANE_Z*2),new THREE.MeshBasicMaterial({color:'#c1fff0',transparent:true,opacity:.85,depthWrite:false}),serveLane,false);rail.rotation.x=-Math.PI/2;rail.position.x=x;}
   const ballShadow=mesh(new THREE.CircleGeometry(BALL_RADIUS,32),new THREE.MeshBasicMaterial({color:'#354f28',transparent:true,opacity:.21,depthWrite:false}),scene,false);ballShadow.rotation.x=-Math.PI/2;geometries.push(ballShadow.geometry);
   let fanInk=null;for(const item of animated)if(item.type==='fan'){const outline=fanInk?new THREE.Mesh(fanInk.geometry,fanInk.material):toon.ink(item.object,{width:1.7,predicate:object=>object.scale.x>=.17});if(!fanInk)fanInk=outline;else item.object.add(outline);outline.userData.isInk=true;outline.userData.procedural=true;outline.castShadow=false;outline.receiveShadow=false;}
   // Flat ink belongs on strong silhouettes. Tiny net squares, blades, clouds,
@@ -172,6 +176,8 @@ export function createWorld({canvas,onProgress=()=>{},onLoadProgress=()=>{},redu
     sky.position.copy(camera.position);for(const texture of waterMaps)texture.offset.y=-t*.16;
     const b=game?.ball||fallbackBall;ball.visible=game?.phase!=='attract';ball.position.set(b.x,Math.max(BALL_RADIUS,b.y),b.z);core.rotation.x+=dt*2;ball.rotation.z+=dt*1.8;halo.rotation.y=t*1.6;locator.visible=ball.visible;locator.position.copy(ball.position);locator.quaternion.copy(camera.quaternion);
     const landingTime=Math.max(0,((b.vy||0)+Math.sqrt((b.vy||0)**2+2*BALL_GRAVITY*Math.max(0,b.y-BALL_RADIUS)))/BALL_GRAVITY);landing.position.set(THREE.MathUtils.clamp(b.x+(b.vx||0)*landingTime,-10,10),.018,THREE.MathUtils.clamp(b.z+(b.vz||0)*landingTime,-6,6));landing.visible=ball.visible;landing.rotation.y=t*.35;landingRing.material.opacity=.43+Math.sin(t*4)*.08;
+    const servingPlayer=selectRenderPlayer(game);serveLane.visible=!menuScene&&game?.phase==='serve'&&game?.serveStage==='ready'&&servingPlayer?.id===game.server*(game.mode==='1v1'?1:2);
+    if(serveLane.visible){serveLane.position.set(servingPlayer.x,.035,0);laneMaterial.opacity=reducedMotion?.28:.25+Math.sin(t*3)*.045;}
     ballShadow.visible=ball.visible;ballShadow.position.set(b.x,.01,b.z);ballShadow.scale.setScalar(1+b.y*.08);ballShadow.material.opacity=.22/(1+b.y*.2);updateScore(game?.score);
     for(const a of animated){if(a.type==='flag'){a.object.rotation.y=Math.sin(t*4+a.seed*.5)*.2;a.object.rotation.x=Math.cos(t*3+a.seed)*.05;}if(a.type==='fan'){a.object.rotation.z=Math.sin(t*3+a.seed)*.07;a.object.position.y=a.base+Math.max(0,Math.sin(t*2.8+a.seed))*.04;}if(a.type==='cloud')a.object.position.x=a.base+Math.sin(t*.015+a.seed)*5;if(a.type==='bird'){const q=t*.12+a.seed*.85;a.object.position.set(Math.cos(q)*34,11+Math.sin(q*2+a.seed)*1.5,Math.sin(q)*29);a.object.rotation.y=-q;for(let j=0;j<2;j++)a.wings[j].rotation.z=(j?1:-1)*Math.sin(t*5+a.seed)*.5;}}
     vfx.update(dt,menuScene?null:game,t);toon.update(camera,width,height);updateMapMotion(dt,t);

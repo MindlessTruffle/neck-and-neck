@@ -66,6 +66,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
   for (let count = 2; count <= 12; count++) comicTexture(`VOLLEY ${count}!`, count % 3 === 0 ? CORAL : count % 3 === 1 ? GOLD : TEAL);
   comicTexture('EPIC RALLY!', GOLD);
   comicTexture('TOSS!', IVORY);
+  comicTexture('PERFECT SPIKE!', GOLD);
   for (const [action, label] of Object.entries(ACTION_LABELS)) comicTexture(label, action === 'spike' ? CORAL : action === 'set' ? TEAL : GOLD);
   for (const ability of Object.values(ABILITIES)) comicTexture(ability.text, ability.color);
   const callouts = [];
@@ -204,9 +205,10 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
     const type = event.type || 'hit';
     const point = vector(event.x, event.y ?? .07, event.z);
     const rawPower = Number.isFinite(event.power) ? event.power : Number.isFinite(event.strength) ? event.strength : .6;
-    const power = THREE.MathUtils.clamp(rawPower, .15, 1.5);
+    const perfect=event.perfectSpike===true;
+    const power = perfect?1.35:THREE.MathUtils.clamp(rawPower, .15, 1.5);
     const ability = ABILITIES[event.ability];
-    const tint = ability?.color || (event.team === 1 ? CORAL : GOLD);
+    const tint = perfect?GOLD:ability?.color || (event.team === 1 ? CORAL : GOLD);
     if (type === 'round') {
       volleyCount = 0; successPulse = 0; lastAbility = null; clearTrail();
       const kit = event.abilities?.find(entry => entry.player === 0);
@@ -290,7 +292,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
     successPulse = 1;
     const callout = volleyCount > 12 ? 'EPIC RALLY!' : volleyCount > 1 ? `VOLLEY ${volleyCount}!` : event.assisted || event.softContact ? 'GOOD SAVE!' : 'NICE!';
     if (ACTION_LABELS[event.action]) {
-      announce(ACTION_LABELS[event.action], point, .85, { width: event.action==='bump'?3.7:3 });
+      announce(perfect?'PERFECT SPIKE!':ACTION_LABELS[event.action], point, perfect?1.1:.85, { width: perfect?4.5:event.action==='bump'?3.7:3 });
       if (volleyCount >= 3) announce(callout, point, .72, { height: 1.65, width: 2.3 });
     } else announce(callout, point);
     tintTrail(ability?.color || (volleyCount >= 5 ? GOLD : lastHitTeam ? CORAL : TEAL));
@@ -300,7 +302,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
     // Even a gentle, assisted contact gets an unmistakable success ring and chime.
     shock(point, normal, IVORY, .7 + power * .55);
     shock(point, UP, volleyCount >= 3 ? TEAL : tint, .5 + Math.min(volleyCount, 6) * .07);
-    burst(point, tint, strong ? 26 : 12, .45 + power * .55);
+    burst(point, tint, perfect ? 40 : strong ? 26 : 12, .45 + power * .55);
     if (!reducedMotion && strong) {
       for (let i = 0; i < 2; i++) {
         const slash = acquire('slash', point, i ? tint : IVORY, .20 + i * .025);
@@ -308,8 +310,8 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
         slash.object.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * 6);
         slash.initialScale = .4; slash.growth = 3.6 * power;
       }
-      for (let i = 0; i < 3; i++) bolt(point, i % 2 ? IVORY : tint, power);
-      impulse = Math.min(.095, impulse + .045 * power);
+      for (let i = 0; i < (perfect?5:3); i++) bolt(point, i % 2 ? IVORY : tint, power);
+      impulse = Math.min(.095, impulse + (perfect?.075:.045) * power);
     }
     return { hitstop: 0 };
   }

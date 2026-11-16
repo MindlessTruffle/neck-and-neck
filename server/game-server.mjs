@@ -68,11 +68,21 @@ export function createGameServer(options={}) {
   function roomView(room) {return room?{code:room.code,mode:room.mode,hostId:room.hostId,status:room.matchId?'playing':room.queued?'queued':'lobby',members:room.members.map(s=>({id:s.id,name:s.name,team:s.team,connected:!!s.ws,host:s.id===room.hostId,loadout:s.loadout}))}:null;}
   function publishRoom(room) {if(!room)return;const message={type:'room',room:roomView(room)};for(const s of room.members)tell(s,message);}
   function touch(room){if(room)room.activity=Date.now();}
+  function publishQueues() {
+    const counts=new Map(MODES.map(mode=>[mode,queues.filter(g=>g.mode===mode).reduce((n,g)=>n+g.members.filter(s=>s.ws).length,0)]));
+    for(const group of queues){
+      const players=counts.get(group.mode);
+      if(group.publishedPlayers===players)continue;
+      group.publishedPlayers=players;
+      for(const s of group.members)tell(s,{type:'queue',status:'waiting',mode:group.mode,partySize:group.members.length,players});
+    }
+  }
   function cancelQueue(session,notify=true) {
     const group=queues.find(g=>g.members.includes(session));if(!group)return;
     queues.splice(queues.indexOf(group),1);
     for(const s of group.members){s.queued=false;if(notify)tell(s,{type:'queue',status:'cancelled',mode:group.mode,partySize:group.members.length});}
     const room=rooms.get(group.roomCode);if(room){room.queued=false;publishRoom(room);}
+    publishQueues();
   }
   function removeFromRoom(session,{notify=true}={}) {
     cancelQueue(session);const room=roomFor(session);session.roomCode=null;
@@ -167,6 +177,7 @@ export function createGameServer(options={}) {
         const room=makeRoom(mode,members);room.matchmade=true;room.parties=parties;startMatch(room);again=true;
       }
     }
+    publishQueues();
   }
   function processCommand(ws,message) {
     const now=Date.now();let session=ws.session;
@@ -253,7 +264,7 @@ export function createGameServer(options={}) {
       if(room&&(room.hostId!==session.id||room.mode!=='2v2'||message.mode!=='2v2'||room.members.length!==2||room.members.some(s=>!s.ws)))return fail(ws,'PARTY','A party queue requires a connected two-player 2v2 room and its host.');
       const members=room?[...room.members]:[session];const group={id:randomUUID(),mode:message.mode,members,roomCode:room?.code||null};
       queues.push(group);if(room)room.queued=true;
-      for(const s of members){s.queued=true;tell(s,{type:'queue',status:'waiting',mode:message.mode,partySize:members.length});}publishRoom(room);tryMatchQueues();return;
+      for(const s of members)s.queued=true;publishRoom(room);tryMatchQueues();return;
     }
     fail(ws,'COMMAND','Unknown command.');
   }
