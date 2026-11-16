@@ -447,7 +447,7 @@ export class VolleyballGame {
       if(d<.0001)continue;
       const nx=dx/d,ny=dy/d,nz=dz/d, relative=(b.vx-h.vx)*nx+(b.vy-h.vy)*ny+(b.vz-h.vz)*nz;
       if(relative>=0)continue;
-      const perfectSpike=h===p.head&&p._swingTime>0&&['bump','spike'].includes(action)&&dy>=.12&&dy<=.85&&Math.hypot(dx,dz)<=1.4&&Math.cos(p.aimYaw)*(p.team?-1:1)>.15;
+      const perfectSpike=(human||action==='spike')&&h===p.head&&p._swingTime>0&&['bump','spike'].includes(action)&&dy>=.12&&dy<=.85&&Math.hypot(dx,dz)<=1.4&&Math.cos(p.aimYaw)*(p.team?-1:1)>.15;
       if(perfectSpike)action='spike';
       if(!this._registerTouch(p,action))return;
       // A padded volleyball absorbs most whip speed instead of becoming a cannonball.
