@@ -249,7 +249,7 @@ export class GameAudio {
         case 'net': this._tone(180, this.context.currentTime, .21, 'sine', this.master, .065, 65); break;
         case 'hit': case 'impact': case 'bump': case 'spike':
           this._impact(event?.perfectSpike ? 1.2 : event?.power ?? event?.strength, event?.action);
-          if(event?.perfectSpike){const time=this.context.currentTime;this._tone(110,time,.22,'sine',this.master,.18,42);this._tone(880,time,.13,'triangle',this.master,.07,1760);}
+          if(event?.perfectSpike){this._stockSound('dash',.18);this._noise(.24,.055,1350);const time=this.context.currentTime;this._tone(110,time,.22,'sine',this.master,.18,42);this._tone(880,time,.13,'triangle',this.master,.07,1760);}
           this._rallyCount = Number.isFinite(event?.rallyHits) ? Math.max(1, Math.floor(event.rallyHits)) : this._rallyCount + 1;
           this._rallyNote(this._rallyCount, event?.assisted || event?.softContact);
           break;

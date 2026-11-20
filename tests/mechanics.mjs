@@ -50,7 +50,8 @@ const rules=live('2v2');const [a,b,c]=rules.g.players;
 assert(rules.g._registerTouch(a,'set'));rules.g.lastHitter=a.id;
 assert(rules.g._registerTouch(b,'set'));rules.g.lastHitter=b.id;
 assert(rules.g._registerTouch(a,'bump'));rules.g.lastHitter=a.id;
-assert.equal(rules.g._registerTouch(b,'bump'),false);assert.deepEqual(rules.g.score,[0,1]);assert.equal(rules.events.at(-1).reason,'four touches');
+assert(rules.g._registerTouch(b,'bump'));rules.g.lastHitter=b.id;
+assert.equal(rules.g._registerTouch(a,'bump'),false);assert.deepEqual(rules.g.score,[0,1]);assert.equal(rules.events.at(-1).reason,'five touches');
 const double=live('2v2');double.g._registerTouch(double.p,'set');double.g.lastHitter=double.p.id;
 assert.equal(double.g._registerTouch(double.p,'bump'),false);assert.equal(double.events.at(-1).reason,'double touch');
 const lingering=live('2v2');hit(lingering.g);hit(lingering.g);
@@ -174,3 +175,17 @@ for(const direction of [-1,1]){
  for(let i=0;i<25;i++)g.update(1/120,{z:-direction});assert.equal(p.z,z,'Toss freezes chosen serve position');
 }
 console.log('PASS perfect spike sweet spot and bounded sideways serve positioning.');
+
+for(const team of [0,1]){
+  function trajectory(yawOffset,perfect){
+    const g=new VolleyballGame({mode:'1v1'});g.start();
+    const p=g.players.find(player=>player.team===team),forward=team?-1:1;
+    p.human=true;p.aimYaw=(team?Math.PI:0)+yawOffset;
+    Object.assign(g.ball,{x:-2*forward,y:5.2,z:0,vx:7*forward,vy:1,vz:0});
+    assert(g._guideReturn(p,'spike',true,null,perfect));
+    return g.ball;
+  }
+  const basic=trajectory(0,false),perfect=trajectory(0,true);
+  assert(perfect.vy<0&&perfect.vy<basic.vy-1,'high perfect spikes drive down more sharply');
+  assert(trajectory(.48,true).vz*trajectory(-.48,true).vz<0,'opposite clicks choose opposite lanes on both teams');
+}

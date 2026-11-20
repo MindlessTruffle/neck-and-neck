@@ -15,7 +15,7 @@ for(const team of [0,1]){
  assert.equal(events.find(e=>e.type==='hit')?.perfectSpike,true,'Clicking during cue produces a perfect spike');
  assert.equal(perfectSpikeReady(g,p),false,'Successful contact clears cue');
 }
-for(const alter of [s=>s.g.phase='serve',s=>s.g.paused=true,s=>s.p._swingCooldown=.2,s=>s.p._contactCooldown=.1,s=>s.p._dive=.5,s=>s.p._blockTime=.3,s=>s.g.ball.y=2.8,s=>s.g.ball.z=5,s=>s.g.ball.vx=4,s=>s.p.aimYaw=Math.PI,s=>{s.g.touchTeam=0;s.g.lastHitter=s.p.id;s.g.touches=[1,0]},s=>{s.g.touchTeam=0;s.g.touches=[3,0]}]){
+for(const alter of [s=>s.g.phase='serve',s=>s.g.paused=true,s=>s.p._swingCooldown=.2,s=>s.p._contactCooldown=.1,s=>s.p._dive=.5,s=>s.p._blockTime=.3,s=>s.g.ball.y=2.8,s=>s.g.ball.z=5,s=>s.g.ball.vx=4,s=>s.p.aimYaw=Math.PI,s=>{s.g.touchTeam=0;s.g.lastHitter=s.p.id;s.g.touches=[1,0]},s=>{s.g.touchTeam=0;s.g.touches=[4,0]}]){
  const s=setup();alter(s);assert.equal(perfectSpikeReady(s.g,s.p),false);
 }
 const online=setup();online.g.touchTeam=0;online.g.lastHitter=online.p.id;online.g.touches=[1,0];

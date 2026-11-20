@@ -24,10 +24,10 @@ async function privateMatch(peers,mode){
 }
 function allFinite(value){if(typeof value==='number')assert.ok(Number.isFinite(value));else if(value&&typeof value==='object')for(const part of Object.values(value))allFinite(part);}
 assert.equal(normalizeControls({x:NaN}),null);assert.equal(normalizeControls({dive:1}),null);
-assert.deepEqual(normalizeLoadout({ability:'invented',skin:{body:'url(secret)'}}),{ability:'magnet',skin:null,cosmetics:{hat:null,face:null,back:null}});
+assert.deepEqual(normalizeLoadout({ability:'invented',skin:{body:'url(secret)'}}),{ability:'magnet',skin:null,cosmetics:{hat:null,face:null,back:null,scarf:null,goal:null}});
 assert.ok(Math.hypot(...['x','z'].map(k=>normalizeControls({x:99,z:99})[k]))<=1.00001);
 assert.throws(()=>createGameServer({production:true}),/allowlist/);
-const app=createGameServer({port:0,maxRooms:4,maxConnectionsPerIP:20,maxCommandsPerSecond:100,reconnectGraceMs:180,sessionTtlMs:10000,heartbeatMs:200,helloTimeoutMs:1000});
+const app=createGameServer({readAdmissionLoad:()=>({}),port:0,maxRooms:4,maxConnectionsPerIP:20,maxCommandsPerSecond:100,reconnectGraceMs:180,sessionTtlMs:10000,heartbeatMs:200,helloTimeoutMs:1000});
 const peers=[];let address;
 try {
   address=await app.start();
@@ -38,7 +38,16 @@ try {
   a.send('room.start');assert.equal((await a.next('error')).code,'PLAYERS_REQUIRED');
   b.send('room.join',{code:room.code});await b.next('room',m=>m.room?.members.length===2);
   b.send('room.start');assert.equal((await b.next('error')).code,'HOST_REQUIRED');
-  a.send('room.start');const [ma,mb]=await Promise.all([a.next('match'),b.next('match')]);assert.equal(ma.playerId,0);assert.equal(mb.playerId,1);assert.equal(mb.team,1);assert.equal(ma.mapId,mb.mapId);assert(['meadow','jungle','beach','volcano','mountain'].includes(ma.mapId));assert.equal(ma.partyCode,room.code);
+  a.send('room.start');const [ma,mb]=await Promise.all([a.next('match'),b.next('match')]);assert.equal(ma.playerId,0);assert.equal(mb.playerId,1);assert.equal(mb.team,1);assert.equal(ma.mapId,mb.mapId);assert(['meadow','jungle','beach','volcano','mountain','cave'].includes(ma.mapId));assert.equal(ma.partyCode,room.code);
+  const watcher=await connect(address.url,{name:'Fan'});peers.push(watcher);
+  watcher.send('spectate.list');const {games}=await watcher.next('spectate.list');
+  assert.equal(games[0].id,ma.matchId);assert.equal(games[0].code,undefined);
+  watcher.send('spectate.join',{id:ma.matchId});await watcher.next('spectate.start');await watcher.next('snapshot');
+  await a.next('viewers',m=>m.count===1);watcher.send('queue.join',{mode:'1v1'});assert.equal((await watcher.next('error')).code,'WATCHING');
+  watcher.send('spectate.leave');await watcher.next('spectate.end');await a.next('viewers',m=>m.count===0);
+  watcher.send('spectate.join',{id:ma.matchId});await watcher.next('spectate.start');
+  a.send('quickchat',{key:'mine',name:'Fake'});const chat=await b.next('events',m=>m.events.some(e=>e.type==='quickchat'));
+  assert.deepEqual(chat.events.filter(e=>e.type==='quickchat').map(e=>[e.key,e.name,e.player]),[['mine','Alfa',0]]);
   const initial=await a.next('snapshot');assert.equal(initial.state.mapId,ma.mapId);assert.equal(initial.state.players.length,2);assert.ok(initial.state.players.every(p=>p.human));allFinite(initial.state);
   a.send('input',{seq:1,controls:{x:99,z:0,neckYaw:1e99,neckPitch:99,extension:9},score:[999,0],position:{x:1000}});
   const moved=await a.next('snapshot',m=>m.ack===1);assert.equal(moved.state.players[0].x,initial.state.players[0].x,'Server rejects movement during serve');assert.equal(moved.state.score[0],0);assert.ok(moved.state.players[0].x<0);assert.ok(moved.state.players[0].neck.pitch<=1.35);allFinite(moved.state);
@@ -56,6 +65,7 @@ try {
   const resumed=await connect(address.url,{token:oldToken});peers.push(resumed);assert.equal(resumed.welcome.id,b.welcome.id);assert.equal(resumed.welcome.resumed,true);assert.equal(resumed.welcome.matchId,ma.matchId);assert.equal((await resumed.next('match')).playerId,1);await resumed.next('snapshot');
   resumed.close();const finishEvents=await a.next('events',m=>m.events.some(e=>e.type==='win'));assert.equal(finishEvents.events.find(e=>e.type==='win').team,0);
   const blast=await a.next('snapshot',m=>m.state.phase==='finished');assert.ok(blast.state.celebrationRemaining>0);
+  await watcher.next('spectate.end');watcher.close();
   const ended=await a.next('match.end',()=>true,600);assert.equal(ended.reason,'disconnect');assert.equal(ended.winner,0);await a.next('room',m=>m.room===null);
   assert.equal(app.metrics().matches,0);assert.equal(app.metrics().rooms,1);await a.next('room',m=>m.room?.status==='lobby');a.send('room.leave');await a.next('room',m=>m.room===null);
   const afterGrace=await connect(address.url,{token:oldToken});peers.push(afterGrace);assert.equal(afterGrace.welcome.resumed,true);assert.equal(afterGrace.welcome.matchId,null,'expired match must be explicitly absent on resume');await afterGrace.next('room',m=>m.room===null);afterGrace.close();
@@ -85,11 +95,11 @@ try {
   console.log('PASS server: payload/rate limits, health privacy, fixed-clock snapshots and cleanup.');
 } finally {for(const peer of peers)peer.close();await app.close();}
 
-const prod=createGameServer({port:0,production:true,allowedOrigins:['https://example.test']});
+const prod=createGameServer({readAdmissionLoad:()=>({}),port:0,production:true,allowedOrigins:['https://example.test']});
 try{const location=await prod.start();const client=await connect(location.url,{origin:'https://example.test'});assert.ok(client.welcome.sessionToken);client.close();}finally{await prod.close();}
 console.log('PASS production: explicit browser origin allowlist accepted; missing configuration rejected.');
 
-const limited=createGameServer({port:0,maxRooms:1,maxConnections:2,maxConnectionsPerIP:2,heartbeatMs:50,helloTimeoutMs:100,roomIdleMs:500});
+const limited=createGameServer({readAdmissionLoad:()=>({}),port:0,maxRooms:1,maxConnections:2,maxConnectionsPerIP:2,heartbeatMs:200,helloTimeoutMs:400,roomIdleMs:5000});
 const limitedPeers=[];
 try{
   const where=await limited.start();const one=await connect(where.url),two=await connect(where.url);limitedPeers.push(one,two);
@@ -101,7 +111,7 @@ try{
   console.log('PASS limits: room/global/per-IP capacity, disconnected party dequeue, missing hello deadline and dead-peer heartbeat.');
 }finally{for(const p of limitedPeers)p.close();await limited.close();}
 
-const proxied=createGameServer({port:0,production:true,allowedOrigins:['https://example.test'],trustProxy:true,maxConnectionsPerIP:1});
+const proxied=createGameServer({readAdmissionLoad:()=>({}),port:0,production:true,allowedOrigins:['https://example.test'],trustProxy:true,maxConnectionsPerIP:1});
 const proxyPeers=[];
 try{
   const where=await proxied.start();
@@ -111,7 +121,7 @@ try{
 }finally{for(const p of proxyPeers)p.close();await proxied.close();}
 
 // Queue counts include yourself, exclude other modes and update on leave/disconnect.
-const counted=createGameServer({port:0,maxConnectionsPerIP:8});const countedPeers=[];
+const counted=createGameServer({readAdmissionLoad:()=>({}),port:0,maxConnectionsPerIP:8});const countedPeers=[];
 try{
  const where=await counted.start();
  for(let i=0;i<4;i++)countedPeers.push(await connect(where.url));
@@ -128,3 +138,17 @@ try{
 
 assert.equal(createRoomCode(v=>['0000','0001'].includes(v),()=>0),'0002');
 assert.equal(createRoomCode(v=>v==='9999',()=>9999),'0000');
+
+// Exercise admission transitions independently of the machine running this test.
+let measuredCpu=94;
+const adaptive=createGameServer({port:0,maxConnectionsPerIP:8,readAdmissionLoad:()=>({hostCpuPercent:measuredCpu})}), fans=[];
+try{
+ const where=await adaptive.start();
+ for(let i=0;i<6;i++){const fan=await connect(where.url);fans.push(fan);fan.send('queue.join',{mode:'1v1'});}
+ await fans[5].next('queue',m=>m.players===6);
+ assert.equal(adaptive.metrics().matches,0);
+ measuredCpu=30;
+ await Promise.all(fans.map(f=>f.next('match')));
+ assert.equal(adaptive.metrics().matches,3);
+ console.log('PASS adaptive admission: high CPU holds queue, recovery opens three independent courts.');
+}finally{for(const p of fans)p.close();await adaptive.close();}

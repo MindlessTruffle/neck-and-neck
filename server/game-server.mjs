@@ -1,3 +1,4 @@
+import { QUICK_LABELS } from '../src/quick-messages.js';
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { createResourceMonitor } from './resource-monitor.mjs';
@@ -25,18 +26,35 @@ function privateAddress(address='') {const ip=address.replace(/^::ffff:/,'');ret
 
 /** Authoritative rooms, matchmaking and 120 Hz physics. No client position/score writes. */
 export function createGameServer(options={}) {
-  const config={host:'127.0.0.1',port:8787,maxRooms:8,maxConnections:64,maxConnectionsPerIP:8,maxSessions:128,
+  const config={host:'127.0.0.1',port:8787,maxRooms:Infinity,maxConnections:64,maxConnectionsPerIP:8,maxSessions:128,
     reconnectGraceMs:15000,sessionTtlMs:60000,roomIdleMs:15*60e3,matchTimeoutMs:20*60e3,
     heartbeatMs:10000,helloTimeoutMs:5000,inputStaleMs:300,maxBufferedBytes:512*1024,
     maxMessagesPerSecond:70,maxCommandsPerSecond:12,production:process.env.NODE_ENV==='production',...options};
   const origins=new Set((Array.isArray(config.allowedOrigins)?config.allowedOrigins:String(config.allowedOrigins||'').split(',')).map(v=>v.trim()).filter(Boolean));
   if(config.production&&!origins.size)throw new Error('Production requires an explicit ALLOWED_ORIGINS allowlist.');
-  for(const key of ['maxRooms','maxConnections','maxConnectionsPerIP','maxSessions'])if(!Number.isInteger(config[key])||config[key]<1)throw new Error(`Invalid ${key}`);
+  for(const key of ['maxConnections','maxConnectionsPerIP','maxSessions'])if(!Number.isInteger(config[key])||config[key]<1)throw new Error(`Invalid ${key}`);
   const sessions=new Map(),rooms=new Map(),matches=new Map(),connections=new Set(),queues=[];
   const stats={ticks:0,physicsSteps:0,snapshots:0,messages:0,rejected:0,tickMs:0,maxTickMs:0,droppedTimeMs:0};
   let timer=null,heartbeat=null,closing=false,started=false,lastTick=performance.now(),accumulator=0,snapshotElapsed=0,lastHousekeeping=0;
 
   const resources=createResourceMonitor();
+  let lastAdmission=0;
+  function canOpenCourt() {
+    const load = (options.readAdmissionLoad ?? resources.read)();
+    return matches.size < config.maxRooms &&
+      (!config.production || !matches.size || Date.now()-lastAdmission>=2100) &&
+      (load.hostCpuPercent ?? 0) < 90 && (load.processCpuCorePercent ?? 0) < 90 &&
+      (load.eventLoopP95Ms ?? 0) < 45 && (load.hostMemoryAvailableBytes ?? Infinity) > 64 * 1024 * 1024;
+  }
+  function publishViewers(match) {
+    const message = {type:'viewers', matchId:match.id, count:match.viewers.size};
+    for (const s of match.members) tell(s,message);
+  }
+  function stopWatching(session) {
+    const match=matches.get(session.watching);
+    session.watching=null;
+    if(match?.viewers.delete(session)) publishViewers(match);
+  }
   const server=http.createServer((request,response)=>{
     const path=request.url?.split('?')[0];
     if(request.method==='GET'&&(path==='/serverhealth'||path==='/serverhealth/')){
@@ -52,7 +70,7 @@ export function createGameServer(options={}) {
       const headers={'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff','vary':'Origin'};
       if(origins.has(request.headers.origin)||(!config.production&&/^http:\/\/(localhost|127\.0\.0\.1)(?::\d+)?$/.test(request.headers.origin||'')))headers['access-control-allow-origin']=request.headers.origin;
       response.writeHead(200,headers);
-      response.end(JSON.stringify({ok:!closing,servers:[{name:'Neck & Neck game server',status:closing?'stopping':'running',matches:matches.size,rooms:rooms.size,connections:connections.size,activePlayers:[...matches.values()].reduce((n,m)=>n+m.members.filter(s=>s.ws).length,0),queued:queues.reduce((n,g)=>n+g.members.length,0),maxMatches:config.maxRooms,maxConnections:config.maxConnections,physicsTargetHz:TICK_RATE,snapshotTargetHz:SNAPSHOT_RATE,resources:resources.read()}]}));return;
+      response.end(JSON.stringify({ok:!closing,servers:[{name:'Neck & Neck game server',status:closing?'stopping':'running',matches:matches.size,rooms:rooms.size,connections:connections.size,activePlayers:[...matches.values()].reduce((n,m)=>n+m.members.filter(s=>s.ws).length,0),queued:queues.reduce((n,g)=>n+g.members.length,0),admitting:canOpenCourt(),maxMatches:Number.isFinite(config.maxRooms)?config.maxRooms:null,maxConnections:config.maxConnections,physicsTargetHz:TICK_RATE,snapshotTargetHz:SNAPSHOT_RATE,resources:resources.read()}]}));return;
     }
     if(request.method==='GET'&&request.url==='/health'){
       response.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});
@@ -106,16 +124,22 @@ export function createGameServer(options={}) {
     // only the acknowledgement differs. Keep the existing JSON wire format.
     const state=JSON.stringify(snapshotState(match.game)),seq=++match.snapshotSeq,time=Date.now();stats.snapshots++;
     const prefix=JSON.stringify({type:'snapshot',matchId:match.id,seq,time}).slice(0,-1);
+    if(!one && match.viewers.size) {
+      const packet = prefix + ',"ack":-1,"state":' + state + '}';
+      for (const viewer of match.viewers) send(viewer.ws,packet);
+    }
     for(const s of one?[one]:match.members)send(s.ws,`${prefix},"ack":${s.ack},"state":${state}}`);
   }
   function flushEvents(match) {
     if(!match.events.length)return;
     const events=match.events.splice(0);const message={type:'events',matchId:match.id,events};
     for(const s of match.members)tell(s,message);
+    for(const viewer of match.viewers)tell(viewer,message);
   }
   function startMatch(room) {
+    lastAdmission=Date.now();
     const members=[...room.members].sort((a,b)=>a.team-b.team);
-    const match={id:randomUUID(),room,members,parties:room.matchmade?(room.parties||[]):[{...room,members:[...room.members]}],game:null,events:[],eventId:0,snapshotSeq:0,startedAt:Date.now(),reason:'completed',finishedAt:0};
+    const match={id:randomUUID(),room,members,parties:room.matchmade?(room.parties||[]):[{...room,members:[...room.members]}],viewers:new Set(),game:null,events:[],eventId:0,snapshotSeq:0,startedAt:Date.now(),reason:'completed',finishedAt:0};
     match.game=new VolleyballGame({mode:room.mode,onEvent:event=>{
       match.events.push({...event,id:++match.eventId});
       if(match.events.length>256)match.events.shift();
@@ -136,6 +160,8 @@ export function createGameServer(options={}) {
     if(!matches.has(match.id))return;
     const game=match.game,winner=game.score[0]===game.score[1]?null:game.score[0]>game.score[1]?0:1;
     for(const s of match.members){tell(s,{type:'match.end',matchId:match.id,reason:match.reason,winner,score:[...game.score]});s.matchId=null;s.playerId=null;s.input=noControls();s.lastSeq=s.ack=s.pendingSeq=-1;}
+    for(const viewer of match.viewers){viewer.watching=null;tell(viewer,{type:'spectate.end',matchId:match.id});}
+    match.viewers.clear();
     matches.delete(match.id);match.room.matchId=null;touch(match.room);
     // Every completed court is disposable, including private games. Results
     // and celebration continue on clients without holding server capacity.
@@ -174,7 +200,7 @@ export function createGameServer(options={}) {
         function search(index,picked,size){if(found)return;if(size===capacity(mode)){const assigned=canFit(picked,mode);if(assigned){found=picked;teams=assigned;}return;}if(size>capacity(mode))return;for(let i=index;i<candidates.length;i++)search(i+1,[...picked,candidates[i]],size+candidates[i].members.length);}
         search(0,[],0);if(!found)break;
         const replaced=new Set(found.map(g=>g.roomCode).filter(Boolean));
-        if(rooms.size-replaced.size>=config.maxRooms||matches.size>=config.maxRooms)break;
+        if(rooms.size-replaced.size>=config.maxRooms||!canOpenCourt())break;
         const parties=found.map(g=>rooms.get(g.roomCode)).filter(Boolean).map(p=>({...p,members:[...p.members]}));
         for(const group of found){queues.splice(queues.indexOf(group),1);if(group.roomCode)rooms.delete(group.roomCode);}
         const members=teams.flat();for(let t=0;t<2;t++)for(const s of teams[t])s.team=t;
@@ -197,16 +223,39 @@ export function createGameServer(options={}) {
         if(sessions.size>=config.maxSessions){fail(ws,'CAPACITY','The clubhouse is full. Try again shortly.');ws.close(1013,'Server full');return;}
         session={id:randomUUID(),token:token(),name:normalizeName(message.name),loadout:normalizeLoadout(message.loadout),ws:null,roomCode:null,matchId:null,playerId:null,team:0,queued:false,input:noControls(),lastSeq:-1,pendingSeq:-1,ack:-1,inputAt:now,disconnectedAt:0,lastSeen:now};sessions.set(session.token,session);
       }
-      if(session.ws&&session.ws!==ws){session.ws.session=null;session.ws.close(4001,'Session resumed elsewhere');}
+      if(session.ws&&session.ws!==ws){stopWatching(session);session.ws.session=null;session.ws.close(4001,'Session resumed elsewhere');}
       ws.session=session;session.ws=ws;session.disconnectedAt=0;session.lastSeen=now;
       tell(session,{type:'welcome',version:PROTOCOL_VERSION,id:session.id,sessionToken:session.token,resumed,matchId:session.matchId||null});
       const room=roomFor(session);if(room)publishRoom(room);else tell(session,{type:'room',room:null});
-      const match=matchFor(session);if(match){tell(session,matchNotice(match,session));publishSnapshot(match,session);}
+      const match=matchFor(session);if(match){tell(session,matchNotice(match,session));publishSnapshot(match,session);publishViewers(match);}
       return;
     }
     if(!session)return fail(ws,'HELLO_REQUIRED','Connect before sending commands.');
     session.lastSeen=now;
     if(message.type==='ping'){if((typeof message.id==='number'&&Number.isFinite(message.id))||(typeof message.id==='string'&&message.id.length<=64))tell(session,{type:'pong',id:message.id,clientTime:Number.isFinite(message.clientTime)?message.clientTime:null,serverTime:now});return;}
+    if(message.type==='quickchat'){
+      const match=matchFor(session);
+      if(match && !match.finishedAt && QUICK_LABELS.has(message.key) && now-(session.lastChat||0)>=900){
+        session.lastChat=now;
+        match.events.push({type:'quickchat',key:message.key,name:session.name,player:session.playerId,id:++match.eventId});
+      }
+      return;
+    }
+    if(message.type==='spectate.list'){
+      tell(session,{type:'spectate.list',games:[...matches.values()].filter(m=>!m.finishedAt).map(m=>({
+        id:m.id,mode:m.game.mode,map:m.game.mapId,score:m.game.score,teams:[0,1].map(t=>m.members.filter(s=>s.team===t).map(s=>s.name))
+      }))});return;
+    }
+    if(message.type==='spectate.leave'){stopWatching(session);tell(session,{type:'spectate.end'});return;}
+    if(message.type==='spectate.join'){
+      if(session.matchId||session.roomCode||session.queued)return fail(ws,'BUSY','Leave your court first.');
+      const match=matches.get(message.id);
+      if(!match||match.finishedAt)return fail(ws,'ENDED','This match has ended.');
+      stopWatching(session);session.watching=match.id;match.viewers.add(session);
+      tell(session,{type:'spectate.start',matchId:match.id,players:match.game.players.map(p=>({id:p.id,name:p.name}))});
+      publishViewers(match);publishSnapshot(match,session);return;
+    }
+    if(session.watching)return fail(ws,'WATCHING','Leave spectator mode first.');
     if(message.type==='profile.update'){
       if(message.name!==undefined)session.name=normalizeName(message.name);
       if(message.loadout!==undefined)session.loadout=normalizeLoadout(message.loadout);
@@ -259,7 +308,7 @@ export function createGameServer(options={}) {
       if(!room||room.hostId!==session.id||room.queued)return fail(ws,'HOST_REQUIRED','Only the host can start this room.');
       const half=capacity(room.mode)/2;
       if(room.members.length!==capacity(room.mode)||room.members.some(s=>!s.ws)||[0,1].some(t=>room.members.filter(s=>s.team===t).length!==half))return fail(ws,'PLAYERS_REQUIRED',`This match needs ${capacity(room.mode)} connected players on balanced teams.`);
-      if(matches.size>=config.maxRooms)return fail(ws,'CAPACITY','All courts are occupied. Try again shortly.');
+      if(!canOpenCourt())return fail(ws,'CAPACITY','All courts are occupied. Try again shortly.');
       startMatch(room);return;
     }
     if(message.type==='queue.join'){
@@ -301,7 +350,7 @@ export function createGameServer(options={}) {
     });
     ws.on('close',()=>{
       connections.delete(ws);const session=ws.session;
-      if(session?.ws===ws){session.ws=null;session.disconnectedAt=Date.now();session.input=noControls();cancelQueue(session);publishRoom(roomFor(session));}
+      if(session?.ws===ws){stopWatching(session);session.ws=null;session.disconnectedAt=Date.now();session.input=noControls();cancelQueue(session);publishRoom(roomFor(session));}
     });
   });
   function housekeeping(now) {

@@ -61,7 +61,7 @@ export class NetworkClient {
   onEvent(listener) { this._eventListeners.add(listener); return () => this._eventListeners.delete(listener); }
   onMatch(listener) { this._matchListeners.add(listener); return () => this._matchListeners.delete(listener); }
   _notify() { for (const listener of this._listeners) { try { listener(this.getState()); } catch {} } }
-  _status(status, error = null) { this.state.status = this.state.connection = status; this.state.error = error ? { code: error.code || 'NETWORK_ERROR', message: error.message } : null; this._notify(); }
+  _status(status, error = null) { if(status!=='connected' && this.state.watching){this.state.watching=null;this.motion.clear();} this.state.status = this.state.connection = status; this.state.error = error ? { code: error.code || 'NETWORK_ERROR', message: error.message } : null; this._notify(); }
   _error(code, message) { this.state.error = { code, message }; this._notify(); return false; }
   _emit(event) { for (const listener of this._eventListeners) { try { listener(clone(event)); } catch {} } }
 
@@ -160,6 +160,10 @@ export class NetworkClient {
     if (!packet || typeof packet.type !== 'string') return;
     this._lastHeard = this.clock();
     switch (packet.type) {
+      case 'spectate.list': this.state.liveGames=packet.games;this._notify();break;
+      case 'spectate.start': this.motion.clear();this.state.watching={id:packet.matchId,players:packet.players};this._notify();break;
+      case 'spectate.end': this.motion.clear();this.state.watching=null;this._notify();break;
+      case 'viewers': if(packet.matchId===this.state.match?.matchId){this.state.viewers=packet.count;this._notify();}break;
       case 'welcome': {
         if (packet.version !== PROTOCOL_VERSION || typeof packet.id !== 'string' || typeof packet.sessionToken !== 'string' || packet.sessionToken.length < 16 || packet.sessionToken.length > 256) { const error = failure('PROTOCOL_MISMATCH', 'This server uses an incompatible game protocol.'); this._stopConnection(false); this._connectPending?.reject(error); this._connectPending = null; this._status('offline', error); return; }
         this.timers.clearTimeout(this._welcomeTimer); this._welcomeTimer = null;
@@ -177,7 +181,7 @@ export class NetworkClient {
         this._predictedActions.clear();
         if (typeof packet.matchId !== 'string' || !Number.isSafeInteger(packet.playerId) || ![0, 1].includes(packet.localTeam ?? packet.team)) return;
         const fresh = this.state.match?.matchId !== packet.matchId;
-        if (fresh) { this.motion.clear(); this._events.clear(); this._eventOrder = []; this._pendingEdges = []; this._latestInput = normalizeControls({}); }
+        if (fresh) { this.state.viewers=0;this.motion.clear(); this._events.clear(); this._eventOrder = []; this._pendingEdges = []; this._latestInput = normalizeControls({}); }
         const match = { matchId: packet.matchId, playerId: packet.playerId, team: packet.team, localTeam: packet.localTeam ?? packet.team, mode: packet.mode, mapId: packet.mapId, partyCode: packet.partyCode || null, roomCode: packet.roomCode };
         this.state.match = match; this.state.localPlayerId = packet.playerId; this.state.localTeam = match.localTeam;
         this.motion.setLocal(packet.playerId, match.localTeam); this._notify();
@@ -185,6 +189,7 @@ export class NetworkClient {
         break;
       }
       case 'snapshot':
+        if(this.state.watching?.id===packet.matchId){this.motion.push(packet,this.clock(),this.state.rtt);break;}
         if (packet.matchId !== this.state.match?.matchId) return;
         if (this.motion.push(packet, this.clock(), this.state.rtt)) {
           if (Number.isSafeInteger(packet.ack)) this._seq = Math.max(this._seq, packet.ack);
@@ -192,7 +197,7 @@ export class NetworkClient {
         }
         break;
       case 'events':
-        if (packet.matchId !== this.state.match?.matchId || !Array.isArray(packet.events)) return;
+        if ((packet.matchId !== this.state.match?.matchId && packet.matchId !== this.state.watching?.id) || !Array.isArray(packet.events)) return;
         for (const event of packet.events.slice(0, 128)) {
           if (!event || typeof event.type !== 'string' || !Number.isSafeInteger(event.id)) continue;
           const key = `${packet.matchId}:${event.id}`;
@@ -309,6 +314,9 @@ export class NetworkClient {
     for (const key of ACTION_KEYS) this._latestInput[key] = false;
     this._pendingEdges = []; this.motion.neutralize(); this._flushInput(true);
   }
+  listGames(){return this._command('spectate.list');}
+  watchGame(id){return this._command('spectate.join',{id});}
+  leaveSpectator(){return this._command('spectate.leave');}
   setName(name) { this.options.name = normalizeName(name); return this.state.status === 'connected' ? this._command('profile.update', this.options) : true; }
   setLoadout(loadout) { this.options.loadout = normalizeLoadout(loadout); return this.state.status === 'connected' ? this._command('profile.update', this.options) : true; }
   createRoom(mode = '2v2') { return this._command('room.create', { mode }); }
@@ -330,6 +338,7 @@ export class NetworkClient {
     this._resetRoomState();
     return sent;
   }
+  sendQuickChat(key) { return this._command('quickchat', { key }); }
   joinQueue(mode = '1v1') { return this._command('queue.join', { mode }); }
   cancelQueue() { return this._command('queue.cancel'); }
 

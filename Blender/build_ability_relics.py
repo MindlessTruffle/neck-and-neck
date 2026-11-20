@@ -28,6 +28,17 @@ def tube(points,r,mat):
  c=bpy.data.curves.new('Sculpted profile','CURVE');c.dimensions='3D';c.bevel_depth=r;c.bevel_resolution=3;s=c.splines.new('POLY');s.points.add(len(points)-1)
  for p,v in zip(s.points,points):p.co=(*v,1)
  o=bpy.data.objects.new('Relic detail',c);scene.collection.objects.link(o);return finish(o,mat)
+def enamel(points,y,mat,depth=.11):
+ # A raised, chamfered enamel emblem with an authored silhouette.
+ n=len(points);vs=[(x,y+d,z) for d in [0,depth] for x,z in points]
+ faces=[tuple(range(n)),tuple(reversed(range(n,2*n)))]+[(i,n+i,n+(i+1)%n,(i+1)%n) for i in range(n)]
+ data=bpy.data.meshes.new('Enamel inlay');data.from_pydata(vs,[],faces);data.update()
+ o=bpy.data.objects.new('Enamel inlay',data);scene.collection.objects.link(o);finish(o,mat)
+ bevel=o.modifiers.new('Jeweller bevel','BEVEL');bevel.width=.022;bevel.segments=2
+ o.modifiers.new('Enamel normals','WEIGHTED_NORMAL')
+ return o
+def star(cx,z,r):
+ return [(cx+math.sin(i*math.pi/5)*r*(.48 if i%2 else 1),z+math.cos(i*math.pi/5)*r*(.48 if i%2 else 1)) for i in range(10)]
 def torus(loc,r,minor,mat,rot=(0,0,0)):
  bpy.ops.mesh.primitive_torus_add(major_segments=32,minor_segments=8,location=loc,major_radius=r,minor_radius=minor,rotation=rot);return finish(bpy.context.object,mat)
 for ident in ['magnet','feather','spring','rocket','shield']:
@@ -39,6 +50,8 @@ for ident in ['magnet','feather','spring','rocket','shield']:
    for z in [-.1,.05,.2]:torus((x,0,z),.25,.035,'gold')
   sphere((0,-.02,-.53),(.34,.27,.28),'ink');sphere((0,-.25,-.53),(.2,.08,.18),'ice')
   for x in [-1,1]:tube([(x*.94,0,.5),(x*1.17,0,.76),(x*.98,0,.8),(x*1.23,0,1.1)],.055,'ice')
+  enamel([(-.10,.91),(-.39,.29),(-.09,.29),(-.19,-.12),(.39,.58),(.09,.55),(.23,.91)],-.23,'gold')
+  for x in [-1,1]:enamel(star(x*.95,1.22,.13),-.03,'white')
  if ident=='feather':
   sphere((0,0,0),(.25,.2,.72),'gold');torus((0,0,.9),.34,.055,'gold')
   for side in [-1,1]:
@@ -46,6 +59,10 @@ for ident in ['magnet','feather','spring','rocket','shield']:
     o=sphere((side*(.25+j*.13),0,.6-j*.2),(.14,.12,.62-j*.045),'ice' if j%2 else 'white');o.rotation_euler[1]=side*(.45+j*.09)
    tube([(side*.15,0,-.7),(side*.48,0,0),(side*.65,0,.63)],.045,'gold')
   sphere((0,-.21,.2),(.19,.12,.23),'violet')
+  enamel(star(0,.87,.22),-.12,'gold')
+  for side in [-1,1]:
+   enamel([(side*.2,-.25),(side*.5,.18),(side*1.24,.97),(side*1.15,.45),(side*.9,.13),(side*.99,.13),(side*.48,-.27)],.05,'ice')
+   tube([(side*.36,-.12,-.05),(side*.72,-.12,.30),(side*1.12,-.12,.79)],.028,'gold')
  if ident=='spring':
   box((0,0,-.7),(1.2,.72,.28),'ink');box((0,-.15,-.52),(1.15,.95,.24),'gold')
   pts=[(.34*math.cos(t),.34*math.sin(t),-.35+i/100*1.1) for i,t in enumerate([i*math.pi/10 for i in range(101)])];tube(pts,.09,'gold')
@@ -53,6 +70,11 @@ for ident in ['magnet','feather','spring','rocket','shield']:
   for x in [-.5,.5]:
    tube([(x,0,-.5),(x,0,.65)],.06,'blue');sphere((x,0,.65),(.12,.12,.12),'pink')
   for x in [-.35,0,.35]:box((x,-.61,-.55),(.15,.1,.1),'ice',.02)
+  for x in [-.35,0,.35]:
+   o=box((x,-.50,-.76),(.21,.33,.14),'violet',.035)
+  for side in [-1,1]:
+   enamel([(side*.52,.09),(side*.97,.48),(side*.89,.08),(side*.66,-.14),(side*.78,-.12),(side*.54,-.40)],-.10,'ice')
+  enamel([(0,1.51),(-.33,1.22),(-.26,1.10),(0,1.28),(.26,1.10),(.33,1.22)],-.03,'gold')
  if ident=='rocket':
   for x in [-.42,.42]:
    cyl((x,0,.2),.29,1.1,'orange');cone((x,0,.98),.3,.48,'gold');cyl((x,0,-.43),.34,.2,'ink');torus((x,0,.37),.3,.04,'gold')
@@ -61,6 +83,10 @@ for ident in ['magnet','feather','spring','rocket','shield']:
    flame=cone((x,-.02,-.8),.12,.48,'ice');flame.rotation_euler[0]=math.pi
    for side in [-1,1]:o=box((x+side*.3,0,-.1),(.1,.5,.45),'gold');o.rotation_euler[1]=side*-.28
   tube([(-.42,.22,.6),(0,.3,.73),(.42,.22,.6)],.065,'ink')
+  for x in [-.42,.42]:
+   for i in range(3):box((x,-.295,.10-i*.13),(.28,.065,.052),'ink',.016)
+   side=1 if x>0 else -1
+   enamel([(x+side*.18,-.32),(x+side*.64,-.60),(x+side*.52,-.10),(x+side*.22,.28)],-.04,'pink')
  if ident=='shield':
   # A faceted canopy shield, with radial ribs, a jewel and curled handle.
   verts=[(0,-.24,.2)]+[(math.sin(i*math.pi/4)*.94,0,.2+math.cos(i*math.pi/4)*.94) for i in range(8)]
@@ -69,6 +95,10 @@ for ident in ['magnet','feather','spring','rocket','shield']:
    a=verts[i+1];b=verts[(i+1)%8+1];tube([a,b],.055,'gold');tube([(0,-.26,.2),a],.024,'ice')
   sphere((0,-.31,.2),(.3,.15,.34),'violet');sphere((0,-.43,.23),(.14,.05,.18),'ice')
   tube([(0,.15,.1),(0,.15,-.93),(.14,.15,-1.06),(.32,.15,-.95)],.085,'gold')
+  enamel([(0,1.48),(-.17,1.22),(-.44,1.32),(-.37,1.05),(.37,1.05),(.44,1.32),(.17,1.22)],-.10,'gold')
+  for side in [-1,1]:
+   enamel([(side*.35,-.15),(side*.76,.66),(side*1.30,.90),(side*1.10,.49),(side*.91,.39),(side*1.05,.40),(side*.85,.10)],-.10,'ice')
+  enamel([(0,-.83),(-.19,-.55),(0,-.64),(.19,-.55)],-.09,'gold')
 # Bake and merge each authored relic into material batches for runtime.
 for relic in [o for o in scene.objects if o.type=='EMPTY']:
  bpy.ops.object.select_all(action='DESELECT')
@@ -82,5 +112,6 @@ bpy.ops.object.select_all(action='DESELECT')
 for o in scene.objects:o.select_set(True)
 os.makedirs(os.path.join(root,'public/models/abilities'),exist_ok=True)
 bpy.ops.export_scene.gltf(filepath=os.path.join(root,'public/models/abilities/relics.glb'),export_format='GLB',use_selection=True,use_active_scene=True,export_apply=True)
+bpy.context.preferences.filepaths.save_version=0
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(root,'Blender/ability-relics.blend'))
 result={'models':5,'bytes':os.path.getsize(os.path.join(root,'public/models/abilities/relics.glb'))}

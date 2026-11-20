@@ -123,17 +123,20 @@ export class VolleyballGame {
     const tossed=!attract&&this.serveStage==='toss';
     Object.assign(this.ball, { x: p.head.x + Math.cos(yaw) * 1.5, y: tossed?Math.max(p.head.y+.3,this.ball.y):p.head.y+.3, z: p.head.z + Math.sin(yaw) * 1.5,
       vx: Math.cos(yaw) * speed, vy: 4.5 + pitch*.7+power*.8, vz: Math.sin(yaw) * speed, spin: 0 });
-    this.lastTeam = team; this.lastHitter = p.id; this.touchCooldown = .2;p._contactCooldown=.45;this.rallyHits = 0;this.touches=[0,0];this.touchTeam=null;
+    this.lastTeam = team; this.lastHitter = p.id; this.teamLastTouch=[null,null];this.teamLastTouch[team]=p.id; this.touchCooldown = .2;p._contactCooldown=.45;this.rallyHits = 0;this.touches=[0,0];this.touchTeam=null;
     this.serveQuality=clamp(1-Math.abs(power-.82),0,1);this.serveStage='ready';this.lastAction='serve';
     if (!attract) { this.phase = 'play'; this.message = 'PLAY'; this.emit('serve', { team, player:p.id,power,quality:this.serveQuality,x: this.ball.x, y: this.ball.y, z: this.ball.z }); }
   }
   _point(team, reason) {
     if (this.phase === 'attract') { this._place(); this._launch(team, true); return; }
     this.score[team]++; this.rally++; this.server = team; this.phase = 'point'; this.timer = 0; this.message = team ? 'THEIR POINT' : 'YOUR POINT';
+    if(reason==='five touches')this.message='TOUCH LIMIT · FIFTH TOUCH';
     const final=(this.score[team]>=7&&this.score[team]-this.score[1-team]>=2)||this.score[team]>=11;
     const origin=this._blastPlayers(final);
+    const scorer=this.players.find(p=>p.id===this.teamLastTouch?.[team])||this.players.find(p=>p.team===team);
+    origin.goalEffect=scorer?.cosmetics?.goal||null;
     this.emit('score', { team, score: [...this.score], reason,rallyHits:this.rallyHits,explosion:true,final,...origin });
-    if(final){this.phase='finished';this.message=team?'THEY WIN':'YOU WIN';this.emit('win',{team,score:[...this.score],explosion:true,final:true,...origin});}
+    if(final){this.phase='finished';this.message=team?'THEY WIN':'YOU WIN';this.emit('win',{team,reason,score:[...this.score],explosion:true,final:true,...origin});}
   }
   _blastPlayers(final=false) {
     const origin={x:clamp(this.ball.x,-9,9),y:Math.max(.5,Math.min(this.ball.y,4)),z:clamp(this.ball.z,-5,5)};
@@ -203,7 +206,7 @@ export class VolleyballGame {
   _registerTouch(p,action) {
     if(this.touchTeam!==p.team){this.touches=[0,0];this.touchTeam=p.team;this._lastWasBlock=false;}
     if(action==='block'){this._lastWasBlock=true;return true;}
-    if(this.touches[p.team]>=3){this._point(1-p.team,'four touches');return false;}
+    if(this.touches[p.team]>=4){this._point(1-p.team,'five touches');return false;}
     if(this.mode==='2v2'&&this.lastHitter===p.id&&this.touches[p.team]>0&&!this._lastWasBlock){this._point(1-p.team,'double touch');return false;}
     this.touches[p.team]++;this._lastWasBlock=false;return true;
   }
@@ -233,8 +236,12 @@ export class VolleyballGame {
     const b=this.ball,forward=p.team?-1:1;
     const flight=(b.vy+Math.sqrt(b.vy*b.vy+2*G*Math.max(0,b.y-BALL_R)))/G;
     const projectedX=(b.x+b.vx*flight)*forward;
-    const targetX=forward*clamp(projectedX>1?projectedX:4.5,2.4,7.2);
-    const targetZ=clamp(b.z+b.vz*flight,-3.6,3.6);
+    const depth=projectedX>1?projectedX:4.5;
+    const targetX=forward*clamp(perfectSpike?depth*.63:depth,2.4,7.2);
+    const aimedZ=b.z+Math.sin(p.aimYaw)*Math.abs(targetX-b.x)/Math.max(.5,Math.abs(Math.cos(p.aimYaw)));
+    const naturalZ=b.z+b.vz*flight;
+    const aimWeight=action==='spike'?1:Math.min(1,2*Math.abs(Math.sin(p.aimYaw)))*(action==='bump'?.65:.3);
+    const targetZ=clamp(naturalZ+(aimedZ-naturalZ)*aimWeight,-3.9,3.9);
     let best=null,bestCost=Infinity;
     // Solve bounded ballistic arcs, including low saves and backwards contacts.
     // Preserve chosen lane/depth; prioritize clearing the tape over raw power.
@@ -245,7 +252,7 @@ export class VolleyballGame {
       if(action==='dive'&&vy<7.6)continue;
       if(speed>MAX_BALL_SPEED||vx*forward<=0)continue;
       if(netTime>0&&netTime<t&&b.y+vy*netTime-.5*G*netTime*netTime<2.95)continue;
-      const cost=Math.abs(t-clamp(flight,perfectSpike?.85:1.15,perfectSpike?1.2:1.65))+.025*speed;
+      const cost=Math.abs(t-(action==='spike'?(perfectSpike?.65:.86):clamp(flight,1.15,1.65)))+.025*speed;
       if(cost<bestCost){best={vx,vy,vz};bestCost=cost;}
     }
     if(best){Object.assign(b,best);return true;}
@@ -432,7 +439,7 @@ export class VolleyballGame {
         }
       }
       const physicalRadius=BALL_R+contactRadius, forgiveness=human ? (p._actionTime>0?.62:.48) : 0;
-      let action=p._dive>0?'dive':p._blockTime>0?'block':p._actionTime>0?p._contactAction:'bump';
+      let action=p._dive>0?'dive':p._blockTime>0?'block':p._actionTime>0?p._contactAction:'set';
       const abilityReach=p.ability?.active>0?(p.ability.id==='magnet'?.65:p.ability.id==='shield'?.55:0):0;
       const min=physicalRadius+forgiveness+abilityReach+(action==='dive'?.4:action==='block'?.3:0);
       // Sweep the ball against the moving head so a fast whip cannot tunnel through it.
@@ -481,7 +488,7 @@ export class VolleyballGame {
       assisted=this._guideReturn(p,action,assisted,ability,perfectSpike)||assisted;
       const guidedSpeed=Math.hypot(b.vx,b.vy,b.vz);if(guidedSpeed>MAX_BALL_SPEED){const scale=MAX_BALL_SPEED/guidedSpeed;b.vx*=scale;b.vy*=scale;b.vz*=scale;}
       b.spin=clamp((h.vz-b.vz)*nx-(h.vx-b.vx)*nz,-15,15);
-      this.lastTeam=p.team;this.lastHitter=p.id;this.touchCooldown=.08;p._contactCooldown=.36;p._lastHitActionSerial=p._actionSerial;this.hits++;this.rallyHits++;this.lastAction=action;
+      this.lastTeam=p.team;this.lastHitter=p.id;this.teamLastTouch??=[null,null];this.teamLastTouch[p.team]=p.id;this.touchCooldown=.08;p._contactCooldown=.36;p._lastHitActionSerial=p._actionSerial;this.hits++;this.rallyHits++;this.lastAction=action;
       const tip=p.neckPoints[8],recoil=Math.min(2.5,impulse*.09);tip.vx-=nx*recoil;tip.vy-=ny*recoil;tip.vz-=nz*recoil;
       this.emit('hit',{player:p.id,team:p.team,action,perfectSpike,ability,touches:[...this.touches],x:b.x,y:b.y,z:b.z,power:clamp(.18+impulse/18,0,1),incomingSpeed:-relative,impact:impulse,rallyHits:this.rallyHits,assisted,softContact:d>physicalRadius,outgoingSpeed:Math.hypot(b.vx,b.vy,b.vz),normal:{x:nx,y:ny,z:nz},velocity:{x:b.vx,y:b.vy,z:b.vz}});break;
     }

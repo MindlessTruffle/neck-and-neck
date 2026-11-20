@@ -1,9 +1,17 @@
-import React from 'react';
-import { COSMETICS } from './cosmetics-catalog.js';
-import { purchaseCosmetic, equipCosmetic } from './profile.js';
-import { assetUrl } from './assets.js';
-import { Icon } from './icons.jsx';
+import React,{useState} from 'react';
+import {COSMETICS,getCosmetic} from './cosmetics-catalog.js';
+import {purchaseCosmetic,equipCosmetic,getSkin} from './profile.js';
+import {assetUrl} from './assets.js';
+import {Icon} from './icons.jsx';
+import {WardrobePreview,revealTryOn} from './wardrobe-preview.jsx';
+const categories={hat:'Hats',face:'Glasses',back:'Back',scarf:'Scarves',goal:'Goal FX'};
 export function CosmeticLocker({profile,onChange,onNotice}){
+ const [slot,setSlot]=useState('hat'),[selected,setSelected]=useState(profile.cosmetics.hat||'cap');
+ const item=getCosmetic(selected),owned=profile.ownedCosmetics.includes(selected),equipped=profile.cosmetics[slot]===selected;
  const apply=result=>{if(result.ok)onChange(result.profile);onNotice(result.message);};
- return <div className="cosmetic-locker"><div className="cosmetic-equipped">{['hat','face','back'].map(slot=><button key={slot} disabled={!profile.cosmetics[slot]} onClick={()=>apply(equipCosmetic(profile,null,slot))}><Icon name={profile.cosmetics[slot]?'close':'check'} size={24}/>{profile.cosmetics[slot]?`Remove ${COSMETICS.find(c=>c.id===profile.cosmetics[slot])?.name}`:`No ${slot==='back'?'backpack':slot==='face'?'glasses':'hat'}`}</button>)}</div><div className="cosmetic-grid">{COSMETICS.map((item,i)=>{const owned=profile.ownedCosmetics.includes(item.id),equipped=profile.cosmetics[item.slot]===item.id;return <article key={item.id} className={equipped?'is-equipped':''}><div className="cosmetic-art" role="img" aria-label={item.name} style={{backgroundImage:`url("${assetUrl('ui/cosmetics-atlas.png')}")`,backgroundPosition:`${i%3*50}% ${Math.floor(i/3)*100}%`}}/><h2>{item.name}</h2><button disabled={equipped||(!owned&&profile.coins<item.price)} onClick={()=>apply(purchaseCosmetic(profile,item.id))}>{equipped?'EQUIPPED':owned?'EQUIP':<><Icon name="coin" size={24}/>{item.price} · BUY</>}</button></article>;})}</div></div>;
+ function browse(s){setSlot(s);setSelected(profile.cosmetics[s]||COSMETICS.find(c=>c.slot===s).id);}
+ return <div className="locker-skin-layout wardrobe-layout"><aside className="locker-skin-preview">
+   <WardrobePreview palette={getSkin(profile.equippedSkin).palette} cosmetics={{...profile.cosmetics,[slot]:selected}} back={slot==='back'} goalPreview={slot==='goal'}/>
+   <h2>{item.name}</h2><button className="locker-primary" disabled={!owned&&profile.coins<item.price} onClick={()=>apply(equipped?equipCosmetic(profile,null,slot):purchaseCosmetic(profile,selected))}>{equipped?'REMOVE':owned?'EQUIP':<><Icon name="coin" size={20}/>{item.price} · BUY</>}</button>
+ </aside><div className="locker-collection"><nav className="wardrobe-categories" aria-label="Gear category">{Object.entries(categories).map(([s,label])=><button key={s} aria-pressed={slot===s} onClick={()=>browse(s)}>{label}</button>)}</nav><div className="locker-skin-grid">{COSMETICS.filter(c=>c.slot===slot).map(c=><button key={c.id} className={'locker-skin-card '+(selected===c.id?'is-selected':'')} aria-pressed={selected===c.id} onClick={e=>{setSelected(c.id);revealTryOn(e.currentTarget);}}><div style={{'--card-coat':c.color}}><img loading="lazy" alt="" src={assetUrl('ui/locker/'+c.id+'.webp')}/></div><b>{c.name}</b><span>{profile.cosmetics[slot]===c.id?'EQUIPPED':profile.ownedCosmetics.includes(c.id)?'OWNED':<><Icon name="coin" size={16}/>{c.price}</>}</span></button>)}</div></div></div>;
 }

@@ -244,7 +244,7 @@ timeoutTimers.advance(8000); assert.equal(await timeout, 'CONNECTION_TIMEOUT'); 
 console.log('PASS Network client: secure endpoints, honest offline state, room/profile commands,30Hz buffered edges, delayed interpolation, finite local neck prediction, bounded buffers, event deduplication, reconnect tokens/sequence, RTT and complete shutdown.');
 
 // Real WebSocket integration proves the public API speaks the authoritative server.
-const server = createGameServer({ port: 0 }); const address = await server.start();
+const server = createGameServer({ readAdmissionLoad:()=>({}), port: 0 }); const address = await server.start();
 const a = new NetworkClient({ WebSocketImpl: WebSocket, autoBind: false, storage: null }), b = new NetworkClient({ WebSocketImpl: WebSocket, autoBind: false, storage: null });
 const until = async predicate => { const deadline = Date.now() + 4000; while (!predicate()) { if (Date.now() > deadline) throw new Error('Timed out waiting for server state'); await new Promise(resolve => setTimeout(resolve, 10)); } };
 try {
@@ -265,7 +265,7 @@ try {
   assert(a.motion.snapshots.at(-1).ack >= 1);
   assert.equal(b.sample(0, {}).players.find(p => p.human).id, b.localPlayerId);
   const identity = a.localPlayerId, priorSnapshot = a.motion.latestSeq;
-  a.socket.close(); await until(() => a.getState().status === 'connected' && a.motion.latestSeq > priorSnapshot);
+  const previousSocket=a.socket;previousSocket.close(); await until(() => a.socket!==previousSocket && a.socket?.readyState===1 && a.getState().status === 'connected' && a.motion.latestSeq > priorSnapshot);
   assert.equal(a.localPlayerId, identity, 'a real reconnect preserves the assigned physical giraffe');
   a.sample(.016, { x: 1 });
   const finalEvents = []; a.onEvent(event => finalEvents.push(event)); b.leaveRoom();

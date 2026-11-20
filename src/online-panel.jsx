@@ -1,5 +1,6 @@
 import { migrateServerEndpoint } from './server-endpoint.js';
-import React, { useState } from 'react';
+import {EyeIcon,LiveCourtList} from './spectators.jsx';
+import React, { useEffect, useState } from 'react';
 import { getSkin } from './profile.js';
 import { assetUrl } from './assets.js';
 import './online-panel.css';
@@ -17,6 +18,13 @@ export function OnlinePanel({ client, state = {}, profile, partyOnly=false }) {
   const [code, setCode] = useState('');
   const [notice, setNotice] = useState('');
   const [partyMenu, setPartyMenu] = useState(partyOnly);
+  const [browsing,setBrowsing]=useState(false);
+  useEffect(()=>{
+    if(!browsing||state.connection!=='connected')return;
+    client.listGames();
+    const timer=setInterval(()=>client.listGames(),3500);
+    return ()=>clearInterval(timer);
+  },[browsing,client,state.connection]);
   const room = state.room;
   const connected = state.connection === 'connected';
   const busy = ['connecting', 'reconnecting'].includes(state.connection);
@@ -32,6 +40,7 @@ export function OnlinePanel({ client, state = {}, profile, partyOnly=false }) {
   const setQueue = mode => { setPartyMenu(false); return invoke(async () => { await ensureConnected(); await client.joinQueue(mode); }); };
   return <section className="party-panel" role="dialog" aria-modal="true" aria-labelledby="party-title">
     <header className="party-heading"><h1 id="party-title">{t(partyOnly?'PARTY':'ONLINE')}</h1><span className="post-stamp" data-online={connected}>{connected ? '●' : busy ? '…' : '○'}</span></header>
+    {browsing && connected ? <LiveCourtList games={state.liveGames} onWatch={id=>client.watchGame(id)} onBack={()=>setBrowsing(false)}/> : <>
     {connected && <div className="party-name-badge">{name}</div>}
     {!connected && <div className="party-connect">
       <label className="party-name-label">{t('YOUR NAME')}<input aria-label="Your multiplayer name" value={name} maxLength={24} onChange={event => setName(event.target.value)} placeholder="Tall Friend" autoComplete="nickname"/></label>
@@ -58,6 +67,8 @@ export function OnlinePanel({ client, state = {}, profile, partyOnly=false }) {
         {!partyOnly&&<button className="party-back-button" style={{ backgroundImage: `url("${assetUrl('kenney/ui/back-button-red.png')}")` }} aria-label="Back to multiplayer modes" onClick={() => setPartyMenu(false)}><img src={assetUrl('kenney/ui/back-arrow-red.png')} alt=""/></button>}
       </div>}
       {connected && <button className="post-text" onClick={() => client.disconnect()}>{t('DISCONNECT')}</button>}
+    </>}
+    {!partyOnly&&!queued&&!room&&<button className="post-secondary spectator-toggle" disabled={busy || !endpoint.trim()} onClick={()=>invoke(async()=>{await ensureConnected();setBrowsing(true);})}><EyeIcon/>Spectate live games</button>}
     </>}
     {(notice || state.error) && <p className="post-error" role="status">{notice || (typeof state.error === 'string' ? state.error : state.error.message)}</p>}
   </section>;

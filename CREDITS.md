@@ -35,3 +35,7 @@ Kenney logos are not used. No remote asset requests occur during gameplay.
 ## Worldbuilding terrain atlas
 
 `public/textures/world-paint-v2.png`: original OpenAI imagegen artwork created for this project (meadow grass, jungle forest floor, basalt and alpine snow). Not an official Kenney asset. Existing Kenney/Quaternius attributions above continue to apply to their source models.
+
+## Courtside wildlife
+
+Fox and alpaca spectator meshes are baked from Quaternius's CC0 Ultimate Animated Animal Pack. The other four species, torch-lit cavern, mineral paint, light shafts and courtside animations were made for this game. The Blender source script is `Blender/build_cavern_and_crowds.py`. [Original animal pack](https://quaternius.com/packs/ultimateanimatedanimals.html)

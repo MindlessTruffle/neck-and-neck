@@ -38,3 +38,8 @@
 .match-ui[data-touch=true][data-perfect-spike=true] .action-swing .touch-action-icon{display:none}
 .match-ui[data-touch=true][data-perfect-spike=true] .action-swing .spike-button-label{display:block;font:900 17px/1 var(--display);color:#382540;position:absolute;inset:0;align-content:center;text-align:center}
 @media(max-height:500px){.perfect-spike-prompt{top:25%}.perfect-spike-prompt strong{font-size:28px}.perfect-spike-prompt span{font-size:16px}}
+
+[data-advanced-moves=false] .match-ui[data-touch=true] :is(.action-jumpSet,.ability-button,.movement-actions button:last-child){display:none}
+.ability-button .power-icon{width:32px;height:32px;flex:none}
+.touch-fault{position:absolute;top:33%;left:50%;transform:translateX(-50%);padding:.5em .9em;border-radius:1em;background:#803132;color:white;font:bold clamp(15px,3vw,28px) system-ui;text-align:center;pointer-events:none}.rally-info:has(.touch-pips i:nth-child(4)[data-active=true]){color:#ffe082;filter:drop-shadow(0 1px 3px #5a1b06)}
+.meadow[data-retro=true]::after{content:"";position:absolute;inset:0;z-index:100;pointer-events:none;background:repeating-linear-gradient(0deg,transparent 0 2px,#281e450b 2px 3px)}

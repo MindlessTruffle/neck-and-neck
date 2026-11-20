@@ -41,3 +41,13 @@ for(const asset of manifest.assets.filter(a=>a.file!=='lobby.glb')){
   }
 }
 console.log('PASS added Kenney scenery stays outside the expanded player movement envelope.');
+
+const wildlifeBytes=fs.readFileSync(new URL('../public/models/worlds/courtside-wildlife.glb',import.meta.url));
+const wildlife=JSON.parse(wildlifeBytes.subarray(20,20+wildlifeBytes.readUInt32LE(12)).toString());
+assert.deepEqual(new Set(wildlife.meshes.map(mesh=>mesh.name)),new Set(['crab','capuchin','fox','alpaca','salamander','bat','meadowMill','meadowSails','mountainCable','mountainCar','volcanoVents']));
+for(const mesh of wildlife.meshes) {
+  assert.equal(mesh.primitives.length,1,mesh.name+' needs to render the whole crowd in a single batch');
+  assert.notEqual(mesh.primitives[0].attributes.COLOR_0,undefined,mesh.name+' must retain baked paint');
+}
+assert.ok(wildlifeBytes.length < 750*1024,'Crowd model budget');
+console.log('PASS six painted wildlife meshes, one material batch per species, five landmark parts, under 750 KiB.');

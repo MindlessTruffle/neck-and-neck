@@ -8,7 +8,7 @@ const until = async (predicate, timeout = 4500) => {
   const end = Date.now() + timeout;
   while (!predicate()) { assert(Date.now() < end, 'Room reset timed out'); await delay(10); }
 };
-const server = createGameServer({ port: 0, maxRooms: 1, maxCommandsPerSecond: 100, reconnectGraceMs: 150, sessionTtlMs: 500 });
+const server = createGameServer({ readAdmissionLoad:()=>({}), port: 0, maxRooms: 1, maxCommandsPerSecond: 100, reconnectGraceMs: 150, sessionTtlMs: 500 });
 const peers = Array.from({ length: 2 }, () => new NetworkClient({ WebSocketImpl: WebSocket, storage: null, autoBind: false }));
 try {
   const address = await server.start();

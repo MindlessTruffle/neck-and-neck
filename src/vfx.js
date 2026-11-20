@@ -1,3 +1,5 @@
+import { getCosmetic } from './cosmetics-catalog.js';
+import {createFlipbooks} from './contact-flipbooks.js';
 import * as THREE from 'three';
 import { BALL_RADIUS } from './physics.js';
 
@@ -5,7 +7,6 @@ const IVORY = '#fff5d4', GOLD = '#ffd35c', TEAL = '#5edbcc', CORAL = '#ff8d70';
 const UP = new THREE.Vector3(0, 1, 0);
 const vector = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const TRAIL_SAMPLES = 24;
-const ACTION_LABELS = { bump: 'BUMP!', set: 'SET!', spike: 'SPIKE!', block: 'BLOCK!', dive: 'DIVE!' };
 const ABILITIES = {
   feather: { text: 'FEATHER FLOAT!', color: '#d8f4ee' },
   spring: { text: 'SPRING STEP!', color: '#ffd56c' },
@@ -19,6 +20,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
   const root = new THREE.Group();
   root.name = 'AnimeSportsEffects';
   scene.add(root);
+  const books=createFlipbooks(root,mobile?8:16);
   const geometries = {
     ring: new THREE.TorusGeometry(1, .025, 5, 64),
     slash: new THREE.TorusGeometry(1, .055, 5, 42, Math.PI * 1.35),
@@ -59,19 +61,11 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
     calloutTextures.set(text, texture);
     return texture;
   }
-  comicTexture('NICE!', GOLD);
-  comicTexture('GOOD SAVE!', TEAL);
-  comicTexture('POINT!', IVORY);
-  comicTexture('VICTORY!', GOLD);
-  for (let count = 2; count <= 12; count++) comicTexture(`VOLLEY ${count}!`, count % 3 === 0 ? CORAL : count % 3 === 1 ? GOLD : TEAL);
-  comicTexture('EPIC RALLY!', GOLD);
-  comicTexture('TOSS!', IVORY);
+  comicTexture('SET!', TEAL);
   comicTexture('PERFECT SPIKE!', GOLD);
-  for (const [action, label] of Object.entries(ACTION_LABELS)) comicTexture(label, action === 'spike' ? CORAL : action === 'set' ? TEAL : GOLD);
-  for (const ability of Object.values(ABILITIES)) comicTexture(ability.text, ability.color);
   const callouts = [];
   for (let i = 0; i < 4; i++) {
-    const material = new THREE.SpriteMaterial({ map: calloutTextures.get('NICE!'), transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false });
+    const material = new THREE.SpriteMaterial({ map: calloutTextures.get('SET!'), transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false });
     const object = new THREE.Sprite(material);
     object.name = 'VolleyComicCallout'; object.visible = false; object.renderOrder = 25;
     root.add(object);
@@ -83,7 +77,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
     label.y = point.y + height; label.width = width; label.duringServe = duringServe;
     label.object.position.set(point.x, label.y, point.z);
     label.object.scale.set(width, width / 3.2, 1);
-    label.object.material.map = calloutTextures.get(text) || calloutTextures.get('EPIC RALLY!');
+    label.object.material.map = calloutTextures.get(text) || calloutTextures.get('SET!');
     label.object.material.opacity = 1;
     label.object.material.rotation = -.055;
     label.object.visible = true;
@@ -116,7 +110,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
   const fragments = Array.from({ length: debris.instanceMatrix.count }, () => ({ x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 1, spin: 0 }));
   const debrisTransform = new THREE.Object3D(), debrisColor = new THREE.Color();
   let debrisLife = 0, debrisDuration = 1;
-  function scoreExplosion(team, final, origin) {
+  function scoreExplosion(team, final, origin, effect) {
     const count = reducedMotion ? 8 : mobile ? (final ? 36 : 24) : final ? 88 : 58;
     debris.count = count; debris.visible = true; debrisLife = debrisDuration = final ? 2.25 : 1.65;
     for (let i = 0; i < count; i++) {
@@ -126,7 +120,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
       fragment.size = reducedMotion ? .4 : .5 + Math.random() * 1.4; fragment.spin = Math.random() * 8 - 4;
       // Score impacts read as a hot orange blast for either team; team colors
       // remain in the rings, callouts, and rally feedback around it.
-      debrisColor.set([ '#ff6a24', '#ff9a32', '#ffd15a', '#fff0a3' ][i % 4]); debris.setColorAt(i, debrisColor);
+      debrisColor.set(effect ? (i%3 ? effect.color : effect.trim) : [ '#ff6a24', '#ff9a32', '#ffd15a', '#fff0a3' ][i % 4]); debris.setColorAt(i, debrisColor);
       debrisTransform.position.set(fragment.x, fragment.y, fragment.z); debrisTransform.scale.setScalar(fragment.size); debrisTransform.rotation.set(0, 0, 0); debrisTransform.updateMatrix(); debris.setMatrixAt(i, debrisTransform.matrix);
     }
     debris.instanceMatrix.needsUpdate = true; debris.instanceColor.needsUpdate = true;
@@ -213,12 +207,13 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
       volleyCount = 0; successPulse = 0; lastAbility = null; clearTrail();
       const kit = event.abilities?.find(entry => entry.player === 0);
       const identity = ABILITIES[kit?.id];
-      if (identity) announce(identity.text, vector(kit.x ?? -4.8, kit.y ?? 3.2, kit.z ?? 0), 1.1, { height: .7, width: 3.8, duringServe: true });
+      books.clear();
+      if(identity)books.spawn(vector(kit.x,kit.y,kit.z),identity.color);
       return { hitstop: 0 };
     }
     if (type === 'ability') {
       if (!ability) return { hitstop: 0 };
-      announce(ability.text, point, .95, { width: 3.8, duringServe: true });
+      books.spawn(point,ability.color,2.7);
       const forward = vector(event.team === 1 ? -1 : 1, 0, 0);
       shock(point, event.ability === 'shield' ? forward : UP, ability.color, 1.1);
       if (event.ability === 'magnet' && !reducedMotion) for (let i = 0; i < 2; i++) bolt(point, ability.color, .7);
@@ -227,7 +222,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
     }
     if (type === 'toss') {
       volleyCount = 0; successPulse = 0; clearTrail();
-      announce('TOSS!', point, .5, { width: 2.1, duringServe: true });
+      books.spawn(point,TEAL,1.6);
       shock(point, UP, IVORY, .3);
       return { hitstop: 0 };
     }
@@ -235,16 +230,23 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
       volleyCount = 0; successPulse = 0; lastAbility = null;
       impulse = Math.min(.18, impulse + (type === 'score' ? .09 : .15));
       clearTrail();
-      scoreExplosion(event.team, type !== 'score', point);
-      burst(point.clone().setY(point.y + 1), '#ff8730', type === 'score' ? 34 : 66, 1.1, true);
-      shock(point.clone().setY(.07), UP, '#ff8730', 1.4);
-      announce(type === 'score' ? 'POINT!' : 'VICTORY!', vector(point.x, point.y + .7, point.z), type === 'score' ? .82 : 1.3, { width: type === 'score' ? 3 : 4.8 });
+      const effect=getCosmetic(event.goalEffect);
+      scoreExplosion(event.team, type !== 'score', point, effect);
+      if(effect && !reducedMotion){
+        if(effect.shape==='comet') bolt(point,effect.trim,1.1);
+        if(effect.shape==='petal') burst(point,effect.trim,24,1.3,true);
+        if(effect.shape==='frost') for(let i=0;i<3;i++)shock(point,vector(Math.cos(i*2.1),.25,Math.sin(i*2.1)),effect.trim,1.05);
+        if(effect.shape==='star') for(let i=0;i<5;i++)burst(point.clone().add(vector(Math.cos(i*1.257)*1.4,1,Math.sin(i*1.257)*1.4)),effect.trim,5,.55);
+      }
+      burst(point.clone().setY(point.y + 1), effect?.color || '#ff8730', type === 'score' ? 34 : 66, 1.1, true);
+      shock(point.clone().setY(.07), UP, effect?.color || '#ff8730', 1.4);
+      books.spawn(point,tint,type==='score'?3.2:5);
       return { hitstop: 0 };
     }
     if (/jump|land|dash|dive/.test(type)) {
       const floor = point.clone().setY(.06);
       shock(floor, UP, type === 'dash' ? TEAL : IVORY, .4);
-      if (type === 'dive') announce('DIVE!', point, .55, { height: 1, width: 2.6 });
+      if(type==='dive')books.spawn(point,TEAL,1.9);
       for (let i = 0; i < (reducedMotion ? 2 : 7); i++) {
         const effect = acquire('puff', floor, '#e8daa2', .25 + Math.random() * .15);
         if (!effect) break;
@@ -290,11 +292,12 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
     lastHitTeam = event.team ?? 0;
     lastAbility = ability || null;
     successPulse = 1;
-    const callout = volleyCount > 12 ? 'EPIC RALLY!' : volleyCount > 1 ? `VOLLEY ${volleyCount}!` : event.assisted || event.softContact ? 'GOOD SAVE!' : 'NICE!';
-    if (ACTION_LABELS[event.action]) {
-      announce(perfect?'PERFECT SPIKE!':ACTION_LABELS[event.action], point, perfect?1.1:.85, { width: perfect?4.5:event.action==='bump'?3.7:3 });
-      if (volleyCount >= 3) announce(callout, point, .72, { height: 1.65, width: 2.3 });
-    } else announce(callout, point);
+    books.spawn(point,perfect?GOLD:event.action==='block'?CORAL:event.action==='set'?IVORY:TEAL,perfect?3.6:2.1);
+    if(perfect){
+      const forward=event.team===1?-1:1;
+      books.spawn(vector(forward*.65,Math.max(2.7,point.y-.35),point.z),0xffffff,2.4,true);
+      books.ignite();announce('PERFECT SPIKE!',point,1.1,{width:4.6});}
+    else if(event.action==='set')announce('SET!',point,.72,{width:2.6});
     tintTrail(ability?.color || (volleyCount >= 5 ? GOLD : lastHitTeam ? CORAL : TEAL));
     const source = event.normal || event.velocity;
     const normal = source ? vector(source.x ?? source[0] ?? 1, source.y ?? source[1] ?? 0, source.z ?? source[2] ?? 0).normalize() : vector(1, .15, .25).normalize();
@@ -359,7 +362,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
     const ball = game?.ball, paused = !!game?.paused;
     const identity=game?.network?`online:${game.matchId??'current'}`:game;
     if ((previousGame && identity !== previousGame) || (game?.hits ?? 0) < previousHits) {
-      volleyCount = 0; successPulse = 0;
+      volleyCount = 0; successPulse = 0;books.clear();
       for (const label of callouts) { label.life = 0; label.object.visible = false; }
     }
     const reset = identity !== previousGame || game?.phase !== previousPhase || paused !== previousPaused || (game?.hits ?? 0) < previousHits || (game?.rally ?? 0) !== previousRally;
@@ -404,6 +407,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
   }
   function update(dt, game, time = clock + dt) {
     if (disposed) return;
+    books.update(dt,game,reducedMotion);
     clock = time; impulse *= Math.exp(-dt * 22);
     successPulse *= Math.exp(-dt * 6);
     if (debrisLife > 0) {
@@ -487,7 +491,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
   }
   function dispose() {
     if (disposed) return;
-    disposed = true;
+    disposed = true;books.dispose();
     root.removeFromParent();
     root.traverse(object => object.material?.dispose());
     Object.values(geometries).forEach(geometry => geometry.dispose());

@@ -3,9 +3,9 @@ import { SKINS, ABILITY_CATALOG, createProfile, validateProfile, loadProfile, sa
 
 const initial = createProfile();
 assert.equal(initial.coins, 500);
-assert.equal(SKINS.length, 8);
+assert.equal(SKINS.length, 18);
 assert.equal(ABILITY_CATALOG.reduce((sum, ability) => sum + ability.odds, 0), 100);
-assert.equal(new Set(SKINS.map(item => JSON.stringify(item.palette))).size, 8);
+assert.equal(new Set(SKINS.map(item => JSON.stringify(item.palette))).size, SKINS.length);
 const dirty = validateProfile({ ...initial, coins: -90, ownedSkins: ['cosmic', 'fake', 'cosmic'], equippedSkin: 'fake', ownedAbilities: ['rocket', 'unknown'], equippedAbility: 'shield', stats: { wins: Infinity, matches: 2.1 }, claimedRewards: Array.from({ length: 150 }, (_, i) => `reward-${i}`), secret: 'ignored' });
 assert.equal(dirty.coins, 0); assert.equal(dirty.equippedSkin, 'classic'); assert.equal(dirty.equippedAbility, 'magnet');
 assert.deepEqual(dirty.ownedSkins, ['classic', 'cosmic']); assert.deepEqual(dirty.ownedAbilities, ['magnet', 'rocket']);
@@ -39,4 +39,4 @@ assert.deepEqual(loadProfile(storage), initial); saveProfile(purchased, storage)
 storage.value = '{broken'; assert.deepEqual(loadProfile(storage), initial);
 const blocked = { getItem() { throw new Error('privacy'); }, setItem() { throw new Error('quota'); } };
 assert.deepEqual(loadProfile(blocked), initial); assert.deepEqual(saveProfile(purchased, blocked), purchased);
-console.log('PASS Profile: validated persistence, eight palettes, exact visible roll odds, duplicates/refunds, immutable transactions, ownership and reward replay protection.');
+console.log('PASS Profile: validated persistence, 18 palettes, exact visible roll odds, duplicates/refunds, immutable transactions, ownership and reward replay protection.');

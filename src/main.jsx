@@ -1,3 +1,4 @@
+import { QuickChat } from './quick-chat.jsx';
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createWorld } from './art.js';
@@ -11,6 +12,7 @@ import { MatchUI } from './match-ui.jsx';
 import { CloudLobby } from './cloud-lobby.jsx';
 import { Shop } from './shop.jsx';
 import { NetworkClient } from './network-client.js';
+import {SpectatorBar,EyeIcon,placeSpectatorCamera} from './spectators.jsx';
 import { OnlinePanel } from './online-panel.jsx';
 import { loadProfile, saveProfile, getSkin, award, ABILITY_CATALOG } from './profile.js';
 import { steerLook, cameraRelativeMovement, stickMovement, applyWalk, isBrowserShortcut } from './controls.js';
@@ -45,12 +47,15 @@ function App() {
   const menuTabRef = useRef(menuTab); menuTabRef.current = menuTab;
   const [hotspots, setHotspots] = useState(null);
   const [onlineStatus, setOnlineStatus] = useState({ connection: 'offline' });
+  const [spectatorView,setSpectatorView]=useState({mode:'Side',player:0});
+  const spectatorCamera=useRef(spectatorView);spectatorCamera.current=spectatorView;
   const [menu, setMenu] = useState('lobby');
   const [mode, setMode] = useState('2v2');
   const [difficulty, setDifficulty] = useState('club');
   const [ready, setReady] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [error, setError] = useState('');
+  const [quickMessage,setQuickMessage]=useState(null);
   const [muted, setMuted] = useState(false);
   const [music, setMusic] = useState(true);
   const [result, setResult] = useState(null);
@@ -75,6 +80,7 @@ function App() {
   const showMenu = next => {
     menuRef.current = next;
     setMenu(next);
+    if(next)setQuickMessage(null);
     clearInput();
     if (runtime.current.game) runtime.current.game.paused = Boolean(next) && next !== 'finished';
     if (runtime.current.onlineActive) runtime.current.online?.setPaused(Boolean(next) && next !== 'finished');
@@ -133,7 +139,7 @@ function App() {
           ], { duration: 320, easing: 'ease-out' });
         }
         if (event.type === 'win') {
-          setResult({ score: runtime.current.onlineActive && runtime.current.localTeam === 1 ? [...event.score].reverse() : [...event.score], winner: runtime.current.onlineActive ? (event.team === runtime.current.localTeam ? 0 : 1) : event.team });
+          setResult({ reason:event.reason,score: runtime.current.onlineActive && runtime.current.localTeam === 1 ? [...event.score].reverse() : [...event.score], winner: runtime.current.onlineActive ? (event.team === runtime.current.localTeam ? 0 : 1) : event.team });
           showMenu('finished');
         }
       } });
@@ -158,7 +164,12 @@ function App() {
         setResult(null); showMenu(null);
       });
       online.onEvent(event => {
+        if(online.state.watching){
+          if(event.type!=='quickchat'&&event.type!=='match.end'){world.impact?.(event);audio.event(event);}
+          return;
+        }
         if (!runtime.current.onlineActive) return;
+        if (event.type === 'quickchat') { setQuickMessage(event); return; }
         if (event.type === 'match.end') {
           if (menuRef.current !== 'finished') {
             const localTeam = runtime.current.localTeam;
@@ -192,7 +203,8 @@ function App() {
         const activeGame = runtime.current.onlineActive ? runtime.current.onlineView || game : game;
         if (!menuRef.current) {
           if (interaction.current.mouseDown && !interaction.current.powerSpent && now - interaction.current.pressStarted > 450 && activeGame.phase === 'play') {
-            edges.ability = true; interaction.current.powerSpent = true;
+            if(stage.current?.dataset.touch!=='true'||settingsRef.current.advancedMoves)edges.ability = true;
+            interaction.current.powerSpent = true;
           }
           const turn = (Number(keys.has('KeyL')) - Number(keys.has('KeyJ'))) * dt * 1.6;
           view.yaw += turn; aim.yaw += turn;
@@ -208,7 +220,9 @@ function App() {
             ...edges,
           };
         }
-        if (runtime.current.onlineActive) {
+        if(online.state.watching){
+          renderGame=online.motion.sample(dt,{},now,{paused:true})||motion.reset();
+        }else if (runtime.current.onlineActive) {
           renderGame = online.sample(dt, frameInput, now) || runtime.current.onlineView || motion.reset();
           runtime.current.onlineView = renderGame;
         } else if (!menuRef.current) renderGame = motion.advance(dt, frameInput);
@@ -225,6 +239,7 @@ function App() {
         // Sample actual frame duration, before the physics/animation safety clamp.
         world.updatePerformance(idleFrame ? 0 : rawDt);
         world.update(Math.min(dt, .05), renderGame, now / 1000);
+        if(online.state.watching)placeSpectatorCamera(world.camera,renderGame,spectatorCamera.current);
         world.renderer.render(world.scene, world.camera);
         frameCount++;
         if (now - fpsAt > 1000) {
@@ -400,15 +415,15 @@ function App() {
   useEffect(() => { runtime.current.audio?.setMusic(music); }, [music]);
   useEffect(() => {
     const world = runtime.current.world;
-    world?.setMenuScene?.(menu === 'lobby');
+    world?.setMenuScene?.(menu === 'lobby'&&!onlineStatus.watching);
     world?.setMenuFocus?.(menuTab === 'home' || menuTab === 'controls' ? 'play' : menuTab);
     runtime.current.audio?.setScene?.(!menu ? 'match' : menu === 'finished' ? 'results' : menuTab === 'shop' ? 'shop' : menuTab === 'abilities' ? 'abilities' : 'lobby');
-  }, [menu, menuTab, ready]);
+  }, [menu, menuTab, ready,onlineStatus.watching?.id]);
   useEffect(() => {
     runtime.current.world?.setPlayerSkin?.(0, getSkin(profile.equippedSkin).palette);
     runtime.current.world?.setPlayerCosmetics?.(profile.cosmetics);
     if (onlineStatus.connection === 'connected' && !runtime.current.onlineActive) runtime.current.online?.setLoadout({ ability: profile.equippedAbility, skin: getSkin(profile.equippedSkin).palette, cosmetics: profile.cosmetics });
-  }, [profile.equippedSkin, profile.equippedAbility, profile.cosmetics.hat, profile.cosmetics.face, profile.cosmetics.back, ready, onlineStatus.connection]);
+  }, [profile.equippedSkin, profile.equippedAbility, profile.cosmetics.hat, profile.cosmetics.face, profile.cosmetics.back, profile.cosmetics.scarf, profile.cosmetics.goal, ready, onlineStatus.connection]);
   useEffect(() => {
     const media = window.matchMedia('(pointer: coarse), (max-width: 699px)');
     const change = () => { if (touchOverride.current === null) setTouch(media.matches); };
@@ -526,7 +541,7 @@ function App() {
     interaction.current.touches.delete(event.pointerId);
   };
 
-  return <LanguageContext.Provider value={settings.language}><main ref={stage} className="meadow" data-camera="mouse-shoulder" data-playing={!menu} data-mouse-focus={mouseFocused} data-touch={touch}>
+  return <LanguageContext.Provider value={settings.language}><main ref={stage} data-retro={settings.retroPixels} data-advanced-moves={settings.advancedMoves} className="meadow" data-camera="mouse-shoulder" data-playing={!menu} data-mouse-focus={mouseFocused} data-touch={touch}>
     <canvas ref={canvas} tabIndex={menu ? -1 : 0} aria-label="Mouse swings physical giraffe neck; high shoulder camera gently follows. WASD moves. Click returns ball or serves. Hold click for equipped power. Q set, E jump set, V flop dive, X ability, Space jump, Escape pause." onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onLostPointerCapture={pointerUp} onContextMenu={event => event.preventDefault()} />
     {settings.showFps && <div className="fps-counter">{Math.round(runtime.current.world?.performance.averageFps || 60)} FPS</div>}
     {(menuTab === 'options' && menu === 'lobby' || optionsOpen) && <div className="options-overlay"><Options value={settings} onChange={value => setSettings(saveSettings(value))} onClose={() => { setOptionsOpen(false); setMenuTab('home'); }} onFullscreen={toggleFullscreen}/></div>}
@@ -539,9 +554,12 @@ function App() {
         <small>{captureFailed ? 'Embedded preview? Drag to swing, or open in Chrome / Edge.' : 'Swing neck · camera follows'}</small>
       </button>}
       {runtime.current.onlineActive && <div className="online-match-status" role="status">{onlineStatus.connection === 'connected' ? `ONLINE / ${runtime.current.localTeam === 0 ? 'MEADOW' : 'EMBER'} / ${Math.round(onlineStatus.rtt || 0)} ms` : onlineStatus.connection === 'reconnecting' || onlineStatus.connection === 'connecting' ? 'CONNECTION LOST / REJOINING CLUB...' : `OFFLINE / ${onlineStatus.error?.message || 'Return to Party Post to reconnect.'}`}</div>}
+      <QuickChat message={quickMessage} send={key=>{if(runtime.current.onlineActive)runtime.current.online.sendQuickChat(key);else setQuickMessage({key,name:'You'});}}/>
+      {runtime.current.onlineActive && <div className="viewer-count" aria-label={`${onlineStatus.viewers||0} viewers`}><EyeIcon/>{onlineStatus.viewers||0}</div>}
       <MatchUI state={match} onAction={action} onPause={() => showMenu('pause')} onWalk={(walk, id) => applyWalk(interaction.current, walk, `stick:${id}`)} touch={touch}/>
     </>}
-    {menu === 'lobby' && <CloudLobby error={error} onReload={() => location.reload()} profile={profile} skinName={getSkin(profile.equippedSkin).name} abilityName={ABILITY_CATALOG.find(item => item.id === profile.equippedAbility)?.name || profile.equippedAbility} hotspots={hotspots} onFocus={id => runtime.current.world?.hoverMenu(id)}
+    {onlineStatus.watching && <SpectatorBar watching={onlineStatus.watching} view={spectatorView} onView={setSpectatorView} onLeave={()=>runtime.current.online.leaveSpectator()}/>}
+    {menu === 'lobby' && !onlineStatus.watching && <CloudLobby error={error} onReload={() => location.reload()} profile={profile} skinName={getSkin(profile.equippedSkin).name} abilityName={ABILITY_CATALOG.find(item => item.id === profile.equippedAbility)?.name || profile.equippedAbility} hotspots={hotspots} onFocus={id => runtime.current.world?.hoverMenu(id)}
       onSelect={selectMenu} view={menuTab} onClose={() => { if (menuTab === 'online'||menuTab==='play') { runtime.current.online?.cancelQueue(); if(!runtime.current.online?.getState().room)runtime.current.online?.disconnect(); } setMenuTab('home'); }}
       muted={muted} music={music} touch={touch} onMuted={() => setMuted(value => !value)} onMusic={() => setMusic(value => !value)}
       onTouch={() => { touchOverride.current = !touch; setTouch(!touch); }} onFullscreen={toggleFullscreen} ready={ready} progress={loadingProgress} panelRef={panel}>

@@ -3,7 +3,7 @@ import { VolleyballGame, BALL_GRAVITY, BALL_RADIUS, MAX_BALL_SPEED } from '../sr
 const near = (a,b,t=.03) => assert.ok(Math.abs(a-b)<t, `${a} differs from ${b}`);
 function impact(headV=0, zOffset=0) {
  const g=new VolleyballGame({mode:'1v1'});g.start();g.phase='play';g.touchCooldown=0;g.lastHitter=null;
- const p=g.players[0];Object.assign(p.head,{x:-4,y:3,z:0,vx:headV,vy:0,vz:0});
+ const p=g.players[0];p._actionTime=.4;p._contactAction='bump';Object.assign(p.head,{x:-4,y:3,z:0,vx:headV,vy:0,vz:0});
  Object.assign(g.ball,{x:-3.2,y:3,z:zOffset,vx:-5,vy:0,vz:0});g._ballStep(1/1000);return g.ball;
 }
 const still=impact(), moving=impact(4), angled=impact(0,.35);
@@ -47,7 +47,7 @@ const whip=new VolleyballGame({mode:'1v1'});whip.start();whip.phase='play';Objec
 for(let i=0;i<60;i++){whip.update(1/120,{neckYaw:0,extension:.3,swing:i===0});maxWhip=Math.max(maxWhip,whip.players[0].head.vx);}assert(maxWhip>2,'swing physically moves the head');
 let impactEvent;const impactGame=new VolleyballGame({mode:'1v1',onEvent:e=>{if(e.type==='hit')impactEvent=e}});impactGame.start();impactGame.phase='play';impactGame.lastHitter=null;impactGame.touchCooldown=0;
 const impactPlayer=impactGame.players[0];Object.assign(impactPlayer.head,{x:-4,y:3,z:0,vx:4,vy:0,vz:0});Object.assign(impactGame.ball,{x:-3.2,y:3,z:0,vx:-5,vy:0,vz:0});impactGame._ballStep(.001);
-assert(impactEvent.incomingSpeed>0&&impactEvent.impact>0);assert(impactEvent.normal.x>0&&impactEvent.velocity.x>0);assert(impactPlayer.neckPoints[8].vx<0,'impact recoils the chain');
+assert(impactEvent.incomingSpeed>0&&impactEvent.impact>0);assert.equal(impactEvent.action,"set");assert(impactEvent.normal.x>0&&impactEvent.velocity.y>0);assert(impactPlayer.neckPoints[8].vx<0,'impact recoils the chain');
 console.log('PASS: independent neck control, chain length, overshoot, whip velocity and impact recoil');
 
 // Ability presses shortly before landing/recovery are retained, then consumed once.
@@ -76,7 +76,7 @@ console.log('PASS: landing/recovery buffers, expired inputs, directional eased d
 const fast=new VolleyballGame({mode:'1v1'});fast.start();fast.phase='play';fast.lastHitter=null;fast.touchCooldown=0;
 Object.assign(fast.players[0].head,{x:-4,y:3,z:0,vx:0,vy:0,vz:0});
 Object.assign(fast.ball,{x:-5.2,y:3,z:0,vx:300,vy:0,vz:0});fast._ballStep(.01);
-assert.equal(fast.hits,1,'fast ball cannot tunnel through head');assert(fast.ball.vx>0,'rescued contact is guided toward opponent court');
+assert.equal(fast.hits,1,'fast ball cannot tunnel through head');assert(fast.ball.vy>0,'passive save sets upward');
 const falling=new VolleyballGame({mode:'1v1'});falling.start();falling.phase='play';falling.lastHitter=null;falling.touchCooldown=0;
 Object.assign(falling.players[0].head,{x:-4,y:3,z:0,vx:0,vy:0,vz:0});
 Object.assign(falling.ball,{x:-4,y:5,z:0,vx:0,vy:-600,vz:0});falling._ballStep(.01);
@@ -114,12 +114,12 @@ const gentle=paddedHit({offset:.8,headSpeed:4}),hard=paddedHit({offset:.8,headSp
 assert(gentle.game.ball.vx<6,'ordinary four m/s head motion does not fire a cannonball');
 assert(hard.event.outgoingSpeed<=MAX_BALL_SPEED+1e-9,'extreme whips obey the post-hit speed cap');
 assert(Math.hypot(fast.ball.vx,fast.ball.vy,fast.ball.vz)<=MAX_BALL_SPEED+1e-9,'extreme incoming speed is absorbed');
-const returned=forgiving.game.ball;
+const returned=paddedHit({swing:.2}).game.ball;
 const landTime=(returned.vy+Math.sqrt(returned.vy**2+2*BALL_GRAVITY*(returned.y-BALL_RADIUS)))/BALL_GRAVITY;
 assert(returned.x+returned.vx*landTime>1,'soft front receive reaches opposing court');
 const netTime=-returned.x/returned.vx;
 assert(returned.y+returned.vy*netTime-.5*BALL_GRAVITY*netTime**2>2.6,'assisted arc clears tape');
-const back=paddedHit({offset:.8,backward:true});assert.equal(back.event.assisted,true);assert(back.game.ball.vx>0,'backward contacts also receive court guidance');
+const back=paddedHit({offset:.8,backward:true,swing:.2});assert.equal(back.event.assisted,true);assert(back.game.ball.vx>0,'backward contacts also receive court guidance');
 assert(BALL_GRAVITY<18&&BALL_GRAVITY>0,'ball floats longer without changing player jump gravity');
 const serveFloat=new VolleyballGame({mode:'1v1'});serveFloat.start();serveFloat.update(1/120,{serve:true});serveFloat.update(1/120,{serve:true});
 assert(Math.hypot(serveFloat.ball.vx,serveFloat.ball.vz)<7,'serve horizontal speed is reduced');

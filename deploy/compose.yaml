@@ -9,7 +9,6 @@ services:
       HOST: 0.0.0.0
       PORT: 8787
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?Set ALLOWED_ORIGINS in deploy/.env}
-      MAX_ROOMS: ${MAX_ROOMS:-8}
       MAX_CONNECTIONS: ${MAX_CONNECTIONS:-64}
       TRUST_PROXY: "true"
     read_only: true

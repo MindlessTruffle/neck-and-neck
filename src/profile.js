@@ -1,4 +1,4 @@
-import { COSMETICS, cleanCosmetics } from './cosmetics-catalog.js';
+import { COSMETICS, SLOTS, cleanCosmetics } from './cosmetics-catalog.js';
 export const PROFILE_VERSION = 1;
 export const PROFILE_KEY = 'neck-and-neck.profile.v1';
 export const ROLL_COST = 100;
@@ -14,6 +14,16 @@ export const SKINS = Object.freeze([
   skin('glacier', 'Frost Front', 380, 'Rare', 'Ice-blue spots. Unreasonably cool under pressure.', { body: '#bfdee5', spots: '#6b9fb5', muzzle: '#eefaf2', scarf: '#3fa8a1', accent: '#f5dd90' }),
   skin('royal', 'Royal Rally', 520, 'Epic', 'Lavender velvet colours and a gold club scarf.', { body: '#b3a1ce', spots: '#685188', muzzle: '#eadcf0', scarf: '#ca9b45', accent: '#ffe8a4' }),
   skin('cosmic', 'Afterglow', 850, 'Legendary', 'Deep-sea spots with electric candy-colour trim.', { body: '#263d47', spots: '#4f7886', muzzle: '#afdadb', scarf: '#e883a9', accent: '#91e9cd' }),
+  skin('ember', 'Emberheart', 150, 'Epic', '', { body: '#f89038', spots: '#75344d', muzzle: '#ffdda3', scarf: '#382d54', accent: '#ffeb64' }),
+  skin('kelp', 'Kelp Current', 180, 'Rare', '', { body: '#51b8a9', spots: '#245766', muzzle: '#edf7cb', scarf: '#e78657', accent: '#eeda75' }),
+  skin('thunder', 'Thunderhead', 210, 'Rare', '', { body: '#7886cd', spots: '#353050', muzzle: '#d1d6ff', scarf: '#eac443', accent: '#80f1eb' }),
+  skin('obsidian', 'Obsidian', 240, 'Epic', '', { body: '#414054', spots: '#e06b52', muzzle: '#b8a5af', scarf: '#c04d79', accent: '#f7bd72' }),
+  skin('orchid', 'Orchid Mist', 270, 'Rare', '', { body: '#eb9ee4', spots: '#814b9c', muzzle: '#f9dbec', scarf: '#509c94', accent: '#f8d378' }),
+  skin('sorbet', 'Lemon Sorbet', 300, 'Rare', '', { body: '#f4de85', spots: '#e6a75b', muzzle: '#fff4cb', scarf: '#8acbbd', accent: '#ef896e' }),
+  skin('bamboo', 'Bamboo Grove', 330, 'Epic', '', { body: '#afc798', spots: '#497a68', muzzle: '#f4e6b7', scarf: '#83544b', accent: '#f3ae52' }),
+  skin('coral', 'Coral Reef', 360, 'Rare', '', { body: '#f58d86', spots: '#bd536a', muzzle: '#ffd9b8', scarf: '#388e9e', accent: '#f4e495' }),
+  skin('moon', 'Moon Rabbit', 390, 'Rare', '', { body: '#d0cbdc', spots: '#8b80a4', muzzle: '#f8eedb', scarf: '#4b527f', accent: '#f3ce79' }),
+  skin('sunstone', 'Sunstone', 420, 'Epic', '', { body: '#e6a457', spots: '#844d54', muzzle: '#ffe0b3', scarf: '#a74640', accent: '#fff094' }),
 ]);
 
 export const ABILITY_CATALOG = Object.freeze([
@@ -146,7 +156,7 @@ export function purchaseCosmetic(raw,id){
 }
 export function equipCosmetic(raw,id,slot){
  const profile=validateProfile(raw),item=COSMETICS.find(c=>c.id===id);
- if(id===null&&['hat','face','back'].includes(slot)){profile.cosmetics[slot]=null;return outcome(true,profile,'Cosmetic removed.');}
+ if(id===null&&SLOTS.includes(slot)){profile.cosmetics[slot]=null;return outcome(true,profile,'Cosmetic removed.');}
  if(!item||!profile.ownedCosmetics.includes(id))return outcome(false,profile,'Unlock this cosmetic first.');
  profile.cosmetics[item.slot]=id;return outcome(true,profile,`${item.name} equipped.`,{item});
 }

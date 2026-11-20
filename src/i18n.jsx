@@ -1,6 +1,11 @@
 import { createContext, useContext } from 'react';
 export const LanguageContext = createContext('en');
 const entries = {
+  'Enable Advanced Moves':['Activar movimientos avanzados','Activer les mouvements avancés'],
+  'Retro pixel filter':['Filtro de píxeles retro','Filtre pixel rétro'],
+  'MATCH MENU':['MENÚ DEL PARTIDO','MENU DU MATCH'],
+  'ONLINE MATCH':['PARTIDO EN LÍNEA','MATCH EN LIGNE'],
+  'NEXT TOUCH LOSES':['OTRO TOQUE PIERDE','PROCHAINE TOUCHE PERDANTE'],
   'ONLINE':['EN LÍNEA','EN LIGNE'],'BOTS':['BOTS','BOTS'],
   'SPIKE!':['¡REMATE!','SMASH !'],'TAP SPIKE':['TOCA REMATE','TOUCHEZ SMASH'],'CLICK NOW':['HAZ CLIC','CLIQUEZ'],
   'PLAYERS IN QUEUE':['JUGADORES EN COLA','JOUEURS EN ATTENTE'],

@@ -23,18 +23,14 @@ effects.update(.4, game);
 effects.impact({ type: 'hit', x: 1, y: 3, z: 0, power: .1, rallyHits: 1, assisted: true });
 assert.equal(effects.cameraImpulse(), 0, 'gentle returns need confirmation, not camera shake');
 assert.equal(visible('Effect_ring'), 2, 'gentle contacts still get clear success rings');
-let callout = root.children.find(object => object.name === 'VolleyComicCallout' && object.visible);
-assert.equal(callout.userData.text, 'GOOD SAVE!');
-assert.equal(callout.material.map.userData.text, 'GOOD SAVE!');
-const saveTexture = callout.material.map;
+const activeFrame=()=>root.children.find(o=>o.name==='ContactFlipbook'&&o.visible);
+assert(activeFrame()); const saveTexture=activeFrame().material.map;
 effects.update(.8, game);
 effects.impact({ type: 'hit', x: 1, y: 3, z: 0, power: 1, rallyHits: 3, normal: { x: 1, y: 0, z: 0 } });
 assert(effects.cameraImpulse() > 0);
 assert.equal(visible('Effect_spark'), 26);
 assert.equal(visible('Effect_lightning'), 3);
-callout = root.children.find(object => object.name === 'VolleyComicCallout' && object.visible);
-assert.equal(callout.userData.text, 'VOLLEY 3!');
-const volleyTexture = callout.material.map;
+assert.equal(activeFrame().material.map,saveTexture);
 assert.equal(trail.geometry.attributes.color.itemSize, 4, 'the comet trail fades alpha instead of turning black');
 const trailArray = trail.geometry.attributes.position.array;
 for (let i = 0; i < 12; i++) { game.ball.x += .1; effects.update(1 / 60, game); }
@@ -58,8 +54,7 @@ assert.deepEqual(root.children, objects);
 assert.deepEqual(root.children.map(object => object.material.uuid), materialIds);
 effects.update(1, game);
 effects.impact({ type: 'hit', rallyHits: 3, power: .1 });
-callout = root.children.find(object => object.name === 'VolleyComicCallout' && object.visible);
-assert.equal(callout.material.map, volleyTexture, 'comic textures must be reused across impacts');
+assert.equal(activeFrame().material.map,saveTexture);
 effects.update(.1, game);
 assert(root.getObjectByName('RallyBallAura_1').visible, 'longer volleys gain a second ball ring');
 game.paused = true; effects.update(.01, game);
@@ -71,7 +66,7 @@ const onlineFrame={...game,network:true,matchId:'feedback-match',paused:false,ph
 effects.update(.02,onlineFrame);
 effects.impact({type:'hit',action:'bump',power:.2,rallyHits:1,x:1,y:3,z:0});
 for(let i=0;i<6;i++)effects.update(.02,{...onlineFrame,ball:{...onlineFrame.ball,x:onlineFrame.ball.x+i*.1}});
-assert(root.children.some(o=>o.name==='VolleyComicCallout'&&o.visible&&o.userData.text==='BUMP!'),'online snapshots cannot erase bump confirmation');
+assert(root.children.some(o=>o.name==='ContactFlipbook'&&o.visible),'online snapshots cannot erase bump confirmation');
 assert(trail.geometry.drawRange.count>0,'online ball trail survives fresh render snapshots');
 effects.update(.02,{...onlineFrame,matchId:'next-match'});
 assert.equal(visible('VolleyComicCallout'),0,'a genuinely new online match clears old feedback');
@@ -81,17 +76,17 @@ assert.equal(trail.geometry.drawRange.count, 0);
 effects.update(1, game);
 for (const action of ['bump', 'set', 'spike', 'block', 'dive']) {
   effects.impact({ type: 'hit', action, rallyHits: 1, power: .15, x: 1, y: 3, z: 0 });
-  assert(root.children.some(object => object.name === 'VolleyComicCallout' && object.visible && object.userData.text === `${action.toUpperCase()}!`));
+  assert(activeFrame());if(action==='set')assert(root.children.some(o=>o.visible&&o.userData.text==='SET!'));
   assert.equal(effects.cameraImpulse(), 0);
   effects.update(1, game);
 }
 effects.impact({ type: 'round', abilities: [{ player: 0, id: 'feather', x: -4, y: 3, z: 0 }] });
 game.phase = 'serve'; effects.update(.1, game);
-assert(root.children.some(object => object.name === 'VolleyComicCallout' && object.visible && object.userData.text === 'FEATHER FLOAT!'), 'round identity remains readable before serving');
+assert(activeFrame(), 'round identity remains readable before serving');
 game.phase = 'play'; effects.update(2, game);
 for (const [ability, label] of [['feather', 'FEATHER FLOAT!'], ['spring', 'SPRING STEP!'], ['magnet', 'MAGNET HEAD!'], ['rocket', 'ROCKET HOOVES!'], ['shield', 'IRON CANOPY!']]) {
   effects.impact({ type: 'ability', ability, x: 1, y: 3, z: 0 });
-  assert(root.children.some(object => object.name === 'VolleyComicCallout' && object.visible && object.userData.text === label));
+  assert(activeFrame());
   assert.equal(effects.cameraImpulse(), 0);
   effects.update(2, game);
 }
@@ -111,12 +106,12 @@ mobileEffects.impact({ type: 'win' }); assert.equal(mobileScene.getObjectByName(
 let geometryDisposals = 0;
 let textureDisposals = 0;
 saveTexture.addEventListener('dispose', () => textureDisposals++);
-volleyTexture.addEventListener('dispose', () => textureDisposals++);
+
 trail.geometry.addEventListener('dispose', () => geometryDisposals++);
 effects.dispose(); effects.dispose();
 assert.equal(scene.children.length, 0);
 assert.equal(geometryDisposals, 1);
-assert.equal(textureDisposals, 2);
+assert.equal(textureDisposals, 1);
 console.log('PASS VFX: low-power success callouts, escalating volleys, pooled label textures, missed-swing isolation, clean pause/reset trails, bounded GPU resources and disposal.');
 
 // Browser-like canvas creation must paint real text instead of using the Node fallback.
@@ -130,7 +125,7 @@ try {
   const paintedScene = new THREE.Scene(), paintedEffects = createVFX(paintedScene, { camera });
   const sprite = paintedScene.getObjectByName('VolleyComicCallout');
   assert(sprite.material.map.isCanvasTexture);
-  for (const text of ['NICE!', 'SET!', 'SPIKE!', 'BLOCK!', 'DIVE!', 'FEATHER FLOAT!', 'ROCKET HOOVES!']) assert(paintedLabels.includes(text));
+  for (const text of ['SET!', 'PERFECT SPIKE!']) assert(paintedLabels.includes(text));
   paintedEffects.dispose();
 } finally { globalThis.document = previousDocument; }
 
@@ -355,4 +350,14 @@ perfectEffects.impact({type:'hit',action:'spike',perfectSpike:true,power:.2,x:0,
 const perfectRoot=perfectScene.getObjectByName('AnimeSportsEffects');
 assert(perfectRoot.children.some(o=>o.name==='VolleyComicCallout'&&o.visible&&o.userData.text==='PERFECT SPIKE!'));
 assert.equal(perfectRoot.children.filter(o=>o.name==='Effect_lightning'&&o.visible).length,5);
-assert(perfectEffects.cameraImpulse()>.06);perfectEffects.dispose();
+assert(perfectEffects.cameraImpulse()>.06);
+const fireGame={players:[],phase:'play',hits:1,rally:1,ball:{x:0,y:4,z:0,vx:6,vy:-1,vz:0}};
+for(let frame=0;frame<7;frame++){fireGame.ball.x+=.1;perfectEffects.update(.025,fireGame);}
+const fire=perfectRoot.children.filter(sprite=>sprite.visible&&sprite.name==='ContactFlipbook');
+assert(fire.length>=4&&new Set(fire.map(sprite=>sprite.material.map)).size>1,'perfect spike leaves overlapping animated frames along flight');
+const mantle=perfectRoot.getObjectByName('SpikeFireMantle');
+assert(mantle.isInstancedMesh && mantle.visible && mantle.count===9);
+assert([...mantle.instanceMatrix.array].every(Number.isFinite));
+perfectEffects.setReducedMotion(true);perfectEffects.update(.016,fireGame);
+assert(!mantle.visible);
+perfectEffects.dispose();

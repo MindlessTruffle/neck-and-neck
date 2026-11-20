@@ -29,7 +29,7 @@ export function CloudLobby({ error, onReload, profile, skinName, abilityName, ho
   return <div className="cloud-lobby" data-view={view} ref={panelRef} onKeyDown={event => { if (event.key === 'Escape' && view !== 'home') onClose(); }}>
     <CloudBackdrop />
     {!ready && !error ? <LoadingScreen progress={progress}/> : <>
-      {view === 'home' && <header className="sky-brand"><Crest/><div><small>{t('THE SKY CLUB')}</small><h1>NECK <i>&</i> NECK</h1></div></header>}
+      {view === 'home' && <header className="sky-brand"><Crest/><div><h1><span className="brand-sport">Giraffe Volleyball:</span> Neck <i>&amp;</i> Neck</h1></div></header>}
       {view === 'home' && <button className="sky-wallet" onClick={() => onSelect('shop')} aria-label={`Clovers ${profile.coins}. Open skins shop`}><Icon name="coin"/><b>{profile.coins.toLocaleString()}</b></button>}
       {error && <div className="sky-error" role="alert"><p>{error}</p><button onClick={onReload}>{t('RELOAD')}</button></div>}
       {view === 'home' ? <>

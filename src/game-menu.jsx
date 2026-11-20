@@ -29,10 +29,10 @@ export function GameMenu({ menu, mode, difficulty, onMode, onDifficulty, onPlay,
     buttons[(i + (event.key === 'ArrowDown' ? 1 : buttons.length - 1) + buttons.length) % buttons.length]?.focus();
   };
   return <div className="legends-menu" data-menu={menu}>
-    <div className="club-brand"><Crest/><div><small>{t('MEADOW SPORTS CLUB')}</small><strong>NECK <i>&</i> NECK</strong><span>{t('VOLLEYBALL · LEGENDS IN THE MAKING')}</span></div></div>
+    <div className="club-brand"><Crest/><div><small>GIRAFFE VOLLEYBALL:</small><strong>NECK <i>&</i> NECK</strong><span>{t('VOLLEYBALL · LEGENDS IN THE MAKING')}</span></div></div>
     <div className="court-preview-caption"><b>{t('BIG NECKS.')}<br/>{t('BIGGER SAVES.')}</b><span>1v1 / 2v2 · PHYSICAL BOTS · YOUR LOOK / YOUR POWER</span></div>
     <section className={'menu-panel ' + (help ? 'show-help' : '')} role="dialog" aria-modal="true" aria-labelledby="menu-title" ref={panelRef} onKeyDown={navigate}>
-      <div className="panel-topline"><span>{paused ? t('MATCH PAUSED') : finished ? t('FINAL WHISTLE') : t('PICKUP MATCH')}</span><button onClick={click(onFullscreen)} aria-label={isFullscreen ? 'Leave fullscreen' : 'Enter fullscreen'}><Icon name="fullscreen"/></button></div>
+      <div className="panel-topline"><span>{paused ? t(online?'ONLINE MATCH':'MATCH PAUSED') : finished ? t('FINAL WHISTLE') : t('PICKUP MATCH')}</span><button onClick={click(onFullscreen)} aria-label={isFullscreen ? 'Leave fullscreen' : 'Enter fullscreen'}><Icon name="fullscreen"/></button></div>
       {help ? <div className="help-scroll">
         <button className="close-help" ref={helpClose} style={{ backgroundImage: `url("${assetUrl('kenney/ui/back-button-red.png')}")` }} onClick={click(() => setHelp(false))} aria-label="Back to menu"><img src={assetUrl('kenney/ui/back-arrow-red.png')} alt=""/></button>
         <h1 id="menu-title">{t('HOW TO PLAY')}</h1>
@@ -49,13 +49,16 @@ export function GameMenu({ menu, mode, difficulty, onMode, onDifficulty, onPlay,
           <div><b>{t('POWER')}</b>{touch ? <span className="touch-glyph" aria-label="Power action"><Icon name="power"/></span> : <span className="control-key">X</span>}</div>
           {!touch && <div><b>{t('CAPTURE')}</b><span className="control-key">{t('ALT')}</span></div>}
           {!touch && <div><b>{t('STRETCH')}</b><ControlArt names={['mouse_scroll']} label="Scroll to stretch your neck"/></div>}
-          <div><b>{t('PAUSE')}</b>{touch ? <span className="touch-glyph" aria-label="Pause game"><Icon name="pause"/></span> : <span className="control-key">{t('ESC')}</span>}</div>
+          <div><b>QUICK CHAT</b><span className="control-key">{touch?'CHAT':'C · 1–4'}</span></div>
+          <div><b>{t(online?'MENU':'PAUSE')}</b>{touch ? <span className="touch-glyph" aria-label="Pause game"><Icon name="pause"/></span> : <span className="control-key">{t('ESC')}</span>}</div>
         </div>
-        <p className="rules-note" style={{ fontSize: 16 }}>3 TOUCHES · FIRST TO 7 · WIN BY 2</p>
+        <p className="rules-note" style={{ fontSize: 16 }}>4 TOUCHES · FIRST TO 7 · WIN BY 2</p>
+        <a href="./how-to-play/" target="_blank" rel="noreferrer" style={{color:"inherit"}}>Game guide</a>
         {touch && <p className="touch-note" style={{ fontSize: 16 }}>{t('PHONE · LANDSCAPE')}</p>}
         <button className="play-button" onClick={click(() => setHelp(false))}>GOT IT <Icon name="play"/></button>
       </div> : <>
-        <h1 id="menu-title">{paused ? t('PAUSED') : finished ? result?.winner == null ? t('MATCH ENDED') : result.winner === 0 ? t('YOU WIN') : t('MATCH LOST') : t('PLAY')}</h1>
+        <h1 id="menu-title">{paused ? t(online?'MATCH MENU':'PAUSED') : finished ? result?.winner == null ? t('MATCH ENDED') : result.winner === 0 ? t('YOU WIN') : t('MATCH LOST') : t('PLAY')}</h1>
+        {finished && result?.reason==='five touches' && <strong role="status">FIFTH TOUCH · {result.winner===0?'POINT WON':'POINT LOST'}</strong>}
         {finished && <div className="final-score"><span>{result?.score[0]}</span><small>{result?.winner == null ? t('LAST SCORE') : t('FINAL')}</small><span>{result?.score[1]}</span></div>}
         {!paused && !online && <><fieldset className="formation"><legend>{t('TEAM SIZE')}</legend><div>{['1v1', '2v2'].map(m => <button key={m} aria-pressed={m === mode} onClick={click(() => onMode(m))}><ModeEmblem mode={m}/><b>{m}</b></button>)}</div></fieldset>
           <fieldset className="foes"><legend>{t('BOT LEVEL')}</legend><div>{FOES.map(f => <button key={f.id} aria-pressed={difficulty === f.id} onClick={click(() => onDifficulty(f.id))}>{t(f.name)}</button>)}</div></fieldset>

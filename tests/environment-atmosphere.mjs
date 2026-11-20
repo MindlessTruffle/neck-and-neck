@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { createBiomeAtmosphere, prepareWorldModel } from '../src/environments.js';
 
-const ids=['meadow','jungle','beach','volcano','mountain'];
+const ids=['meadow','jungle','beach','volcano','mountain','cave'];
 function atmosphere(coarse){const groups=new Map(ids.map(id=>[id,new THREE.Group()]));const time={value:0};createBiomeAtmosphere(groups,time,coarse);return {groups,time};}
 const desktop=atmosphere(false),mobile=atmosphere(true);
 assert.equal(desktop.groups.get('beach').children.length,0,'Approved beach must gain no atmosphere draw');

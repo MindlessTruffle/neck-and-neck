@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {once} from 'node:events';
 import {WebSocket} from 'ws';
 import {createGameServer} from '../server/game-server.mjs';
-const server=createGameServer({port:0,production:true,allowedOrigins:['https://example.test']}),clients=[];
+const server=createGameServer({readAdmissionLoad:()=>({}),port:0,production:true,allowedOrigins:['https://example.test']}),clients=[];
 const delay=()=>new Promise(r=>setTimeout(r,100));
 try{
  const {port}=await server.start(),base=`http://127.0.0.1:${port}`;

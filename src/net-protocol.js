@@ -7,7 +7,7 @@ export const INPUT_RATE = 30;
 export const ACTION_KEYS = Object.freeze(['jump','dash','swing','smash','serve','toss','set','jumpSet','dive','ability']);
 export const MODES = Object.freeze(['1v1','2v2']);
 export const ABILITY_IDS = Object.freeze(['feather','spring','magnet','rocket','shield']);
-export const CLIENT_MESSAGES = Object.freeze(['hello','profile.update','room.create','room.join','room.team','room.mode','room.start','room.leave','queue.join','queue.cancel','input','ping']);
+export const CLIENT_MESSAGES = Object.freeze(['hello','quickchat','spectate.list','spectate.join','spectate.leave','profile.update','room.create','room.join','room.team','room.mode','room.start','room.leave','queue.join','queue.cancel','input','ping']);
 export const SERVER_MESSAGES = Object.freeze(['welcome','room','queue','match','snapshot','events','match.end','pong','error']);
 export const MAX_PAYLOAD_BYTES = 4096;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));

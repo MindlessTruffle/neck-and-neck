@@ -10,7 +10,7 @@ export function LoadingScreen({ progress = 0 }) {
   return <div className="loading-screen" role="status" aria-live="polite">
     <div className="loading-screen-cloud" aria-hidden="true"><Crest/></div>
     <div className="loading-screen-giraffe" aria-hidden="true" style={{ backgroundImage: `url("${assetUrl('ui/giraffe-pixel-clouds.png')}")` }}/>
-    <h1>NECK <i>&</i> NECK</h1>
+    <h1><small>GIRAFFE VOLLEYBALL:</small> NECK <i>&</i> NECK</h1>
     <div className="loading-screen-meter" role="progressbar" aria-label="Loading game" aria-valuemin="0" aria-valuemax="100" aria-valuenow={value ?? undefined}>
       <span style={value == null ? undefined : { width: `${value}%` }}/>
     </div>

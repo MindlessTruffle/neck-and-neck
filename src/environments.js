@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createCourtsideWildlife, createSceneryLight, paintCavernFloor } from './courtside.js';
 import { MAPS, getMap } from './maps.js';
 
 /** Blender-authored worlds. Only one biome is rendered; no per-frame allocations. */
@@ -21,24 +22,27 @@ export function createEnvironments(parent, toon, coarse = false) {
   for(let y=.7;y<=2.35;y+=.28)add(cube,chalk,0,y,0,.018,.018,11);
   add(cube,chalk,0,2.38,0,.07,.11,11.2);toon.batch(court.children.filter(o=>!surfaces.includes(o)),court);
   createBiomeAtmosphere(groups,time,coarse);
-  let current=null;
-  function setModels(models,textures){
+  let current=null, updateCrowd=null;
+  function setModels(models,textures,wildlife){
+    createSceneryLight(groups,time);
     for(let i=0;i<MAPS.length;i++){
       const model=models[i],group=groups.get(MAPS[i].id);group.add(model);
       prepareWorldModel(model,textures,coarse,time,waterMaterials);
       // Keep the original Kenney cel palette and material response.
       model.traverse(o=>{if(o.isMesh){const style=m=>m.name.startsWith('Release_')?m:toon.material(m);o.material=Array.isArray(o.material)?o.material.map(style):style(o.material);}});
       model.traverse(o=>{if(o.name.startsWith('Surface_'))surfaces.push(o);});
+      if(MAPS[i].id==='cave')paintCavernFloor(model,time);
       const scenery=[];model.traverse(o=>{if(o.isMesh&&o.parent?.name.startsWith('Scenery_'))scenery.push(o);});
       // A one-instance mesh for each material batch lets the shared win effect
       // launch actual authored scenery, with no duplicate scene or geometry.
       model.updateMatrixWorld(true);
       for(const o of scenery){const inst=new THREE.InstancedMesh(o.geometry,o.material,1);inst.name='AuthoredSceneryBatch';inst.setMatrixAt(0,o.matrixWorld);inst.castShadow=o.castShadow;inst.receiveShadow=true;inst.frustumCulled=false;group.add(inst);o.visible=false;}
     }
+    if(wildlife)updateCrowd=createCourtsideWildlife(groups,new Map(MAPS.map(({id},i)=>[id,models[i]])),wildlife,coarse);
   }
   return {root,groups,setModels,setTrees(){},setPaint(){},setSurfaces(visible){surfaces.forEach(o=>o.visible=visible);},
     set(id){const theme=getMap(id);if(current!==theme.id){groups.forEach((g,key)=>g.visible=key===theme.id);current=theme.id;courtMat.color.set(theme.court);}return theme;},
-    update(t){time.value=t;},get id(){return current;}};
+    update(t,ball,celebrate,menu){time.value=t;if(!menu)updateCrowd?.(current,t,ball,celebrate);},get id(){return current;}};
 }
 
 /** Two cheap atmosphere draws at most. Positions animate on GPU, never on CPU. */
@@ -47,6 +51,7 @@ export function createBiomeAtmosphere(groups,time,coarse=false){
     meadow:{count:100,color:'#fff0cd',size:11,speed:.22,flutter:.7},
     jungle:{count:64,color:'#d5df73',size:13,speed:.34,flutter:1.5},
     volcano:{count:100,color:'#ffb251',size:12,speed:.5,flutter:.5},
+    cave:{count:42,color:'#fbc485',size:11,speed:.27,flutter:.6},
     mountain:{count:70,color:'#e0f8ff',size:10,speed:.12,flutter:.3},
   };
   for(const [id,style] of Object.entries(themes)){
@@ -60,13 +65,29 @@ export function createBiomeAtmosphere(groups,time,coarse=false){
       positions[i*3]=edge<2?(edge===0?-1:1)*(19+random()*18):along;
       positions[i*3+2]=edge>=2?(edge===2?-1:1)*(15+random()*15):along;
       positions[i*3+1]=.7+random()*(id==='volcano'?13:id==='jungle'?13:7);seeds[i]=random()*20;
+      if(id==='volcano' && i%3===0){
+        positions[i*3]=-23+(random()-.5)*2;
+        positions[i*3+1]=4+random()*8;
+        positions[i*3+2]=-14.8+(random()-.5)*2;
+      }
     }
     const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.setAttribute('phase',new THREE.BufferAttribute(seeds,1));
+    const flight = {
+      meadow: 'p.x+=sin(t*.43+phase)*2.4;p.y+=sin(t*1.5)*.22;',
+      volcano: 'float rise=fract(t*.125);p.y+=8.*rise*(1.-rise)+2.6*rise;p.x+=rise*1.4;',
+      mountain: 'float fall=fract(t*.22);p.y+=2.-fall*4.;p.x+=fall*3.2;',
+      cave: 'p.y+=sin(t*.54+phase)*.24;',
+    }[id] || '';
+    const silhouette = {
+      meadow: 'float petal=1.-smoothstep(.29,.49,length(vec2(p.x*1.75,p.y+p.x*.6)));alpha=petal*(.27+.57*glow);color=mix(vec3(.92,.50,.58),tint,kind);',
+      mountain: 'alpha=(1.-smoothstep(.09,.48,length(vec2(p.x,p.y+p.x*.6)*vec2(1.,2.))))*(.26+.42*glow);',
+      volcano: 'alpha=(1.-smoothstep(.06,.5,length(vec2(p.x*2.1,p.y))))*(.39+.6*glow);color=mix(vec3(.88,.19,.026),tint,kind);',
+    }[id] || '';
     const material=new THREE.ShaderMaterial({
       uniforms:{worldTime:time,tint:{value:new THREE.Color(style.color)},size:{value:style.size},speed:{value:style.speed},flutter:{value:style.flutter},insect:{value:id==='jungle'?1:0}},
       transparent:true,depthWrite:false,blending:id==='meadow'||id==='jungle'?THREE.NormalBlending:THREE.AdditiveBlending,
-      vertexShader:`uniform float worldTime,size,speed,flutter; attribute float phase; varying float glow,kind; void main(){kind=step(.8,fract(phase));vec3 p=position;float t=worldTime*speed+phase;p.x+=sin(t*1.7)*flutter;p.z+=cos(t*1.3)*flutter;p.y+=sin(t*.8)*.65;vec4 view=modelViewMatrix*vec4(p,1.0);glow=.45+.55*pow(.5+.5*sin(t*2.1),2.0);gl_PointSize=clamp(size*18.0/max(8.0,-view.z),1.0,8.0);gl_Position=projectionMatrix*view;}`,
-      fragmentShader:`uniform vec3 tint; uniform float insect; varying float glow,kind; void main(){vec2 p=gl_PointCoord-.5;float disc=1.0-smoothstep(.08,.5,length(p));float wings=1.0-smoothstep(.45,1.0,length(vec2((abs(p.x)-.19)*5.5,(p.y-p.x*.4)*3.8)));float alpha=mix(disc*glow*.62,mix(wings*.5,disc*glow*.6,kind),insect);if(alpha<.025)discard;vec3 color=mix(tint,mix(vec3(.16,.26,.13),tint,kind),insect);gl_FragColor=vec4(color,alpha);}`,
+      vertexShader:`uniform float worldTime,size,speed,flutter; attribute float phase; varying float glow,kind; void main(){kind=step(.8,fract(phase));vec3 p=position;float t=worldTime*speed+phase;p.x+=sin(t*1.7)*flutter;p.z+=cos(t*1.3)*flutter;p.y+=sin(t*.8)*.65;${flight} vec4 view=modelViewMatrix*vec4(p,1.0);glow=.45+.55*pow(.5+.5*sin(t*2.1),2.0);gl_PointSize=clamp(size*18.0/max(8.0,-view.z),1.0,8.0);gl_Position=projectionMatrix*view;}`,
+      fragmentShader:`uniform vec3 tint; uniform float insect; varying float glow,kind; void main(){vec2 p=gl_PointCoord-.5;float disc=1.0-smoothstep(.08,.5,length(p));float wings=1.0-smoothstep(.45,1.0,length(vec2((abs(p.x)-.19)*5.5,(p.y-p.x*.4)*3.8)));float alpha=mix(disc*glow*.62,mix(wings*.5,disc*glow*.6,kind),insect);vec3 color=mix(tint,mix(vec3(.16,.26,.13),tint,kind),insect);${silhouette} if(alpha<.025)discard;gl_FragColor=vec4(color,alpha);}`,
     });
     const particles=new THREE.Points(geometry,material);particles.name=`Atmosphere_${id}`;particles.frustumCulled=false;particles.renderOrder=2;group.add(particles);
   }

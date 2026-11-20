@@ -1,4 +1,4 @@
-# Neck & Neck: Meadow Mayhem
+# Giraffe Volleyball: Neck & Neck
 
 [Play on GitHub Pages](https://mindlesstruffle.github.io/neck-and-neck/) · [Source](https://github.com/MindlessTruffle/neck-and-neck)
 
@@ -81,7 +81,7 @@ On phones, drag the right field to swing and use the circular action buttons. Th
 The action grammar takes inspiration from [Volleyball Legends](https://www.roblox.com/games/73956553001240/Volleyball-Legends): contextual bump/spike and set/block, dives, two-step serves and directional aiming. The sports UI uses a top score strip, team-touch pips, a timed serve meter and contextual actions. The cloud lobby and giraffe game are original; licensed stock assets are credited below.
 
 - Real bump, set, spike, block, jump-set and low diving contacts.
-- Three touches per possession. Doubles alternate receivers; a block is exempt. Solo permits repeat touches. Lingering body overlap cannot cause accidental double-touch faults.
+- Four touches per possession. A fifth touch costs the point. Doubles alternate receivers; a block is exempt. Solo permits repeat touches. Lingering body overlap cannot cause accidental double-touch faults.
 - Bots predict trajectories, cover lanes, set partners, attack openings, block and dive. They use all five powers.
 - First to 7, win by 2, capped at 11. Practice uses one local human plus bots; online rooms and queues use two or four real humans.
 - Ball radius .34, gravity 10.8, outgoing speed cap 11.5. Wider human contact margins, soft momentum transfer and forward-return assistance make rallies forgiving.
