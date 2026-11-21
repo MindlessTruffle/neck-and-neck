@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { VolleyballGame, ABILITIES, BALL_RADIUS, BALL_GRAVITY, MAX_BALL_SPEED } from '../src/physics.js';
+import { VolleyballGame, ABILITIES, BALL_RADIUS, BALL_GRAVITY, MAX_BALL_SPEED, moveCooldowns } from '../src/physics.js';
 import { SmoothSimulation } from '../src/motion.js';
 
 const tick=1/120;
@@ -19,7 +19,7 @@ function equip(p,id){const definition=ABILITIES.find(a=>a.id===id);p.ability={..
 const serveEvents=[];const serve=new VolleyballGame({onEvent:e=>serveEvents.push(e)});serve.start();
 for(let i=0;i<720;i++)serve.update(tick);
 assert.equal(serve.phase,'serve');assert.equal(serve.serveStage,'ready');
-serve.update(tick,{swing:true,serve:true});assert.equal(serve.serveStage,'toss');assert(serve.ball.vy>5);
+serve.update(tick,{swing:true,serve:true});assert.equal(serve.serveStage,'toss');assert(serve.ball.vy>4&&serve.ball.vy<4.7);
 const tossY=serve.ball.y;for(let i=0;i<55;i++)serve.update(tick);
 assert(serve.ball.y>tossY+.6);assert(serve.serveCharge>.5&&serve.serveCharge<1);
 serve.update(tick,{serve:true,power:.8,aimYaw:.25});
@@ -42,7 +42,7 @@ assert.equal(block.events.at(-1).action,'block');assert.equal(block.g.touches[0]
 const jumpSet=live();jumpSet.g.update(tick,{jumpSet:true});assert(jumpSet.p._jumpV>0);assert.equal(jumpSet.p._contactAction,'set','E forces a high set, not an airborne block');
 const dive=live();dive.g.update(tick,{dive:true,z:1});const diveZ=dive.p.z;
 for(let i=0;i<20;i++)dive.g.update(tick);assert(dive.p.z>diveZ+.6);assert(dive.p.dive>.5);hit(dive.g);
-assert.equal(dive.events.at(-1).action,'dive');assert(dive.g.ball.vy>7,'dive pops low balls upward');
+assert.equal(dive.events.at(-1).action,'dive');assert(dive.g.ball.vy>0&&dive.g.ball.vy<6.4,'dive lifts the save without a towering lob');
 const diveEvents=dive.events.filter(e=>e.type==='dive').length;dive.g.update(tick,{dive:true});assert.equal(dive.events.filter(e=>e.type==='dive').length,diveEvents,'dive cooldown prevents repeated launches');
 
 // Three contacts per possession; blocks exempt, solo repeated touches permitted.
@@ -70,9 +70,9 @@ for(const id of ABILITIES.map(a=>a.id)){
   const count=s.events.filter(e=>e.type==='ability').length;s.g.update(tick,{ability:true});assert.equal(s.events.filter(e=>e.type==='ability').length,count);
   if(id==='spring')assert(s.p._jumpV>9,'Spring Step creates a stronger jump');
   if(id==='rocket')assert(s.p._dive>0&&s.p._dash>0,'Rocket Hooves starts a fast extended dive');
-  if(id==='shield'){assert(s.p._blockTime>2);hit(s.g);assert.equal(s.events.at(-1).action,'block');}
+  if(id==='shield'){assert(s.p._blockTime>2);hit(s.g);assert.equal(s.events.at(-1).action,'block');assert.equal(s.p.ability.active,0);}
   if(id==='magnet'){hit(s.g,s.p,1.9);assert.equal(s.g.hits,1);assert.equal(s.events.at(-1).ability,'magnet');assert.equal(s.p.ability.active,0);}
-  if(id==='feather'){hit(s.g);assert(s.g.ball.vy>=7.9);assert.equal(s.p.ability.active,0);}
+  if(id==='feather'){hit(s.g);assert(s.g.ball.vy>=6.8 && s.g.ball.vy<=7.65);assert.equal(s.p.ability.active,0);}
   assert(Math.hypot(s.g.ball.vx,s.g.ball.vy,s.g.ball.vz)<=MAX_BALL_SPEED+1e-8);
 }
 const narrow=live();hit(narrow.g,narrow.p,1.9);assert.equal(narrow.g.hits,0,'Magnet Head adds meaningful rescue reach');
@@ -188,4 +188,59 @@ for(const team of [0,1]){
   const basic=trajectory(0,false),perfect=trajectory(0,true);
   assert(perfect.vy<0&&perfect.vy<basic.vy-1,'high perfect spikes drive down more sharply');
   assert(trajectory(.48,true).vz*trajectory(-.48,true).vz<0,'opposite clicks choose opposite lanes on both teams');
+}
+
+{
+  // A real incoming ball, struck at standing head height. Keep the hand-set arc
+  // distinct from a drive while leaving enough clearance to cross the net.
+  const rises = {};
+  for (const action of ['bump', 'set', 'dive']) {
+    const {g,p} = live();
+    g.touchCooldown = 0;
+    Object.assign(p.head, {x:-4, y:3, z:0, vx:2, vy:0, vz:0});
+    Object.assign(p, {_actionTime:.28, _contactAction:action, aimYaw:0});
+    Object.assign(g.ball, {x:-3.2, y:3, z:0, vx:-5, vy:-1, vz:0});
+    g._ballStep(.001);
+    assert.equal(g.hits,1);
+    rises[action] = Math.max(0,g.ball.vy) ** 2 / (2 * BALL_GRAVITY);
+    assert(moveCooldowns(p).swing > .9, 'contact immediately starts recovery');
+  }
+  assert(rises.bump < .8 && rises.dive < 1.1 && rises.set < 1.6);
+  assert(rises.set > rises.bump + .5, 'sets retain a playable setup arc');
+}
+{
+  const {g,p,events} = live();
+  g.update(tick,{swing:true});
+  for(let i=0;i<18;i++)g.update(tick,{});
+  g.update(tick,{set:true});
+  g.update(tick,{swing:true});
+  for(let i=0;i<65;i++)g.update(tick,{});
+  assert.deepEqual(events.filter(e=>e.type==='action').map(e=>e.action),['bump','bump']);
+  assert.equal(moveCooldowns(p).swing,0);
+  p._diveCooldown=.10;
+  g.update(tick,{dive:true});
+  assert(moveCooldowns(p).dive>0);
+  for(let i=0;i<16;i++)g.update(tick,{});
+  assert.equal(events.filter(e=>e.type==='dive').length,1,'near-ready dive fires once');
+}
+
+{
+  const {g,p}=live();
+  function flightTime(action, whip) {
+    Object.assign(g.ball, {x:-3, y:4, z:0, vx:6, vy:3, vz:0});
+    Object.assign(p.head, {vx:whip, vz:0});
+    assert(g._guideReturn(p,action,true));
+    const {vy,y}=g.ball;
+    return (vy+Math.sqrt(vy*vy+2*BALL_GRAVITY*(y-BALL_RADIUS)))/BALL_GRAVITY;
+  }
+  const soft=flightTime('bump',0), driven=flightTime('bump',12);
+  assert(soft > driven+.07 && soft < driven+.20,'soft bump buys one extra beat');
+  assert(flightTime('spike',0)<driven && flightTime('dive',0)>soft);
+}
+
+{
+  const s = live(); equip(s.p,'rocket'); s.p.y=1;
+  assert.equal(s.g._useAbility(s.p,1,0),false);
+  assert.equal(s.p.ability.charges,1,'An airborne dive attempt keeps the charge');
+  s.p.y=0;assert(s.g._useAbility(s.p,1,0));
 }

@@ -38,8 +38,9 @@ export function OnlinePanel({ client, state = {}, profile, partyOnly=false }) {
   };
   const ensureConnected = async () => { if (!connected) await connect(); };
   const setQueue = mode => { setPartyMenu(false); return invoke(async () => { await ensureConnected(); await client.joinQueue(mode); }); };
-  return <section className="party-panel" role="dialog" aria-modal="true" aria-labelledby="party-title">
-    <header className="party-heading"><h1 id="party-title">{t(partyOnly?'PARTY':'ONLINE')}</h1><span className="post-stamp" data-online={connected}>{connected ? '●' : busy ? '…' : '○'}</span></header>
+  const picking = !partyOnly && !partyMenu && !queued && !room && !browsing;
+  return <section className={picking ? 'party-panel match-picker' : 'party-panel'} role="dialog" aria-modal="true" aria-labelledby="party-title">
+    <header className="party-heading"><h1 id="party-title">{t(picking?'CHOOSE MATCH':partyOnly?'PARTY':'ONLINE')}</h1><span className="post-stamp" data-online={connected}>{connected ? '●' : busy ? '…' : '○'}</span></header>
     {browsing && connected ? <LiveCourtList games={state.liveGames} onWatch={id=>client.watchGame(id)} onBack={()=>setBrowsing(false)}/> : <>
     {connected && <div className="party-name-badge">{name}</div>}
     {!connected && <div className="party-connect">

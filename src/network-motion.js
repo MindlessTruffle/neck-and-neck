@@ -200,9 +200,10 @@ export class NetworkMotion {
       for (const key of poseKeys) local[key] = predicted[key];
       local.head = copy(predicted.head); local.neck = copy(predicted.neck); local.neckPoints = copy(predicted.neckPoints);
       local.action = predicted.action;
+      for (const key of ['_swingCooldown', '_diveCooldown', '_dashCooldown', '_jumpV']) local[key] = predicted[key];
     }
     // Discrete game rules and score follow the newest authoritative packet.
-    for (const key of ['phase', 'score', 'touches', 'round', 'rally', 'hits', 'rallyHits', 'message', 'server', 'serveStage', 'serveCharge', 'serveQuality', 'lastAction', 'celebrationRemaining']) out[key] = copy(latest.state[key]);
+    for (const key of ['touchCooldown', 'lastHitter', '_lastWasBlock', 'touchTeam', 'phase', 'score', 'touches', 'round', 'rally', 'hits', 'rallyHits', 'message', 'server', 'serveStage', 'serveCharge', 'serveQuality', 'lastAction', 'celebrationRemaining']) out[key] = copy(latest.state[key]);
     out.paused = false; out.localPlayerId = this.localPlayerId; out.localTeam = this.localTeam; out.network = true;
     this.view = out;
     return out;

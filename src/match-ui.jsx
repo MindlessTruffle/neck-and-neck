@@ -19,6 +19,11 @@ export function MatchUI({ state, onAction, onPause, onWalk, touch }) {
     ['jumpSet', t('JUMP SET'), 'E', 'keyboard_e'],
     ['dive', t('DIVE'), 'V', null],
   ];
+  const recovery = id => {
+    const remaining = id === 'ability' ? (ability?.active || 0) / (ability?.duration || 1) : state.cooldowns?.[id] || 0;
+    const fraction = state.phase === 'play' ? remaining : 0;
+    return fraction > 0 && <i className="move-recovery" aria-hidden="true" style={{'--remaining': fraction}}/>;
+  };
   const press = action => event => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     event.preventDefault(); event.currentTarget.setPointerCapture?.(event.pointerId); onAction(action);
@@ -45,11 +50,11 @@ export function MatchUI({ state, onAction, onPause, onWalk, touch }) {
     </div>
     {state.phase==='point'&&state.message?.includes('FIFTH TOUCH')&&<div className="touch-fault" role="alert">FIFTH TOUCH · {state.server===state.playerTeam?'POINT WON':'POINT LOST'}</div>}
     <footer className="action-deck">
-      <button className="ability-button" disabled={!ability?.ready || state.phase !== 'play'} onPointerDown={press('ability')} onClick={event => { if (event.detail === 0) onAction('ability'); }} style={{ '--ability-color': ability?.color || '#ba9eff' }} aria-label={`Use ${ability?.name || 'ability'}`}>
-        <span className="ability-key">X</span><div><small>{t('EQUIPPED POWER')}</small><strong>{ability?.name || 'Drawing ability…'}</strong><span>{ability?.active > 0 ? t('ACTIVE') : ability?.charges > 0 ? state.phase === 'play' ? touch ? t('READY · TAP TO USE') : t('HOLD CLICK · USE POWER') : t('READY WHEN RALLY STARTS') : t('USED · NEXT ROUND')}</span></div><PowerIcon id={ability?.id}/>
+      <button className="ability-button" data-active={ability?.active > 0} disabled={!ability?.ready || state.phase !== 'play'} onPointerDown={press('ability')} onClick={event => { if (event.detail === 0) onAction('ability'); }} style={{ '--ability-color': ability?.color || '#ba9eff' }} aria-label={`Use ${ability?.name || 'ability'}`}>
+        {recovery('ability')}<span className="ability-key">X</span><div><small>{t('EQUIPPED POWER')}</small><strong>{ability?.name || 'Drawing ability…'}</strong><span>{ability?.active > 0 ? t('ACTIVE') : ability?.charges > 0 ? state.phase === 'play' ? touch ? t('READY · TAP TO USE') : t('HOLD CLICK · USE POWER') : t('READY WHEN RALLY STARTS') : t('USED · NEXT ROUND')}</span></div><PowerIcon id={ability?.id}/>
       </button>
-      <div className="action-buttons">{actions.map(([id, name, key, icon]) => <button key={id} className={`action-button action-${id}`} onPointerDown={press(id)} onClick={event => { if (event.detail === 0) onAction(id); }} aria-label={name}><span className="keycap">{icon ? <img src={assetUrl(`kenney/controls/${icon}.png`)} alt={key}/> : key}</span><span className="touch-action-icon" aria-hidden="true"><Icon name={id === "swing" ? "bump" : id === "set" ? "set" : id === "jumpSet" ? "jumpSet" : "dive"}/></span><strong>{t(name)}</strong>{id==='swing'&&<span className="spike-button-label" aria-hidden="true">{t('SPIKE!')}</span>}</button>)}</div>
-      <div className="movement-actions"><button onPointerDown={press('jump')} onClick={event => { if (event.detail === 0) onAction('jump'); }} aria-label="Jump"><span>{t('SPACE')}</span>{touch ? <Icon name="jump"/> : t("JUMP")}</button><button onPointerDown={press('dash')} onClick={event => { if (event.detail === 0) onAction('dash'); }} aria-label="Dash"><span>{t('SHIFT')}</span>{touch ? <Icon name="dash"/> : t("DASH")}</button></div>
+      <div className="action-buttons">{actions.map(([id, name, key, icon]) => <button key={id} className={`action-button action-${id}`} onPointerDown={press(id)} onClick={event => { if (event.detail === 0) onAction(id); }} aria-label={name}>{recovery(id)}<span className="keycap">{icon ? <img src={assetUrl(`kenney/controls/${icon}.png`)} alt={key}/> : key}</span><span className="touch-action-icon" aria-hidden="true"><Icon name={id === "swing" ? "bump" : id === "set" ? "set" : id === "jumpSet" ? "jumpSet" : "dive"}/></span><strong>{t(name)}</strong>{id==='swing'&&<span className="spike-button-label" aria-hidden="true">{t('SPIKE!')}</span>}</button>)}</div>
+      <div className="movement-actions"><button onPointerDown={press('jump')} onClick={event => { if (event.detail === 0) onAction('jump'); }} aria-label="Jump">{recovery('jump')}<span>{t('SPACE')}</span>{touch ? <Icon name="jump"/> : t("JUMP")}</button><button onPointerDown={press('dash')} onClick={event => { if (event.detail === 0) onAction('dash'); }} aria-label="Dash">{recovery('dash')}<span>{t('SHIFT')}</span>{touch ? <Icon name="dash"/> : t("DASH")}</button></div>
       <div className="energy-track" aria-label={`Stamina ${Math.round(state.energy * 100)} percent`}><i style={{ transform: `scaleX(${state.energy})` }}/></div>
     </footer>
     <div ref={stick} className="touch-stick" aria-label="Movement joystick" role="group"

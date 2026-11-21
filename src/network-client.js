@@ -287,7 +287,7 @@ export class NetworkClient {
     const seq = this._seq + 1;
     if (!this._send({ type: 'input', seq, controls })) return false;
     this._seq = seq; this._lastInputAt = now;
-    if (edge) this._pendingEdges.shift();
+    if (edge) { this._pendingEdges.shift(); this._lastEdgeSentAt = now; }
     this._saveSession(); return true;
   }
 
@@ -302,7 +302,9 @@ export class NetworkClient {
         else this._error('INPUT_OVERFLOW', 'Too many actions arrived at once. Release the controls and try again.');
       }
     }
-    this._flushInput();
+    // One fresh press may lead the next movement packet. Rapid repeats stay paced.
+    const earlyEdge = this._pendingEdges.length === 1 && this.clock() - (this._lastEdgeSentAt ?? -Infinity) >= 100;
+    this._flushInput(earlyEdge);
     const view=this.motion.sample(dt, inactive ? normalizeControls({}) : controls, now, { paused: inactive, connected: this.state.status === 'connected' });
     if(view)view.matchId=this.state.match?.matchId;
     return view;

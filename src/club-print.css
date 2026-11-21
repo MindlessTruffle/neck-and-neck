@@ -1,0 +1,49 @@
+/* Letterpress club stationery, enamel controls and stitched match pennants. */
+.meadow{--club-ink:#28374b;--club-paper:#fff3d3;--club-teal:#177b78;--club-vermillion:#dc6254}
+.cloud-lobby .sky-brand{isolation:isolate;padding:.5rem 1.35rem .65rem .55rem;filter:drop-shadow(0 4px 0 #23344877)}
+.cloud-lobby .sky-brand::before{content:"";position:absolute;inset:0;z-index:-1;clip-path:polygon(0 0,100% 0,96% 50%,100% 100%,0 100%);background:linear-gradient(105deg,#243c50,#37576b);border-block:3px solid #ffe3a1}
+.sky-brand .brand-sport{color:#ffe1a0;letter-spacing:.09em}
+.cloud-lobby .landmark-buttons button strong{font-weight:900;letter-spacing:.05em;text-shadow:0 1px #fff6}
+.sky-settings button,.sky-wallet,.play-tabs button,.locker-primary,.spin-equip{box-shadow:inset 0 2px #fff6d9,0 3px #465168}
+.meadow :is(.options-panel,.legends-menu .menu-panel,.party-panel,.locker-collection,.spin-rates){background-color:#fff1d4;background-image:radial-gradient(#b692721a .85px,transparent 1px),linear-gradient(145deg,#fff9e9,#f4e1bf);background-size:5px 5px,100% 100%;color:var(--club-ink);border:3px solid #47586a;border-radius:20px 7px;box-shadow:inset 0 0 0 3px #fff9e6,0 5px #31405160}
+.meadow :is(.spin-heading,.party-heading,.options-panel>header,.locker-skin-preview h2){color:var(--club-ink);text-shadow:0 1px #fff6d5}
+.play-tabs button[aria-pressed=true],.wardrobe-categories button[aria-pressed=true]{background:linear-gradient(135deg,#246e74,#16545d);color:#fff5d2;border-color:#284451;box-shadow:inset 0 2px #93cfc0,0 3px #243e4a}
+.meadow .post-primary,.meadow .locker-primary,.meadow .legends-menu .play-button{background:linear-gradient(165deg,#b6edb3,#73c8aa);border-color:#354f55;color:#163d41}
+.meadow .loading-screen-meter{background:#213c52;border-color:#294352}.meadow .loading-screen-meter span{background:repeating-linear-gradient(125deg,#f3b65f 0 14px,#ffe2a0 14px 27px)}
+.match-ui .touch-pips i[data-active=true]{background:#ffd276;box-shadow:0 0 0 1px #354350}
+@media(max-height:480px){.cloud-lobby .sky-brand{padding:.18rem .72rem .28rem .25rem}.contact-stamp{width:38px;height:29px}}
+.meadow .wardrobe-stage{background:radial-gradient(ellipse at 50% 79%,#3746543d 0 14%,transparent 35%),radial-gradient(ellipse at 27% 24%,#fff6c5,#f0daab 48%,#d39978);border-radius:15px 5px;border:2px solid #506071}
+.meadow .spin-slot.selected{outline:3px solid var(--power-color,#ffd372);outline-offset:-3px}
+.meadow .spectator-bar,.meadow .quick-chat section{background:linear-gradient(145deg,#30495b,#233644);border:2px solid #e7cea0;box-shadow:0 4px #26324766}
+.meadow .action-button.action-swing .touch-action-icon{color:#103b41}.meadow .action-button.action-set .touch-action-icon{color:#573b17}
+/* Painted venue programme. Illustrations sit behind controls, outside reading areas. */
+.meadow{--duel-art:url('./artwork/duel-pixel.webp');--team-art:url('./artwork/team-pixel.webp');--style-art:url('./artwork/wardrobe.webp');--relic-art:url('./artwork/workshop.webp')}
+.cloud-lobby .sky-overlay{background-size:cover;background-position:center;background-color:#435867}
+.cloud-lobby .sky-view-play,.cloud-lobby .sky-view-controls{background-image:linear-gradient(90deg,#1f414f66,#33454b4d),var(--duel-art)}
+.cloud-lobby .sky-view-online{background-image:linear-gradient(90deg,#234b5159,#22464155),var(--team-art)}
+.cloud-lobby .sky-view-shop{background-image:linear-gradient(90deg,#5f3f4c88,#493b4655),var(--style-art)}
+.cloud-lobby .sky-view-abilities{background-image:linear-gradient(90deg,#21394b55,#1c304288),var(--relic-art)}
+.meadow .sky-view-play .legends-menu{background:transparent}
+.meadow .party-panel .mode-choice,.meadow .legends-menu .formation button{background-size:cover;background-position:center 40%;border:2px solid #304552;border-radius:16px 5px;box-shadow:0 4px #304552;overflow:hidden;position:relative;isolation:isolate}
+.meadow .mode-choice.mode-one,.meadow .formation button:first-of-type{background-image:linear-gradient(0deg,#233943aa,transparent 78%),var(--duel-art)}
+.meadow .mode-choice.mode-two,.meadow .formation button:nth-of-type(2){background-image:linear-gradient(0deg,#223843bb,transparent 78%),var(--team-art)}
+.meadow .formation button svg{visibility:hidden}.meadow .formation button b,.meadow .party-panel .mode-choice span{color:#fff4d6;text-shadow:0 2px 0 #273647;-webkit-text-stroke:2px #253b4b;paint-order:stroke fill}
+.meadow .legends-menu .formation button[aria-pressed=true]{outline:3px solid #f7be60;outline-offset:-5px}
+.meadow .party-heading,.meadow .locker-header,.meadow .options-panel>header,.meadow .spin-heading{background-position:center 42%;background-size:cover;background-color:#304659;border-radius:13px 4px;border:2px solid #334758;color:#fff1cc;text-shadow:0 2px #2a303d}
+.meadow .party-heading{background-image:linear-gradient(90deg,#1c3e4af5,#28455344),var(--team-art);padding:8px 14px}
+.meadow .locker-header{background-image:linear-gradient(90deg,#46374be0,transparent),var(--style-art)}
+.meadow .spin-heading{background-image:linear-gradient(90deg,#193445dd,#22344677),var(--relic-art);padding-block:8px}
+.meadow .options-panel>header{background-image:linear-gradient(90deg,#244453ed,#24445344),var(--duel-art);padding:8px 14px}
+.meadow .party-heading h1,.meadow .options-panel>header h1,.meadow .spin-heading h1{color:#fff0cb}
+.meadow .power-spin-screen{background-image:linear-gradient(90deg,#172c3edf,#233b4ea6,#17283bdc),var(--relic-art);background-size:cover;background-position:center}
+.meadow .locker-shop{background-image:linear-gradient(100deg,#fff3ddeb,#f6ddc4eb 58%,#e7bba6db),var(--style-art);background-size:cover}
+.meadow .legends-menu[data-menu=finished] .menu-panel{background-image:linear-gradient(180deg,#fffae7dc,#ffefd5fa 65%),var(--team-art);background-size:cover;background-position:center}
+.meadow .legends-menu[data-menu=pause] .menu-panel{background-image:linear-gradient(180deg,#fffae7dc,#ffefd5fa 65%),var(--duel-art);background-size:cover}
+@media(max-height:500px){.meadow .party-heading,.meadow .spin-heading{padding-block:3px}}
+@media(min-width:700px) and (max-height:620px){
+ .meadow .sky-view-play{padding-block:10px;justify-content:flex-start}
+ .meadow .sky-view-play .play-tabs{margin-bottom:8px;width:min(480px,70%)}
+ .meadow .sky-view-play .play-tabs button{min-height:38px;font-size:20px}
+ .meadow .sky-view-play .legends-menu .menu-panel{margin-inline:auto;max-height:calc(100dvh - 84px);overflow:auto}
+}
+.meadow .locker-header h1,.meadow .locker-header h2{color:#fff1d1;-webkit-text-stroke:2px #303847;paint-order:stroke fill;text-shadow:0 2px #303847}

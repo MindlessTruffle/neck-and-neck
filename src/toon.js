@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-const INK = '#34372f';
+const INK = '#2d2938';
 
 /** Shared cel materials and bounded, screen-width ink hulls. No postprocess pass. */
 export function createToonStyle() {
@@ -50,6 +50,16 @@ export function createToonStyle() {
       };
       result.customProgramCacheKey=()=> 'painterly-athlete-v1';
     }
+    const paint=result.onBeforeCompile.bind(result);
+    result.onBeforeCompile=shader=>{
+      paint(shader);
+      shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>', `
+        float edgeLight=1.0-clamp(dot(normal,normalize(vViewPosition)),0.0,1.0);
+        float rim=smoothstep(.58,.86,edgeLight)*smoothstep(-.32,.62,normal.y);
+        outgoingLight=mix(outgoingLight,outgoingLight*vec3(.92,.94,1.07),.34);
+        outgoingLight+=vec3(.20,.14,.075)*rim;
+        #include <opaque_fragment>`);
+    };
     result.userData.cel = true;
     ownedMaterials.add(result); if (!unique) materialCache.set(key, result); return result;
   }

@@ -103,7 +103,11 @@ export class GiraffeRig {
     const body=this.bones.get('Body');
     if(body){
       const phase=player._setBounceTime>0?1-player._setBounceTime/.58:0;
-      body.bone.position.y-=Math.sin(phase*Math.PI*2)*.16;
+      const swing=player.swing||0;
+      const bump=player.action==='bump'?swing:0, spike=player.action==='spike'?swing:0;
+      body.bone.rotation.x+=bump*.16-spike*.19;
+      body.bone.rotation.z+=spike*.14;
+      body.bone.position.y-=Math.sin(phase*Math.PI*2)*.22+bump*.09;
       body.bone.scale.set(body.scale.x*(1+bounce*.1),body.scale.y*(1-bounce*.16),body.scale.z*(1+bounce*.08));
     }
     this.root.updateMatrixWorld(true);

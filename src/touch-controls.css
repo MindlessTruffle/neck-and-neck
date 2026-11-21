@@ -43,3 +43,20 @@
 .ability-button .power-icon{width:32px;height:32px;flex:none}
 .touch-fault{position:absolute;top:33%;left:50%;transform:translateX(-50%);padding:.5em .9em;border-radius:1em;background:#803132;color:white;font:bold clamp(15px,3vw,28px) system-ui;text-align:center;pointer-events:none}.rally-info:has(.touch-pips i:nth-child(4)[data-active=true]){color:#ffe082;filter:drop-shadow(0 1px 3px #5a1b06)}
 .meadow[data-retro=true]::after{content:"";position:absolute;inset:0;z-index:100;pointer-events:none;background:repeating-linear-gradient(0deg,transparent 0 2px,#281e450b 2px 3px)}
+
+/* Recovery is drawn inside the existing button so it cannot intercept a buffered press. */
+.match-ui[data-touch=false] .ability-button,
+.match-ui[data-touch=false] .action-button,
+.match-ui[data-touch=false] .movement-actions button { position: relative; }
+.match-ui .move-recovery { position: absolute; pointer-events: none; z-index: 2; }
+.match-ui[data-touch=false] .move-recovery {
+  inset: auto 5px 2px; height: 4px; border-radius: 4px;
+  background: linear-gradient(to right, #ffe897 calc(var(--remaining) * 100%), #21363f 0);
+}
+.match-ui[data-touch=true] .move-recovery {
+  inset: 1px; border-radius: 50%;
+  background: conic-gradient(from -90deg, #fff2b7 calc(var(--remaining) * 1turn), #152b4099 0);
+  mask-image: radial-gradient(farthest-side, transparent calc(100% - 5px), black calc(100% - 4px));
+}
+
+.match-ui .ability-button[data-active=true]:disabled { opacity: .92; }

@@ -26,7 +26,7 @@ waiting.update(1/60,{serve:true});assert.equal(waiting.serveStage,'toss');waitin
 const botServe=new VolleyballGame({mode:'1v1'});botServe.start();botServe.players[0].human=false;
 for(let i=0;i<90;i++)botServe.update(1/60);assert.equal(botServe.phase,'play');
 // Ground movement builds speed and coasts to a stop; airborne steering is weaker.
-const motion=new VolleyballGame({mode:'1v1'});motion.start();motion.phase='play';const m=motion.players[0];m.x=-8;
+const motion=new VolleyballGame({mode:'1v1'});motion.start();motion.phase='play';const m=motion.players[0];m.x=-8;Object.assign(motion.ball,{x:7,y:16,z:3,vx:0,vy:7,vz:0});
 motion.update(.05,{x:1});assert(m.vx>0&&m.vx<5.5);const first=m.vx;
 for(let i=0;i<10;i++)motion.update(.05,{x:1});assert(m.vx>first&&m.vx<5.51);
 motion.update(.05,{});assert(m.vx>0&&m.vx<5.5);for(let i=0;i<30;i++)motion.update(.05,{});assert(Math.abs(m.vx)<.01);

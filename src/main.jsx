@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createWorld } from './art.js';
 import { perfectSpikeReady } from './spike-timing.js';
-import { VolleyballGame } from './physics.js';
+import { VolleyballGame, moveCooldowns } from './physics.js';
 import { SmoothSimulation } from './motion.js';
 import { requestGameCapture } from './capture.js';
 import { GameAudio } from './audio.js';
@@ -22,6 +22,8 @@ import { Options } from './options.jsx';
 import { loadSettings, saveSettings, DEFAULT_BINDINGS } from './settings.js';
 import { LanguageContext, translate } from './i18n.jsx';
 import { chooseMap } from './maps.js';
+import './club-print.css';
+import './arcade-menu.css';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -44,8 +46,6 @@ function App() {
   const [profile, setProfile] = useState(loadProfile);
   const [menuTab, setMenuTab] = useState('home');
   const [playTab,setPlayTab]=useState('online');
-  const menuTabRef = useRef(menuTab); menuTabRef.current = menuTab;
-  const [hotspots, setHotspots] = useState(null);
   const [onlineStatus, setOnlineStatus] = useState({ connection: 'offline' });
   const [spectatorView,setSpectatorView]=useState({mode:'Side',player:0});
   const spectatorCamera=useRef(spectatorView);spectatorCamera.current=spectatorView;
@@ -123,6 +123,7 @@ function App() {
       const world = createWorld({ canvas: canvas.current, onLoadProgress: (loaded, total) => { if (!disposed) setLoadingProgress(total ? loaded / total : 0); } });
       const game = new VolleyballGame({ mode, difficulty, onEvent: runtime.current.handleGameEvent = event => {
         if (!runtime.current.started) return;
+        if (event.player === (runtime.current.onlineActive ? runtime.current.localPlayerId : 0)) runtime.current.hudDirty = true;
         audio.event(event);
         world.impact?.(event);
         if (event.type === 'score' || event.type === 'win') {
@@ -246,7 +247,8 @@ function App() {
           canvas.current.dataset.fps = String(Math.round(frameCount * 1000 / (now - fpsAt)));
           frameCount = 0; fpsAt = now;
         }
-        if (now - telemetryAt > 100) {
+        if (now - telemetryAt > 100 || runtime.current.hudDirty) {
+          runtime.current.hudDirty = false;
           telemetryAt = now;
           canvas.current.dataset.frameMs = (rawDt * 1000).toFixed(1);
           canvas.current.dataset.cpuMs = (performance.now() - cpuStart).toFixed(1);
@@ -266,13 +268,12 @@ function App() {
           canvas.current.dataset.musicStatus = audio.musicStatus;
           canvas.current.dataset.body = [localPlayer.x, localPlayer.y, localPlayer.z].map(value => value.toFixed(3)).join(',');
           if (displayGame.round !== lastRound) { lastRound = displayGame.round; revealUntil = now + 3500; }
-          if (menuRef.current === 'lobby') setHotspots(world.projectMenuHotspots?.() || null);
           if (!menuRef.current) {
             const player = localPlayer;
             setMatch({ perfectSpikeReady:spikeReady, score: [...displayGame.score], mode: displayGame.mode, phase: displayGame.phase, server: displayGame.server,
               playerTeam: player.team, isServer: displayGame.players.find(p => p.team === displayGame.server)?.id === player.id, round: displayGame.round, touches: [...(displayGame.touches || [0, 0])], touchTeam: displayGame.touchTeam,
               rallyHits: displayGame.rallyHits, message: displayGame.message, serveStage: displayGame.serveStage, serveCharge: displayGame.serveCharge,
-              airborne: player.y > .2, energy: player.energy, ability: player.ability ? { ...player.ability } : null,
+              cooldowns: moveCooldowns(player), airborne: player.y > .2, energy: player.energy, ability: player.ability ? { ...player.ability } : null,
               reveal: false, lastAction: displayGame.lastAction });
           }
         }
@@ -407,7 +408,6 @@ function App() {
     document.documentElement.lang=settings.language;
     runtime.current.world?.setOptions(settings);
     runtime.current.world?.setReducedMotion(settings.reducedMotion);
-    runtime.current.world?.setMenuLabels(Object.fromEntries([['play','PLAY'],['shop','STYLE'],['abilities','POWERS'],['online','PARTY']].map(([key,text])=>[key,translate(text,settings.language)])));
     runtime.current.audio?.setVolumes(settings.masterVolume,settings.musicVolume);
     if(settings.touchMode!=='auto'){touchOverride.current=settings.touchMode==='on';setTouch(settings.touchMode==='on');}else{touchOverride.current=null;setTouch(window.matchMedia('(pointer:coarse)').matches||innerWidth<700);}
   },[settings,ready]);
@@ -432,8 +432,8 @@ function App() {
   }, []);
   useEffect(() => {
     if (!menu || (menu === 'lobby' && ['shop', 'abilities'].includes(menuTab))) return;
-    const focusRoot = document.querySelector('.options-panel') || panel.current?.querySelector('[role="dialog"]') || panel.current;
-    const button = focusRoot?.querySelector('.play-button:not(:disabled)') || focusRoot?.querySelector('input,button:not(:disabled)');
+    const focusRoot = stage.current?.querySelector('.options-panel') || stage.current?.querySelector('.cloud-lobby') || panel.current;
+    const button = focusRoot?.querySelector('.station-play .station-button:not(:disabled), .mode-choice:not(:disabled)') || focusRoot?.querySelector('.play-button:not(:disabled)') || focusRoot?.querySelector('input,button:not(:disabled)');
     button?.focus({ preventScroll: true });
     const trap = event => {
       if (event.defaultPrevented || event.key !== 'Tab') return;
@@ -444,7 +444,7 @@ function App() {
     };
     document.addEventListener('keydown', trap);
     return () => document.removeEventListener('keydown', trap);
-  }, [menu, menuTab, ready, optionsOpen]);
+  }, [menu, menuTab, playTab, ready, optionsOpen]);
 
   function begin() {
     if (runtime.current.onlineActive) { clubhouse(); return; }
@@ -501,7 +501,6 @@ function App() {
   const selectMenu = view => { if(view==='play')setPlayTab('online'); runtime.current.audio?.unlock(); runtime.current.audio?.event('menu'); setMenuTab(view); };
   const pointerDown = event => {
     if (menuRef.current) {
-      if (menuRef.current === 'lobby' && menuTabRef.current === 'home') { const box=canvas.current.getBoundingClientRect(); const id=runtime.current.world?.pickMenu(event.clientX-box.left,event.clientY-box.top); if(id) selectMenu(id); }
       return;
     }
     if (event.pointerType === 'touch') {
@@ -517,7 +516,6 @@ function App() {
   };
 
   const pointerMove = event => {
-    if(menuRef.current==='lobby' && menuTabRef.current==='home'){const box=canvas.current.getBoundingClientRect();const id=runtime.current.world?.pickMenu(event.clientX-box.left,event.clientY-box.top);runtime.current.world?.hoverMenu(id);canvas.current.style.cursor=id?'pointer':'default';return;}
     if (menuRef.current || event.pointerType !== 'touch') return;
     const point = interaction.current.touches.get(event.pointerId);
     if (!point) return;
@@ -559,7 +557,7 @@ function App() {
       <MatchUI state={match} onAction={action} onPause={() => showMenu('pause')} onWalk={(walk, id) => applyWalk(interaction.current, walk, `stick:${id}`)} touch={touch}/>
     </>}
     {onlineStatus.watching && <SpectatorBar watching={onlineStatus.watching} view={spectatorView} onView={setSpectatorView} onLeave={()=>runtime.current.online.leaveSpectator()}/>}
-    {menu === 'lobby' && !onlineStatus.watching && <CloudLobby error={error} onReload={() => location.reload()} profile={profile} skinName={getSkin(profile.equippedSkin).name} abilityName={ABILITY_CATALOG.find(item => item.id === profile.equippedAbility)?.name || profile.equippedAbility} hotspots={hotspots} onFocus={id => runtime.current.world?.hoverMenu(id)}
+    {menu === 'lobby' && !onlineStatus.watching && <CloudLobby error={error} onReload={() => location.reload()} profile={profile} abilityName={ABILITY_CATALOG.find(item => item.id === profile.equippedAbility)?.name || profile.equippedAbility}
       onSelect={selectMenu} view={menuTab} onClose={() => { if (menuTab === 'online'||menuTab==='play') { runtime.current.online?.cancelQueue(); if(!runtime.current.online?.getState().room)runtime.current.online?.disconnect(); } setMenuTab('home'); }}
       muted={muted} music={music} touch={touch} onMuted={() => setMuted(value => !value)} onMusic={() => setMusic(value => !value)}
       onTouch={() => { touchOverride.current = !touch; setTouch(!touch); }} onFullscreen={toggleFullscreen} ready={ready} progress={loadingProgress} panelRef={panel}>

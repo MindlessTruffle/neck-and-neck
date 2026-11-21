@@ -8,7 +8,16 @@ export function accessory(id) {
   const ink='#30314d',cream='#fff4d9';
   const materials=new Map();
   function mesh(geometry,c,x,y,z,sx=1,sy=1,sz=1){
-    if(!materials.has(c))materials.set(c,new THREE.MeshStandardMaterial({color:c,roughness:shape==='boater'||item.slot==='scarf'?.88:.48,metalness:id==='crown'?.34:0}));
+    if(!materials.has(c)){
+      const mat=new THREE.MeshStandardMaterial({color:c,roughness:shape==='boater'||item.slot==='scarf'?.88:.48,metalness:id==='crown'?.34:0});
+      mat.onBeforeCompile=shader=>{
+        shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>',`
+          float edge=1.-abs(dot(normal,normalize(vViewPosition)));
+          outgoingLight+=vec3(.21,.16,.09)*smoothstep(.60,.80,edge)*smoothstep(-.45,.40,normal.y);
+          #include <opaque_fragment>`);
+      };
+      materials.set(c,mat);
+    }
     const m=new THREE.Mesh(geometry,materials.get(c));m.position.set(x,y,z);m.scale.set(sx,sy,sz);m.castShadow=true;group.add(m);return m;
   }
   const orb=(c,x,y,z,a,b,d)=>mesh(new THREE.SphereGeometry(1,16,10),c,x,y,z,a,b,d);

@@ -81,9 +81,21 @@ export function createWorld({canvas,onProgress=()=>{},onLoadProgress=()=>{},redu
   // the volleyball readable against trees, grass and every sky angle.
   const ball=new THREE.Group();ball.name='HighlightedVolleyball';ball.scale.setScalar(BALL_RADIUS/.258);scene.add(ball);
   const outlineMat=new THREE.MeshBasicMaterial({color:'#28241f',side:THREE.BackSide});const outline=mesh(new THREE.SphereGeometry(.286,24,16),outlineMat,ball,false);geometries.push(outline.geometry);
-  const ballMat=toon.material(new THREE.MeshStandardMaterial({color:'#fff8dd',emissive:'#fac357',emissiveIntensity:.18}));const core=mesh(new THREE.SphereGeometry(.258,28,20),ballMat,ball);geometries.push(core.geometry);
-  for(let i=0;i<6;i++){const panelGeo=new THREE.SphereGeometry(.26,10,16,i*Math.PI/3,Math.PI/3-.045,.21,Math.PI-.42);const panel=mesh(panelGeo,material(i%3===0?'#e68a43':i%3===1?'#fff4d3':'#429a8c',.55),ball);panel.rotation.z=.35;geometries.push(panelGeo);}
-  const haloGeo=new THREE.TorusGeometry(.36,.011,6,56),halo=mesh(haloGeo,new THREE.MeshBasicMaterial({color:'#ffe4a2',transparent:true,opacity:.8}),ball,false);geometries.push(haloGeo);halo.rotation.x=.7;
+  const ballMat=new THREE.MeshStandardMaterial({color:'#fff2c5',emissive:'#f4be66',emissiveIntensity:.10,roughness:.59});
+  ballMat.onBeforeCompile=shader=>{
+    shader.vertexShader='varying vec3 panelDir;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\npanelDir=position;');
+    shader.fragmentShader='varying vec3 panelDir;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+      vec3 d=normalize(panelDir);
+      float lon=atan(d.z,d.x),lat=asin(clamp(d.y,-1.,1.));
+      float zone=floor((lat+1.5708)/1.0472);
+      float sweep=lon*.95493+.44*sin(lat*3.)+zone*.5;
+      float panel=floor(sweep),stripe=mod(panel+zone,3.);
+      vec3 dye=stripe<.5?vec3(.97,.66,.22):stripe<1.5?vec3(.96,.90,.69):vec3(.10,.48,.48);
+      float seam=min(min(fract(sweep),1.-fract(sweep)),abs(sin((lat+1.5708)*3.))*.5);
+      diffuseColor.rgb=dye*mix(.47,1.,smoothstep(.008,.028,seam));
+      `);
+  };
+  const core=mesh(new THREE.SphereGeometry(.258,36,24),ballMat,ball);geometries.push(core.geometry);
   // Only the thin locator rings ignore depth, so a held ball remains readable
   // when the player's floppy head crosses the line of sight.
   const locator=new THREE.Group();locator.name='BallWorldLocator';locator.scale.setScalar(BALL_RADIUS/.258);scene.add(locator);locator.renderOrder=1000;
@@ -94,7 +106,22 @@ export function createWorld({canvas,onProgress=()=>{},onLoadProgress=()=>{},redu
   const spikeVertices=[];for(let i=0;i<4;i++){const a=i*Math.PI/2,c=Math.cos(a),s=Math.sin(a);for(const [r,w] of [[.59,0],[.76,-.08],[.76,.08]])spikeVertices.push(c*r-s*w,s*r+c*w,0);}
   const spikeArrows=new THREE.BufferGeometry();spikeArrows.setAttribute('position',new THREE.Float32BufferAttribute(spikeVertices,3));
   const spikeArrowMesh=mesh(spikeArrows,new THREE.MeshBasicMaterial({color:'#fff8c9',side:THREE.DoubleSide,depthTest:false,depthWrite:false}),spikeTarget,false);spikeArrowMesh.renderOrder=1003;
-  const landing=new THREE.Group();scene.add(landing);const ringGeo=new THREE.RingGeometry(.46,.49,64);geometries.push(ringGeo);const landingRing=mesh(ringGeo,new THREE.MeshBasicMaterial({color:'#ffe5a2',transparent:true,opacity:.65,side:THREE.DoubleSide,depthWrite:false}),landing,false);landingRing.rotation.x=-Math.PI/2;
+  const landing = new THREE.Group();
+  landing.name = 'PredictedLandingCircle';
+  scene.add(landing);
+  function groundRing(inner, outer, color) {
+    const geometry = new THREE.RingGeometry(inner, outer, 48);
+    geometries.push(geometry);
+    const ring = mesh(geometry, new THREE.MeshBasicMaterial({
+      color, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    }), landing, false);
+    ring.rotation.x = -Math.PI / 2;
+    return ring;
+  }
+  const landingRim = groundRing(.49, .62, '#503e39');
+  const landingRing = groundRing(.515, .59, '#fff1ae');
+  landingRing.position.y = .003;
+  landingRing.renderOrder = 2;
   for(let i=0;i<4;i++){const marker=box(landing,'#ffd775',Math.cos(i*Math.PI/2)*.61,.008,Math.sin(i*Math.PI/2)*.61,.13,.013,.045);marker.rotation.y=-i*Math.PI/2;marker.castShadow=false;}
   const serveLane=new THREE.Group();serveLane.name='ServePositionLane';scene.add(serveLane);serveLane.visible=false;
   const laneMaterial=new THREE.MeshBasicMaterial({color:'#7fffe1',transparent:true,opacity:.26,depthWrite:false,side:THREE.DoubleSide});
@@ -120,33 +147,31 @@ export function createWorld({canvas,onProgress=()=>{},onLoadProgress=()=>{},redu
   const loader=new GLTFLoader(),loadedSources=[];let loaded=0;
   const reportLoad=()=>{const progress=loaded/totalAssets;onProgress(progress);onLoadProgress(loaded,totalAssets);};
   function load(url){return loader.loadAsync(assetUrl(url)).then(asset=>{loadedSources.push(asset.scene);if(disposed){asset.scene.traverse(object=>{object.geometry?.dispose();for(const mat of object.material?(Array.isArray(object.material)?object.material:[object.material]):[])mat.dispose();});return asset.scene;}loaded++;reportLoad();asset.scene.traverse(object=>{if(object.isMesh){object.castShadow=!adaptive.state.coarse;object.receiveShadow=!adaptive.state.coarse;if(object.material){const mats=Array.isArray(object.material)?object.material:[object.material];mats.forEach(m=>{m.roughness=.85;});}}});return asset.scene;});}
-  const totalAssets=17;
+  const totalAssets=16;
   const texLoader=new THREE.TextureLoader();
   function loadTexture(url,repeat=false){return texLoader.loadAsync(assetUrl(url)).then(t=>{t.colorSpace=THREE.SRGBColorSpace;if(repeat)t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=adaptive.state.coarse?2:4;loaded++;reportLoad();return t;});}
-  const ready=Promise.all([load('/models/giraffe-athlete.glb'),...['meadow','jungle','beach','volcano','mountain','cave','lobby','courtside-wildlife'].map(id=>load(`/models/worlds/${id}.glb`)),loadTexture('/textures/painted-meadow.jpg',true),loadTexture('/textures/painted-honey-wood.png',true),loadTexture('/textures/painted-sky-stone.png',true),loadTexture('/ui/destination-pixel-atlas.png'),loadTexture('/textures/painted-sky.png'),loadTexture('/textures/biome-paint-atlas.png'),loadTexture('/textures/world-paint-v2.png'),document.fonts.load('24px "Lilita One"').then(()=>{loaded++;reportLoad();})]).then(([source,...assets])=>{
+  const ready=Promise.all([load('/models/giraffe-athlete.glb'),...['meadow','jungle','beach','volcano','mountain','cave','lobby','courtside-wildlife'].map(id=>load(`/models/worlds/${id}.glb`)),loadTexture('/textures/painted-meadow.jpg',true),loadTexture('/textures/painted-honey-wood.png',true),loadTexture('/textures/painted-sky-stone.png',true),loadTexture('/textures/painted-sky.png'),loadTexture('/textures/biome-paint-atlas.png'),loadTexture('/textures/world-paint-v2.png'),document.fonts.load('24px "Lilita One"').then(()=>{loaded++;reportLoad();})]).then(([source,...assets])=>{
     if(disposed)return;
-    const [meadow,jungle,beach,volcano,mountain,cave,lobby,wildlife,ground,wood,stone,atlas,skyPaint,terrain,worldTerrain]=assets;
+    const [meadow,jungle,beach,volcano,mountain,cave,lobby,wildlife,ground,wood,stone,skyPaint,terrain,worldTerrain]=assets;
     template=source;const textures={ground,wood,stone,terrain,worldTerrain};environments.setModels([meadow,jungle,beach,volcano,mountain,cave],textures,wildlife);
-    menuWorld=createMenuWorld(lobbyRoot,toon,lobby,textures,atlas,adaptive.state.coarse);lobbyModel=lobbyRoot;menuWorld.setVisible(menuFocus==='play');
+    menuWorld=createMenuWorld(lobbyRoot,lobby,textures,adaptive.state.coarse);lobbyModel=lobbyRoot;
     skyMaterial.uniforms.skyPaint.value=skyPaint;skyMaterial.uniforms.hasPaint.value=1;
     createLobbyActors();createMapChunks();captureMapBatches();onProgress(1);
   });
   function createLobbyActors(){
-    const poses=[[0,4],[-3,5],[4,3],[-2,-4],[3.6,-3.2],[.5,-1.8]],palettes=[{body:'#f4c56d',spots:'#9d633c',muzzle:'#ffe1a1',scarf:'#3c9e8c',accent:'#8bd3b1'},{body:'#e4b0a0',spots:'#9a6576',muzzle:'#ffe7c8',scarf:'#b35d4a',accent:'#efb489'},{body:'#bed0a1',spots:'#6d8c60',muzzle:'#f1e5b5',scarf:'#d49248',accent:'#f3cb77'},{body:'#d7c7e0',spots:'#927795',muzzle:'#fff0d2',scarf:'#6a96a1',accent:'#a4d4ce'},{body:'#f2d894',spots:'#ad7c4d',muzzle:'#fff0c3',scarf:'#cb7656',accent:'#f0be7d'},{body:'#b7cfcd',spots:'#658e94',muzzle:'#f4ebc9',scarf:'#839a5e',accent:'#c3d68c'}];
-    for(let i=0;i<(adaptive.state.coarse?3:4);i++){const rig=new GiraffeRig(template,lobbyRoot,i,toon),palette=i===0&&playerSkins.has(0)?playerSkins.get(0):palettes[i],p={id:100+i,team:i%2,human:false,x:poses[i][0],z:poses[i][1],y:(i===1||i===2)?.1:0,dive:(i===1||i===2)?.82:0,_diveX:0,_diveZ:1,vx:0,vz:0,swing:0,energy:1,bodyYaw:1.05,neck:{yaw:1.05,pitch:.05,extension:.2},head:{x:0,y:2.95,z:0},neckPoints:Array.from({length:9},()=>({x:0,y:0,z:0})),skin:palette,cosmetics:i===0?playerCosmetics:null};rig.setSkin?.(palette);lobbyRigs.push(rig);lobbyPlayers.push(p);}
+    const poses=[[-2.9,2.68],[3.75,2.68],[5.3,5.3],[-5.2,-1.0],[7.6,.5],[-3.6,-5.0]],palettes=[{body:'#f4c56d',spots:'#9d633c',muzzle:'#ffe1a1',scarf:'#3c9e8c',accent:'#8bd3b1'},{body:'#e4b0a0',spots:'#9a6576',muzzle:'#ffe7c8',scarf:'#b35d4a',accent:'#efb489'},{body:'#bed0a1',spots:'#6d8c60',muzzle:'#f1e5b5',scarf:'#d49248',accent:'#f3cb77'},{body:'#d7c7e0',spots:'#927795',muzzle:'#fff0d2',scarf:'#6a96a1',accent:'#a4d4ce'},{body:'#f2d894',spots:'#ad7c4d',muzzle:'#fff0c3',scarf:'#cb7656',accent:'#f0be7d'},{body:'#b7cfcd',spots:'#658e94',muzzle:'#f4ebc9',scarf:'#839a5e',accent:'#c3d68c'}];
+    for(let i=0;i<(adaptive.state.coarse?4:6);i++){const rig=new GiraffeRig(template,lobbyRoot,i,toon),palette=i===0&&playerSkins.has(0)?playerSkins.get(0):palettes[i],p={id:100+i,team:i%2,human:false,x:poses[i][0],z:poses[i][1],y:i===2?.1:0,dive:i===2?.82:0,_diveX:0,_diveZ:1,vx:0,vz:0,swing:0,energy:1,bodyYaw:1.05,neck:{yaw:1.05,pitch:.05,extension:.2},head:{x:0,y:2.95,z:0},neckPoints:Array.from({length:9},()=>({x:0,y:0,z:0})),skin:palette,cosmetics:i===0?playerCosmetics:null};rig.setSkin?.(palette);lobbyRigs.push(rig);lobbyPlayers.push(p);}
   }
-  function updateLobbyActors(dt,t){for(let i=0;i<lobbyPlayers.length;i++){const p=lobbyPlayers[i],yaw=1.05+Math.sin(t*.24+i)*.2,c=Math.cos(yaw),ss=Math.sin(yaw),startX=p.x+c*.28,startZ=p.z+ss*.28;p.bodyYaw=yaw;p.neck.yaw=yaw+Math.sin(t*.55+i)*.13;p.head.x=p.x+c*.36+Math.sin(t*.8+i)*.16;p.head.y=(p.dive?1.65:2.95)+Math.sin(t*.75+i)*(p.dive?.035:.07);p.head.z=p.z+ss*.36+Math.cos(t*.67+i)*.13;for(let j=0;j<9;j++){const u=j/8,q=p.neckPoints[j],bend=Math.sin(Math.PI*u);q.x=startX+(p.head.x-startX)*u+Math.sin(t*.8+i+u*3)*.06*bend;const shoulder=1.45-(p.dive||0)*.85+(p.y||0);q.y=shoulder+(p.head.y-shoulder)*u;q.z=startZ+(p.head.z-startZ)*u+Math.cos(t*.75+i+u*2)*.05*bend;}lobbyRigs[i].update(p,dt,t);}}
+  function updateLobbyActors(dt,t){for(let i=0;i<lobbyPlayers.length;i++){const p=lobbyPlayers[i];
+    if(i===3){const a=reducedMotion?.85:t*.64;p.x=-8.4+2.48*Math.cos(a);p.z=4.2+1.75*Math.sin(a);p.vx=reducedMotion?0:-1.58*Math.sin(a);p.vz=reducedMotion?0:1.12*Math.cos(a);}
+    const yaw=(i===0?0:i===1?Math.PI:i===3?Math.atan2(p.vz,p.vx):1.05)+Math.sin(t*.24+i)*.16,c=Math.cos(yaw),ss=Math.sin(yaw),startX=p.x+c*.28,startZ=p.z+ss*.28;p.bodyYaw=yaw;p.neck.yaw=yaw+Math.sin(t*.55+i)*.13;p.swing=i<2&&!reducedMotion?Math.max(0,Math.cos(t*1.65+i*Math.PI))**12:0;p.y=i<2?p.swing*.18:p.y;p.head.x=p.x+c*(.36+p.swing*.18)+Math.sin(t*.8+i)*.16;p.head.y=p.y+(p.dive?1.65:2.95)+Math.sin(t*.75+i)*(p.dive?.035:.07);p.head.z=p.z+ss*.36+Math.cos(t*.67+i)*.13;for(let j=0;j<9;j++){const u=j/8,q=p.neckPoints[j],bend=Math.sin(Math.PI*u);q.x=startX+(p.head.x-startX)*u+Math.sin(t*.8+i+u*3)*.06*bend;const shoulder=1.45-(p.dive||0)*.85+(p.y||0);q.y=shoulder+(p.head.y-shoulder)*u;q.z=startZ+(p.head.z-startZ)*u+Math.cos(t*.75+i+u*2)*.05*bend;}lobbyRigs[i].update(p,dt,t);}}
   function setPlayerCosmetics(value){playerCosmetics=value;if(lobbyPlayers[0])lobbyPlayers[0].cosmetics=value;}
   function setPlayerSkin(id,palette){if(!palette)return;playerSkins.set(id,palette);for(let i=0;i<rigs.length;i++)if((lastGame?.players[i]?.id??i)===id)rigs[i].setSkin?.(palette);if(id===0&&lobbyRigs[0]){lobbyPlayers[0].skin=palette;lobbyRigs[0].setSkin?.(palette);}}
   function menuFov(){const aspect=width/height;if(aspect<=.75)return 85;return 85-Math.min(1,(aspect-.75)/.65)*33;}
   function applyLens(){camera.fov=menuScene?menuFov():cameraFovForAspect(camera.aspect)+(options.fov||0);camera.updateProjectionMatrix();}
-  function setMenuFocus(key){if(lobbyAnchors[key])menuFocus=key;menuWorld?.setVisible(key==='play');}
+  function setMenuFocus(key){if(lobbyAnchors[key])menuFocus=key;}
   function setMenuScene(value){const next=!!value;if(next===menuScene)return;menuScene=next;playRoot.visible=!next;lobbyRoot.visible=next;resetMapMotion();resetCamera();applyLens();}
   function updateMenuCamera(dt){const portrait=width/height<.75,anchor=lobbyAnchors[menuFocus]||lobbyAnchors.play;menuEye.set(portrait?0:2,portrait?25:21,portrait?43:34);menuLook.set(0,1.5,0);if(!cameraInitialized){cameraPosition.copy(menuEye);cameraTarget.copy(menuLook);cameraInitialized=true;}else{const amount=1-Math.exp(-dt*3.5);cameraPosition.lerp(menuEye,amount);cameraTarget.lerp(menuLook,amount);}camera.position.copy(cameraPosition);camera.lookAt(cameraTarget);}
-  function projectMenuHotspots(){camera.updateMatrixWorld();const result={};for(const s of menuWorld?.signs||[]){s.root.updateWorldMatrix(true,false);const center=s.face.getWorldPosition(V()),left=s.face.localToWorld(V(-4.1,0,0)),right=s.face.localToWorld(V(4.1,0,0)),top=s.face.localToWorld(V(0,.825,0)),bottom=s.face.localToWorld(V(0,-.825,0));const a=project(...left.toArray()),b=project(...right.toArray()),c=project(...top.toArray()),d=project(...bottom.toArray());result[s.id]={...project(...center.toArray()),width:Math.abs(b.x-a.x),height:Math.abs(d.y-c.y)};}return result;}
-  function pickMenu(x,y){return menuScene?menuWorld?.pick(x,y,width,height,camera):null;}
-  function hoverMenu(key){menuWorld?.hover(key);}
-  function setMenuLabels(labels){menuWorld?.setLabels(labels);}
   function createMapChunks(){
     const columns=adaptive.state.coarse?6:8,tileX=84/columns,tileZ=76/columns,geometry=new THREE.BoxGeometry(1,1,1),stone=[],top=[],oldIndex=geometry.index.array;for(const group of geometry.groups){const target=group.materialIndex===2?top:stone;for(let i=group.start;i<group.start+group.count;i++)target.push(oldIndex[i]);}geometry.setIndex(stone.concat(top));geometry.clearGroups();geometry.addGroup(0,stone.length,0);geometry.addGroup(stone.length,top.length,1);
     let stoneMaterial=null,topMaterial=null;arenaModel.traverse(o=>{for(const mat of o.material?(Array.isArray(o.material)?o.material:[o.material]):[]){if(/SkyStone/.test(mat.name))stoneMaterial=mat;if(/Meadow/.test(mat.name))topMaterial=mat;}});
@@ -179,12 +204,24 @@ export function createWorld({canvas,onProgress=()=>{},onLoadProgress=()=>{},redu
       if(!cameraInitialized){cameraPosition.copy(wanted);cameraTarget.copy(aim);cameraInitialized=true;}else{const follow=cameraFollowAlpha(dt);cameraPosition.lerp(wanted,follow);cameraTarget.lerp(aim,follow);}
       camera.position.copy(cameraPosition);const shake=vfx.cameraImpulse();if(shake&&!reducedMotion&&options.shake)camera.position.addScaledVector(right,Math.sin(t*137)*shake*.5);camera.lookAt(cameraTarget);
     }
-    if(menuScene){updateLobbyActors(dt,t);updateMenuCamera(dt);menuWorld?.update(dt,t,camera,reducedMotion);}else if(mapMotion.active&&mapMotion.final){menuEye.set(52,48,54);menuLook.set(0,10,0);cameraPosition.lerp(menuEye,1-Math.exp(-dt*3));cameraTarget.lerp(menuLook,1-Math.exp(-dt*3));camera.position.copy(cameraPosition);camera.lookAt(cameraTarget);}
+    if(menuScene){updateLobbyActors(dt,t);updateMenuCamera(dt);menuWorld?.(t,reducedMotion);}else if(mapMotion.active&&mapMotion.final){menuEye.set(52,48,54);menuLook.set(0,10,0);cameraPosition.lerp(menuEye,1-Math.exp(-dt*3));cameraTarget.lerp(menuLook,1-Math.exp(-dt*3));camera.position.copy(cameraPosition);camera.lookAt(cameraTarget);}
     sky.position.copy(camera.position);for(const texture of waterMaps)texture.offset.y=-t*.16;
-    const b=game?.ball||fallbackBall;ball.visible=game?.phase!=='attract';ball.position.set(b.x,Math.max(BALL_RADIUS,b.y),b.z);core.rotation.x+=dt*2;ball.rotation.z+=dt*1.8;halo.rotation.y=t*1.6;locator.visible=ball.visible;locator.position.copy(ball.position);locator.quaternion.copy(camera.quaternion);
+    const b=game?.ball||fallbackBall;ball.visible=game?.phase!=='attract';ball.position.set(b.x,Math.max(BALL_RADIUS,b.y),b.z);core.rotation.x+=dt*2;ball.rotation.z+=dt*1.8;locator.visible=ball.visible;locator.position.copy(ball.position);locator.quaternion.copy(camera.quaternion);
     const spikeReady=!menuScene&&perfectSpikeReady(game,human);spikeTarget.visible=spikeReady;ballMat.emissiveIntensity=spikeReady?.75:.18;
     spikeTarget.scale.setScalar(reducedMotion?1:1+Math.sin(t*5)*.035);
-    const landingTime=Math.max(0,((b.vy||0)+Math.sqrt((b.vy||0)**2+2*BALL_GRAVITY*Math.max(0,b.y-BALL_RADIUS)))/BALL_GRAVITY);landing.position.set(THREE.MathUtils.clamp(b.x+(b.vx||0)*landingTime,-10,10),.018,THREE.MathUtils.clamp(b.z+(b.vz||0)*landingTime,-6,6));landing.visible=ball.visible;landing.rotation.y=t*.35;landingRing.material.opacity=.43+Math.sin(t*4)*.08;
+    landing.visible = !menuScene && game?.phase === 'play' && !game.paused;
+    if (landing.visible) {
+      const vy = b.vy || 0;
+      const timeToFloor = (vy + Math.sqrt(vy * vy + 2 * BALL_GRAVITY * Math.max(0, b.y - BALL_RADIUS))) / BALL_GRAVITY;
+      landing.position.set(b.x + (b.vx || 0) * timeToFloor, .055, b.z + (b.vz || 0) * timeToFloor);
+      const arrival = 1 - Math.min(timeToFloor, 1);
+      landing.scale.setScalar(reducedMotion ? 1.1 : 1.4 - .4 * arrival);
+      const receiving = human && (human.team ? landing.position.x > 0 : landing.position.x < 0);
+      landingRing.material.color.setHex(receiving ? 0x9ffff0 : 0xffedb3);
+      landingRing.material.opacity = receiving ? .84 + .16 * arrival : .50;
+      landingRim.material.color.setHex(receiving ? 0x215155 : 0x503e39);
+      landingRim.material.opacity = .55;
+    }
     const servingPlayer=selectRenderPlayer(game);serveLane.visible=!menuScene&&game?.phase==='serve'&&game?.serveStage==='ready'&&servingPlayer?.id===game.server*(game.mode==='1v1'?1:2);
     if(serveLane.visible){serveLane.position.set(servingPlayer.x,.035,0);laneMaterial.opacity=reducedMotion?.28:.25+Math.sin(t*3)*.045;}
     ballShadow.visible=ball.visible;ballShadow.position.set(b.x,.01,b.z);ballShadow.scale.setScalar(1+b.y*.08);ballShadow.material.opacity=.22/(1+b.y*.2);updateScore(game?.score);
@@ -195,7 +232,7 @@ export function createWorld({canvas,onProgress=()=>{},onLoadProgress=()=>{},redu
   function burst(x,y,z,color,power=1){return impact({type:'hit',x,y,z,power});}
   function project(x,y,z){const p=V(x,y,z).project(camera);return{x:(p.x+1)*width/2,y:(1-p.y)*height/2,visible:p.z<1&&p.z>-1};}
   function getDebugSnapshot(){const human=selectRenderPlayer(lastGame);return{camera:{position:camera.position.toArray(),target:cameraTarget.toArray(),fov:camera.fov,physicalFollowYaw,...orbit},performance:{...adaptive.state},lobby:{visible:menuScene,focus:menuFocus,actors:lobbyRigs.length,ready:!!lobbyModel},mapId:environments.id,mapMotion:{active:mapMotion.active,final:mapMotion.final,time:mapMotion.time},toon:toon.stats(),actors:rigs.filter(r=>r.root.visible).length,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,resources:{...renderer.info.memory},human:human?{body:[human.x,human.y,human.z],head:{...human.head},neckPoints:human.neckPoints?.map(p=>({...p}))}:null,rigs:rigs.map(r=>({bones:r.bones.size,neck:r.neck.map(b=>b.bone.getWorldPosition(V()).toArray()),head:r.head?.bone.getWorldPosition(V()).toArray()}))};}
-  function dispose(){disposed=true;vfx.dispose();rigs.forEach(rig=>rig.dispose());lobbyRigs.forEach(rig=>rig.dispose());scoreTexture.dispose();const seenGeometry=new Set(),seenMaterial=new Set(),seenTexture=new Set();for(const source of [scene,...loadedSources])source.traverse(o=>{if(o.geometry&&!seenGeometry.has(o.geometry)){seenGeometry.add(o.geometry);o.geometry.dispose();}for(const mat of o.material?(Array.isArray(o.material)?o.material:[o.material]):[]){if(seenMaterial.has(mat))continue;seenMaterial.add(mat);for(const value of Object.values(mat)){if(value?.isTexture&&!seenTexture.has(value)){seenTexture.add(value);value.dispose();}}mat.dispose();}});toon.dispose();renderer.dispose();}
-  return{renderer,scene,camera,ready,setOptions,pickMenu,hoverMenu,setMenuLabels,resize,update,dispose,project,burst,impact,setCamera,resetCamera,setMenuScene,setMenuFocus,projectMenuHotspots,setPlayerSkin,setPlayerCosmetics,performance:adaptive.state,updatePerformance,getDebugSnapshot,setLook:(yaw,pitch)=>setCamera({yaw,pitch}),setReducedMotion:value=>{reducedMotion=!!value;if(reducedMotion)resetMapMotion();vfx.setReducedMotion(reducedMotion);}};
+  function dispose(){disposed=true;skyMaterial.uniforms.skyPaint.value?.dispose();vfx.dispose();rigs.forEach(rig=>rig.dispose());lobbyRigs.forEach(rig=>rig.dispose());scoreTexture.dispose();const seenGeometry=new Set(),seenMaterial=new Set(),seenTexture=new Set();for(const source of [scene,...loadedSources])source.traverse(o=>{if(o.geometry&&!seenGeometry.has(o.geometry)){seenGeometry.add(o.geometry);o.geometry.dispose();}for(const mat of o.material?(Array.isArray(o.material)?o.material:[o.material]):[]){if(seenMaterial.has(mat))continue;seenMaterial.add(mat);for(const value of Object.values(mat)){if(value?.isTexture&&!seenTexture.has(value)){seenTexture.add(value);value.dispose();}}mat.dispose();}});toon.dispose();renderer.dispose();}
+  return{renderer,scene,camera,ready,setOptions,resize,update,dispose,project,burst,impact,setCamera,resetCamera,setMenuScene,setMenuFocus,setPlayerSkin,setPlayerCosmetics,performance:adaptive.state,updatePerformance,getDebugSnapshot,setLook:(yaw,pitch)=>setCamera({yaw,pitch}),setReducedMotion:value=>{reducedMotion=!!value;if(reducedMotion)resetMapMotion();vfx.setReducedMotion(reducedMotion);}};
 }
 

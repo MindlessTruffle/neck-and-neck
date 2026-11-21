@@ -1,0 +1,184 @@
+/* Screen-space controls share the club's pixel-sprite palette. */
+.station-dock {
+  position:absolute; inset-inline: max(18px,env(safe-area-inset-left)); bottom:clamp(92px,15vh,150px);
+  display:grid; grid-template-columns:repeat(4,minmax(0,192px)); justify-content:center;
+  gap:clamp(12px,2.2vw,34px); pointer-events:none;
+}
+.station {position:relative; min-width:0; --face:#ffe089; --edge:#ce913e; --sprite:url('./artwork/station-play.webp')}
+.station-shop {--face:#ffc2b3;--edge:#ce7668;--sprite:url('./artwork/station-shop.webp')}
+.station-abilities {--face:#e5cbff;--edge:#ac87cc;--sprite:url('./artwork/station-abilities.webp')}
+.station-online {--face:#adedd9;--edge:#6cbab0;--sprite:url('./artwork/station-online.webp')}
+.cloud-lobby .station-button {
+  position:relative; width:100%; min-height:60px; padding:8px 2px 4px; overflow:visible; isolation:isolate;
+  background:var(--face); color:#413348; border:3px solid #584a61; border-radius:12px;
+  box-shadow:inset 0 4px #fff5db,inset 0 -5px var(--edge),0 3px 0 #584a61;
+  cursor:pointer; touch-action:manipulation; font:clamp(23px,2.55vw,36px)/1 var(--display);
+}
+.station-button strong {font:inherit;letter-spacing:.025em}
+.station-icon {position:absolute; bottom:calc(100% - 5px);left:50%; transform:translateX(-50%);
+  width:clamp(68px,7vw,98px); height:clamp(62px,7vw,94px); background:var(--sprite) center bottom / contain no-repeat;
+  image-rendering:pixelated; filter:drop-shadow(0 3px #47384bb3);pointer-events:none}
+.cloud-lobby .station-bubble {position:absolute;right:-7px;bottom:calc(100% + 11px);width:46px;height:46px;
+  background:transparent center/contain no-repeat;border:none;padding:8px;display:grid;place-items:center;
+  border-radius:50%;filter:drop-shadow(0 2px 0 #66517b66)}
+.station-bubble .power-icon {width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
+.station-bubble b {position:absolute;right:2px;bottom:-1px;font:19px/1 var(--display);color:#fff9dd;
+  -webkit-text-stroke:3px #37526b;paint-order:stroke fill}
+.cloud-lobby .station-button:is(:hover,:focus-visible){background:#fff1bf;outline:3px solid #fff8cf;outline-offset:2px}
+.cloud-lobby .station-button:active {translate:0 2px}
+.cloud-lobby .sky-brand::before {background:#427c85;border-color:#fff1bc}
+.cloud-lobby .sky-brand h1 {text-shadow:0 2px #2e5664}
+.cloud-lobby .sky-settings button,.cloud-lobby .sky-wallet {border-radius:12px;border:2px solid #675e70;background:#fff2ce;color:#574866;box-shadow:inset 0 3px #fffbed,inset 0 -3px #e7cb9b,0 2px #675e70}
+
+.meadow .sky-overlay.sky-view-play {
+  background:linear-gradient(180deg,#8dd9e7e6 0%,#bfebead9 38%,#eddfb7b8 100%);
+  padding-inline:max(16px,env(safe-area-inset-left));
+}
+.meadow :is(.party-panel,.legends-menu .menu-panel,.options-panel,.locker-collection,.spin-rates) {
+  border:3px solid #585672;border-radius:10px;
+  background-color:#fff1ce;background-image:linear-gradient(#fff5d9,#ffedc5);
+  box-shadow:inset 0 0 0 3px #fffbed,0 4px #aaa3a4,0 7px #5b566d;
+}
+.meadow .sky-view-play .play-tabs {gap:0;background:#56536e;border:3px solid #56536e;border-radius:12px;
+  width:min(420px,80%);box-shadow:0 3px #6f7383;overflow:hidden;flex-shrink:0}
+.meadow .play-tabs button {border:0;border-radius:0;background:#e3e3dd;color:#565568;box-shadow:inset 0 -4px #c1c1bf;min-height:44px;font:24px var(--display)}
+.meadow .play-tabs button[aria-pressed=true] {color:#25434d;background:#a8eee0;box-shadow:inset 0 3px #d7fff4,inset 0 -4px #6ec0af}
+.meadow .sky-view-play .party-heading {background:#c7f0dd;border:0;border-radius:0;border-bottom:4px solid #83bcae;box-shadow:none}
+.meadow .sky-view-play :is(.party-heading h1,.menu-panel h1) {font-family:var(--display);color:#3b495d;text-shadow:0 2px #fffae5}
+.meadow .sky-view-play :is(.party-options,.formation>div) {gap:12px}
+.meadow .sky-view-play .mode-choice,.meadow .legends-menu .formation button {
+  display:flex;align-items:flex-end;justify-content:flex-start;position:relative;
+  padding:0;min-width:0;min-height:0;height:auto;aspect-ratio:2.36;
+  background-size:cover;background-position:center 43%;image-rendering:pixelated;
+  border:3px solid #54536b;border-radius:8px;box-shadow:0 3px #858398;
+}
+.meadow .sky-view-play .mode-one,.meadow .legends-menu .formation button:first-of-type {background-image:var(--duel-art)}
+.meadow .sky-view-play .mode-two,.meadow .legends-menu .formation button:nth-of-type(2) {background-image:var(--team-art)}
+.meadow .legends-menu .formation button svg {display:none}
+.meadow .sky-view-play .mode-choice span,.meadow .legends-menu .formation button b {
+  position:relative;inset:auto;margin:0;display:block;background:#fff2c8;color:#453b52;padding:3px 12px 2px 8px;
+  font:clamp(20px,3vw,31px)/1 var(--display);border-radius:0 7px 0 0;text-shadow:none;-webkit-text-stroke:0;
+}
+.meadow .legends-menu .formation button[aria-pressed=true]{outline:3px solid #ffe577;outline-offset:-6px}
+.meadow .sky-view-play .mode-choice:is(:hover,:focus-visible),.meadow .legends-menu .formation button:focus-visible {outline:3px solid #ffcc62;outline-offset:1px}
+.meadow .legends-menu .foes button[aria-pressed=true],.meadow .wardrobe-categories button[aria-pressed=true]{background:#ffe08a;color:#493d50;border-color:#8c724c;box-shadow:inset 0 2px #fff6ce,0 2px #ad8758}
+.meadow .post-primary,.meadow .locker-primary,.meadow .legends-menu .play-button {border:3px solid #48676b;border-radius:9px;background:#a9e4ba;color:#334b4d;box-shadow:inset 0 3px #e4ffd6,inset 0 -4px #7bc49f,0 3px #526977}
+.cloud-lobby button:focus-visible {outline:3px solid #ffcc62;outline-offset:3px}
+@media (max-width:630px) and (min-height:501px){
+  .station-dock{grid-template-columns:repeat(2,minmax(0,164px));gap:64px 18px;bottom:max(94px,calc(env(safe-area-inset-bottom) + 84px))}
+  .cloud-lobby .station-button{min-height:49px;font-size:25px}
+  .station-icon{height:52px;width:65px}.cloud-lobby .station-bubble{height:40px;width:40px;bottom:calc(100% + 4px)}
+}
+@media(max-height:500px) {
+  .station-dock{bottom:68px;gap:12px;grid-template-columns:repeat(4,minmax(0,137px))}
+  .cloud-lobby .station-button{min-height:42px;font-size:22px}.station-icon{height:49px;width:62px}
+  .cloud-lobby .station-bubble{width:35px;height:35px;bottom:calc(100% + 9px);right:0;padding:6px}
+  .meadow .sky-view-play .play-tabs button{min-height:36px;font-size:20px}
+}
+@media(prefers-reduced-motion:no-preference){.station-button{transition:translate .09s ease-out,background-color .1s}}
+/* The mode select is staged over the island, with wide illustrated match tickets. */
+.meadow .sky-view-play .match-picker,
+.meadow .sky-view-play .legends-menu .menu-panel:not(.show-help) {
+  width:min(800px,96%);border:0;border-radius:0;background:none;box-shadow:none;padding:0 12px 12px;
+}
+.meadow .sky-view-play .match-picker {
+  display:flex;flex-direction:column;gap:14px;align-items:center;margin:auto;
+}
+.meadow .sky-view-play .match-picker .party-heading {
+  align-self:stretch;order:0;margin:0;padding:3px 0;background:none;box-shadow:none;border:0;text-align:center;
+}
+.meadow .sky-view-play .match-picker .post-stamp {display:none}
+.meadow .sky-view-play .match-picker .party-heading h1,
+.meadow .sky-view-play .legends-menu .menu-panel:not(.show-help) h1 {
+  color:#fff8df;-webkit-text-stroke:5px #46516b;paint-order:stroke fill;text-shadow:0 4px #46516b;
+  font:clamp(34px,5vw,58px)/1.1 var(--display);text-align:center;margin:0 0 6px;
+}
+.meadow .sky-view-play .match-picker .party-options {order:1;width:100%;margin:0;gap:16px}
+.meadow .sky-view-play .match-picker .party-connect,.meadow .sky-view-play .match-picker .party-name-badge {order:2}
+.meadow .sky-view-play .match-picker .party-connect {
+  width:min(420px,100%);margin:0; padding:0;background:transparent;box-shadow:none;
+}
+.meadow .match-picker .party-name-label {display:flex;align-items:center;justify-content:center;gap:12px;background:#fff1cf;border:2px solid #6c6274;border-radius:9px;padding:5px 9px;min-height:48px;color:#464156}
+.meadow .match-picker .party-name-label input {min-width:0;flex:1;margin:0;padding:4px 6px;text-align:center;min-height:36px;width:auto;border:0;border-bottom:2px solid #b89d84;border-radius:0;background:#fff8e8;font:20px var(--display)}
+.meadow .match-picker .party-advanced {margin:6px 0 0;font-size:16px}
+.meadow .match-picker .party-advanced summary {padding:3px}
+.meadow .match-picker .spectator-toggle {order:3;margin:0}
+.meadow .match-picker :is(.online-error,.connect-status,[role=status],[role=alert]) {order:4}
+.meadow .sky-view-play .match-picker .mode-choice,.meadow .sky-view-play .formation button {
+  height:auto;min-height:0;aspect-ratio:2.5;border-width:4px;border-color:#525571;
+  box-shadow:0 3px #fff4c9,0 6px #57526c;
+}
+.meadow .sky-view-play .formation,.meadow .sky-view-play .foes {margin:0 auto 16px;width:100%}
+.meadow .sky-view-play .foes>div {max-width:520px;margin:0 auto}
+.meadow .sky-view-play .foes legend {width:100%;text-align:center;color:#3c4e60;font:19px var(--display)}
+.meadow .sky-view-play .formation legend {position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden}
+.meadow .sky-view-play .play-button {width:min(380px,100%);margin:2px auto;display:flex}
+.meadow .sky-view-play .menu-links {justify-content:center}
+.meadow .sky-view-play .sound-options {display:none}
+.meadow .sky-view-play .sky-close {position:fixed}
+@media(min-width:701px) and (min-height:621px){
+  .meadow .sky-overlay.sky-view-play {padding-top:clamp(40px,8vh,84px)}
+  .meadow .sky-view-play .match-picker,.meadow .sky-view-play .legends-menu {margin:clamp(20px,7vh,70px) auto auto}
+}
+@media(max-width:540px) and (min-height:501px) {
+  .meadow .sky-view-play .match-picker .party-options,.meadow .sky-view-play .formation>div {grid-template-columns:1fr;gap:12px}
+  .meadow .sky-view-play .match-picker .mode-choice,.meadow .sky-view-play .formation button {aspect-ratio:3.1}
+  .meadow .sky-view-play .match-picker,.meadow .sky-view-play .legends-menu .menu-panel:not(.show-help) {width:100%;padding:0 2px 12px}
+}
+@media(max-height:620px) and (min-width:541px){
+  .meadow .sky-view-play .match-picker,.meadow .sky-view-play .legends-menu .menu-panel:not(.show-help){width:min(710px,88%);gap:7px;padding:0 4px 8px}
+  .meadow .sky-overlay.sky-view-play{padding-block:8px;justify-content:flex-start}
+  .meadow .sky-view-play .play-tabs{margin-bottom:8px}
+  .meadow .sky-view-play .match-picker .mode-choice,.meadow .sky-view-play .formation button{aspect-ratio:3.4;height:auto;min-height:0}
+  .meadow .sky-view-play .match-picker .party-heading h1,.meadow .sky-view-play .legends-menu .menu-panel:not(.show-help) h1{font-size:30px;margin:0}
+  .meadow .sky-view-play .match-picker .party-name-label{min-height:34px}.meadow .match-picker .party-name-label input{min-height:26px}
+  .meadow .sky-view-play .formation,.meadow .sky-view-play .foes{margin-bottom:8px}
+  .meadow .sky-view-play .menu-links{margin:3px auto}
+}
+/* Match-day silk pennants. The cord sags slightly between the two end knots. */
+.cloud-lobby .station-dock {
+  left:50%;right:auto;transform:translateX(-50%);bottom:clamp(76px,11vh,108px);
+  width:min(620px,88vw);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  grid-template-areas:". play ." "shop abilities online";column-gap:clamp(20px,4vw,60px);row-gap:17px;
+  align-items:end;isolation:isolate;
+}
+.station-dock::before {
+  content:"";position:absolute;pointer-events:none;z-index:-1;inset:0 -5% 36% -5%;
+  border-bottom:3px solid #b89562;border-radius:0 0 52% 52%;
+  filter:drop-shadow(0 1px #413947) drop-shadow(0 -1px #ffe3ad);
+}
+.station-dock .station-play{grid-area:play;justify-self:center;width:clamp(168px,20vw,234px);--silk:#426b74;--hem:#233f50}
+.station-dock .station-shop{grid-area:shop;--silk:#a87057;--hem:#704940;rotate:-4deg}
+.station-dock .station-abilities{grid-area:abilities;--silk:#78668d;--hem:#50445f;translate:0 6px}
+.station-dock .station-online{grid-area:online;--silk:#45817f;--hem:#34585e;rotate:4deg}
+.cloud-lobby .station-button {
+  min-height:45px;padding:7px 6px 10px;border-radius:48% 48% 48% 48% / 16% 16% 20% 20%;
+  color:#fff7dd;border:2px solid #604d42;
+  background:linear-gradient(164deg,transparent 21%,#ffffff21 35%,transparent 51%),
+    linear-gradient(180deg,#ffffff50,transparent 30%,#ffffff0c 51%,transparent 53%,#00000010),var(--silk);
+  box-shadow:inset 0 2px #ffdfa7,inset 0 -4px var(--hem),0 2px 0 #e4bd82,0 4px 4px #29314255;
+  font:clamp(18px,2vw,26px)/1 var(--display);text-shadow:0 2px var(--hem);
+}
+.station-button::after{content:"";position:absolute;inset:4px 7px 6px;border-block:1px solid #ffe2a06e;border-radius:inherit;pointer-events:none}
+.cloud-lobby .station-button:is(:hover,:focus-visible){background-color:var(--silk);filter:brightness(1.14);outline-color:#ffe5af}
+.cloud-lobby .station-play .station-button{min-height:62px;font-size:clamp(33px,4vw,45px);letter-spacing:.08em}
+.station-dock .station-icon {width:42px;height:40px;bottom:calc(100% - 7px);filter:drop-shadow(0 2px #42373e99)}
+.station-dock .station-play .station-icon {width:60px;height:55px;bottom:calc(100% - 4px)}
+.cloud-lobby .station-bubble {right:4px;bottom:calc(100% - 4px);height:34px;width:34px;padding:6px}
+.cloud-lobby .station-play .station-bubble{right:7px}
+.cloud-lobby .station-bubble b{font-size:15px}
+@media(max-width:630px) and (min-height:501px){
+ .cloud-lobby .station-dock{width:min(92vw,420px);bottom:88px;gap:18px 12px}
+ .cloud-lobby .station-button{font-size:18px;min-height:43px}
+ .cloud-lobby .station-play .station-button{min-height:56px}
+ .station-dock .station-icon{width:35px;height:34px}
+ .cloud-lobby .station-abilities .station-bubble{right:-2px;width:30px;height:30px;padding:5px}
+}
+@media(max-height:500px){
+ .cloud-lobby .station-dock{width:min(60vw,470px);bottom:74px;row-gap:8px;column-gap:24px}
+ .cloud-lobby .station-button{min-height:35px;font-size:18px;padding:4px 3px 7px}
+ .station-dock .station-play{width:150px}.cloud-lobby .station-play .station-button{min-height:42px;font-size:29px}
+ .station-dock .station-icon{width:28px;height:26px;bottom:calc(100% - 4px)}
+ .station-dock .station-play .station-icon{width:40px;height:34px}
+ .cloud-lobby .station-bubble{width:29px;height:29px;padding:5px}
+}

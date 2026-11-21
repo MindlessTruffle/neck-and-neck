@@ -24,13 +24,14 @@ effects.impact({ type: 'hit', x: 1, y: 3, z: 0, power: .1, rallyHits: 1, assiste
 assert.equal(effects.cameraImpulse(), 0, 'gentle returns need confirmation, not camera shake');
 assert.equal(visible('Effect_ring'), 2, 'gentle contacts still get clear success rings');
 const activeFrame=()=>root.children.find(o=>o.name==='ContactFlipbook'&&o.visible);
-assert(activeFrame()); const saveTexture=activeFrame().material.map;
+const activeLabel=text=>root.children.find(o=>o.name==='VolleyComicCallout'&&o.visible&&o.userData.text===text);
+const saveTexture=activeLabel('NICE!').material.map;
 effects.update(.8, game);
 effects.impact({ type: 'hit', x: 1, y: 3, z: 0, power: 1, rallyHits: 3, normal: { x: 1, y: 0, z: 0 } });
 assert(effects.cameraImpulse() > 0);
-assert.equal(visible('Effect_spark'), 26);
-assert.equal(visible('Effect_lightning'), 3);
-assert.equal(activeFrame().material.map,saveTexture);
+assert.equal(visible('Effect_spark'), 12);
+assert.equal(visible('Effect_lightning'), 1);
+assert.equal(activeLabel('NICE!').material.map,saveTexture);
 assert.equal(trail.geometry.attributes.color.itemSize, 4, 'the comet trail fades alpha instead of turning black');
 const trailArray = trail.geometry.attributes.position.array;
 for (let i = 0; i < 12; i++) { game.ball.x += .1; effects.update(1 / 60, game); }
@@ -54,7 +55,7 @@ assert.deepEqual(root.children, objects);
 assert.deepEqual(root.children.map(object => object.material.uuid), materialIds);
 effects.update(1, game);
 effects.impact({ type: 'hit', rallyHits: 3, power: .1 });
-assert.equal(activeFrame().material.map,saveTexture);
+assert.equal(activeLabel('NICE!').material.map,saveTexture);
 effects.update(.1, game);
 assert(root.getObjectByName('RallyBallAura_1').visible, 'longer volleys gain a second ball ring');
 game.paused = true; effects.update(.01, game);
@@ -66,7 +67,7 @@ const onlineFrame={...game,network:true,matchId:'feedback-match',paused:false,ph
 effects.update(.02,onlineFrame);
 effects.impact({type:'hit',action:'bump',power:.2,rallyHits:1,x:1,y:3,z:0});
 for(let i=0;i<6;i++)effects.update(.02,{...onlineFrame,ball:{...onlineFrame.ball,x:onlineFrame.ball.x+i*.1}});
-assert(root.children.some(o=>o.name==='ContactFlipbook'&&o.visible),'online snapshots cannot erase bump confirmation');
+assert(activeLabel('BUMP!'),'online snapshots cannot erase bump confirmation');
 assert(trail.geometry.drawRange.count>0,'online ball trail survives fresh render snapshots');
 effects.update(.02,{...onlineFrame,matchId:'next-match'});
 assert.equal(visible('VolleyComicCallout'),0,'a genuinely new online match clears old feedback');
@@ -76,7 +77,7 @@ assert.equal(trail.geometry.drawRange.count, 0);
 effects.update(1, game);
 for (const action of ['bump', 'set', 'spike', 'block', 'dive']) {
   effects.impact({ type: 'hit', action, rallyHits: 1, power: .15, x: 1, y: 3, z: 0 });
-  assert(activeFrame());if(action==='set')assert(root.children.some(o=>o.visible&&o.userData.text==='SET!'));
+  assert(root.children.some(o=>o.visible&&o.userData.text===action.toUpperCase()+'!'), action+' needs a contact label');
   assert.equal(effects.cameraImpulse(), 0);
   effects.update(1, game);
 }
@@ -125,7 +126,7 @@ try {
   const paintedScene = new THREE.Scene(), paintedEffects = createVFX(paintedScene, { camera });
   const sprite = paintedScene.getObjectByName('VolleyComicCallout');
   assert(sprite.material.map.isCanvasTexture);
-  for (const text of ['SET!', 'PERFECT SPIKE!']) assert(paintedLabels.includes(text));
+  for (const text of ['BUMP!', 'SET!', 'SPIKE!', 'BLOCK!', 'DIVE!', 'SERVE!', 'PERFECT SPIKE!']) assert(paintedLabels.includes(text));
   paintedEffects.dispose();
 } finally { globalThis.document = previousDocument; }
 

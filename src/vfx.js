@@ -1,6 +1,7 @@
 import { getCosmetic } from './cosmetics-catalog.js';
 import {createFlipbooks} from './contact-flipbooks.js';
 import * as THREE from 'three';
+import {createAbilityField} from './ability-field.js';
 import { BALL_RADIUS } from './physics.js';
 
 const IVORY = '#fff5d4', GOLD = '#ffd35c', TEAL = '#5edbcc', CORAL = '#ff8d70';
@@ -20,6 +21,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
   const root = new THREE.Group();
   root.name = 'AnimeSportsEffects';
   scene.add(root);
+  const field=createAbilityField(root,mobile);
   const books=createFlipbooks(root,mobile?8:16);
   const geometries = {
     ring: new THREE.TorusGeometry(1, .025, 5, 64),
@@ -61,7 +63,12 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
     calloutTextures.set(text, texture);
     return texture;
   }
-  comicTexture('SET!', TEAL);
+  const moveLabels = {
+    bump: ['BUMP!', GOLD], set: ['SET!', TEAL], spike: ['SPIKE!', CORAL],
+    block: ['BLOCK!', IVORY], dive: ['DIVE!', TEAL], serve: ['SERVE!', GOLD],
+  };
+  for (const [label, color] of Object.values(moveLabels)) comicTexture(label, color);
+  comicTexture('NICE!', GOLD);
   comicTexture('PERFECT SPIKE!', GOLD);
   const callouts = [];
   for (let i = 0; i < 4; i++) {
@@ -71,11 +78,19 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
     root.add(object);
     callouts.push({ object, life: 0, duration: .72, y: 0, width: 3.0, duringServe: false });
   }
-  function announce(text, point, duration = .72, { height = .8, width = 3, duringServe = false } = {}) {
+  const labelRight = vector(), labelScreen = vector();
+  function announce(text, point, duration = .72, { height = .8, width = 3, duringServe = false, velocity } = {}) {
     const label = callouts.find(item => item.life <= 0) || callouts.reduce((oldest, item) => item.life < oldest.life ? item : oldest, callouts[0]);
     label.life = label.duration = duration;
     label.y = point.y + height; label.width = width; label.duringServe = duringServe;
     label.object.position.set(point.x, label.y, point.z);
+    if (camera) {
+      labelRight.set(1,0,0).applyQuaternion(camera.quaternion);
+      const screenX = labelScreen.copy(point).project(camera).x;
+      const across = velocity ? labelRight.dot(velocity) : 0;
+      const side = Math.abs(screenX) > .45 ? -Math.sign(screenX) : across > .15 ? -1 : 1;
+      label.object.position.addScaledVector(labelRight, side * (.5 + width * .34));
+    }
     label.object.scale.set(width, width / 3.2, 1);
     label.object.material.map = calloutTextures.get(text) || calloutTextures.get('SET!');
     label.object.material.opacity = 1;
@@ -164,11 +179,13 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
     item.object.quaternion.setFromUnitVectors(vector(0, 0, 1), normal.clone().normalize());
     item.initialScale = .18; item.growth = 4.8 * power;
     item.object.scale.setScalar(.18);
+    return item;
   }
-  function burst(point, tint, count, power = 1, confetti = false) {
+  function burst(point, tint, count, power = 1, confetti = false, travel = null) {
     count = Math.round(count * (reducedMotion ? .22 : mobile ? .5 : 1));
     for (let i = 0; i < count; i++) {
       const direction = vector(Math.random() - .5, Math.random() - .2, Math.random() - .5).normalize();
+      if (travel) direction.multiplyScalar(.56).add(travel).normalize();
       const effect = acquire(confetti ? 'petal' : 'spark', point, i % 3 ? tint : IVORY, confetti ? 1.6 + Math.random() : .22 + Math.random() * .15);
       if (!effect) break;
       effect.velocity.copy(direction).multiplyScalar((confetti ? 3 : 4.8) * power);
@@ -217,7 +234,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
       const forward = vector(event.team === 1 ? -1 : 1, 0, 0);
       shock(point, event.ability === 'shield' ? forward : UP, ability.color, 1.1);
       if (event.ability === 'magnet' && !reducedMotion) for (let i = 0; i < 2; i++) bolt(point, ability.color, .7);
-      burst(point, ability.color, 16, .65, event.ability === 'feather');
+      burst(point, ability.color, mobile ? 22 : 32, .65, event.ability === 'feather');
       return { hitstop: 0 };
     }
     if (type === 'toss') {
@@ -246,7 +263,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
     if (/jump|land|dash|dive/.test(type)) {
       const floor = point.clone().setY(.06);
       shock(floor, UP, type === 'dash' ? TEAL : IVORY, .4);
-      if(type==='dive')books.spawn(point,TEAL,1.9);
+
       for (let i = 0; i < (reducedMotion ? 2 : 7); i++) {
         const effect = acquire('puff', floor, '#e8daa2', .25 + Math.random() * .15);
         if (!effect) break;
@@ -284,7 +301,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
       return { hitstop: 0 };
     }
     if (type === 'serve' || type === 'net') {
-      if (type === 'serve') { volleyCount = 0; successPulse = 0; lastHitTeam = event.team ?? 0; tintTrail(lastHitTeam ? CORAL : TEAL); }
+      if (type === 'serve') { announce('SERVE!',point,.62,{width:2.6,duringServe:true}); volleyCount = 0; successPulse = 0; lastHitTeam = event.team ?? 0; tintTrail(lastHitTeam ? CORAL : TEAL); }
       shock(point, UP, type === 'net' ? IVORY : tint, .4);
       return { hitstop: 0 };
     }
@@ -292,20 +309,26 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
     lastHitTeam = event.team ?? 0;
     lastAbility = ability || null;
     successPulse = 1;
-    books.spawn(point,perfect?GOLD:event.action==='block'?CORAL:event.action==='set'?IVORY:TEAL,perfect?3.6:2.1);
+    if (perfect) books.spawn(point,GOLD,3.6);
     if(perfect){
       const forward=event.team===1?-1:1;
       books.spawn(vector(forward*.65,Math.max(2.7,point.y-.35),point.z),0xffffff,2.4,true);
-      books.ignite();announce('PERFECT SPIKE!',point,1.1,{width:4.6});}
-    else if(event.action==='set')announce('SET!',point,.72,{width:2.6});
+      books.ignite();announce('PERFECT SPIKE!',point,1.1,{width:4.6,velocity:event.velocity});}
+    else announce(moveLabels[event.action]?.[0] || 'NICE!',point,.68,{width:2.65,velocity:event.velocity});
     tintTrail(ability?.color || (volleyCount >= 5 ? GOLD : lastHitTeam ? CORAL : TEAL));
-    const source = event.normal || event.velocity;
+    const source = event.velocity || event.normal;
     const normal = source ? vector(source.x ?? source[0] ?? 1, source.y ?? source[1] ?? 0, source.z ?? source[2] ?? 0).normalize() : vector(1, .15, .25).normalize();
     const strong = power > .6;
     // Even a gentle, assisted contact gets an unmistakable success ring and chime.
-    shock(point, normal, IVORY, .7 + power * .55);
-    shock(point, UP, volleyCount >= 3 ? TEAL : tint, .5 + Math.min(volleyCount, 6) * .07);
-    burst(point, tint, perfect ? 40 : strong ? 26 : 12, .45 + power * .55);
+    const contactColor = moveLabels[event.action]?.[1] || tint;
+    shock(point, normal, event.action === 'set' ? TEAL : IVORY, .58 + power * .48);
+    const echo = shock(point, ['block','spike'].includes(event.action) ? normal : UP, contactColor, .42 + Math.min(volleyCount, 6) * .06);
+    if (echo && !reducedMotion) {
+      if (event.action === 'set') echo.velocity.set(0,2.8,0);
+      else if (event.action === 'dive') echo.velocity.set(normal.x,0,normal.z).multiplyScalar(3.8);
+      else echo.velocity.copy(normal).multiplyScalar(perfect ? 6 : 2.5);
+    }
+    burst(point, perfect ? GOLD : contactColor, perfect ? 32 : strong ? 12 : 6, .45 + power * .55, false, normal);
     if (!reducedMotion && strong) {
       for (let i = 0; i < 2; i++) {
         const slash = acquire('slash', point, i ? tint : IVORY, .20 + i * .025);
@@ -313,7 +336,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
         slash.object.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * 6);
         slash.initialScale = .4; slash.growth = 3.6 * power;
       }
-      for (let i = 0; i < (perfect?5:3); i++) bolt(point, i % 2 ? IVORY : tint, power);
+      for (let i = 0; i < (perfect?5:1); i++) bolt(point, i % 2 ? IVORY : tint, power);
       impulse = Math.min(.095, impulse + (perfect?.075:.045) * power);
     }
     return { hitstop: 0 };
@@ -470,6 +493,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
       object.material.color.set(lastAbility?.color || (i || volleyCount >= 5 ? GOLD : lastHitTeam ? CORAL : TEAL));
       object.material.opacity = .48 + successPulse * .4;
     }
+    field.update(game?.phase==='play'&&!game.paused?game.players:null,clock,reducedMotion);
     streakClock += dt;
     if (streakClock > .09 && !reducedMotion && !game?.paused && game?.phase === 'play') {
       streakClock %= .09;
@@ -491,7 +515,7 @@ export function createVFX(scene, { camera, reducedMotion = false, mobile = globa
   }
   function dispose() {
     if (disposed) return;
-    disposed = true;books.dispose();
+    disposed = true;books.dispose();field.dispose();
     root.removeFromParent();
     root.traverse(object => object.material?.dispose());
     Object.values(geometries).forEach(geometry => geometry.dispose());

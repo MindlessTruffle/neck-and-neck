@@ -26,7 +26,7 @@ export function Shop({ view = 'skins', profile: rawProfile, onChange, onClose, o
   const [collection,setCollection]=useState('skins');
   const powers = view === 'abilities';
   const item = getSkin(selectedSkin), power = getAbility(selectedAbility);
-  const displayedPower=getAbility(profile.equippedAbility);
+  const displayedPower=getAbility(selectedAbility);
   const owned = profile.ownedSkins.includes(item.id), equipped = profile.equippedSkin === item.id;
   useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
   useEffect(() => {
@@ -66,13 +66,13 @@ export function Shop({ view = 'skins', profile: rawProfile, onChange, onClose, o
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
   };
   if (powers) return <section ref={panel} onKeyDown={keys} className={`power-spin-screen ${rolling ? 'is-spinning' : ''}`} role="dialog" aria-modal="true" aria-labelledby="spin-title">
-    <header className="spin-heading"><span>{t('CURRENT POWER')}</span><h1 id="spin-title" style={{color: displayedPower.color}}>{rolling ? t('ROLLING…') : displayedPower.name}</h1><strong>{rolling ? t('GOOD LUCK!') : t(POWER_EFFECT[displayedPower.id])}</strong></header>
+    <header className="spin-heading"><span>{t(selectedAbility===profile.equippedAbility?'CURRENT POWER':'PREVIEW')}</span><h1 id="spin-title" style={{color: displayedPower.color}}>{rolling ? t('ROLLING…') : displayedPower.name}</h1><strong>{rolling ? t('GOOD LUCK!') : t(POWER_EFFECT[displayedPower.id])}</strong></header>
     <button className="spin-close" onClick={close} aria-label="Close locker"><Icon name="back"/></button>
     <aside className="spin-inventory" aria-label="Power collection"><h2>{t('YOUR POWERS')}</h2>{ABILITY_CATALOG.map(ability => {
       const unlocked=profile.ownedAbilities.includes(ability.id),active=profile.equippedAbility===ability.id;
       return <button key={ability.id} className={`spin-slot ${selectedAbility===ability.id?'selected':''}`} style={{'--power-color':ability.color}} aria-pressed={selectedAbility===ability.id} disabled={rolling} onClick={()=>{setSelectedAbility(ability.id);setLastRoll(null);onSound('menu');}}><PowerIcon id={ability.id} color={ability.color}/><span><b>{ability.name}</b><small>{rolling?'…':active?t('EQUIPPED'):unlocked?t('OWNED'):t('LOCKED')}</small></span></button>;
     })}</aside>
-    <div className="spin-showcase"><div className="spin-aura"/><PowerRoll selected={rolling?rollTarget:profile.equippedAbility} rolling={rolling} reducedMotion={reducedMotion} onTick={()=>onSound('menu')}/><div className="spin-reveal" role="status">{lastRoll ? lastRoll.duplicate ? `${t('DUPLICATE')} +${DUPLICATE_REFUND}` : t('NEW POWER!') : ''}</div></div>
+    <div className="spin-showcase"><div className="spin-aura"/><PowerRoll palette={getSkin(profile.equippedSkin).palette} cosmetics={profile.cosmetics} selected={rolling?rollTarget:selectedAbility} rolling={rolling} reducedMotion={reducedMotion} onTick={()=>onSound('menu')}/><div className="spin-reveal" role="status">{lastRoll ? lastRoll.duplicate ? `${t('DUPLICATE')} +${DUPLICATE_REFUND}` : t('NEW POWER!') : ''}</div></div>
     <aside className="spin-rates"><h2>{t('ROLL ODDS')}</h2><div className="spin-odds-list">{ABILITY_CATALOG.map(ability=><div key={ability.id} style={{'--power-color':ability.color}}><span>{ability.name}</span><strong>{ability.odds}%</strong></div>)}</div><div className="spin-equip"><PowerIcon id={power.id} color={power.color}/><b>{power.name}</b><button disabled={rolling||!profile.ownedAbilities.includes(power.id)||profile.equippedAbility===power.id} onClick={()=>apply(equipAbility(profileRef.current,power.id))}>{profile.equippedAbility===power.id?t('EQUIPPED'):profile.ownedAbilities.includes(power.id)?t('EQUIP POWER'):t('LOCKED')}</button></div></aside>
     <div className="spin-actions"><div className="spin-balance"><Clover size={26}/>{profile.coins.toLocaleString()}</div><button className="spin-button" onClick={roll} disabled={rolling||profile.coins<ROLL_COST}>{rolling?t('SPINNING…'):t('SPIN')}</button><div className="spin-cost">1 SPIN = <Clover size={22}/>{ROLL_COST}<span>{Math.floor(profile.coins/ROLL_COST)} {t(Math.floor(profile.coins/ROLL_COST)===1?'SPIN LEFT':'SPINS LEFT')}</span></div><span className="spin-notice" role="status" aria-live="polite">{notice}</span></div>
     <button className="spin-return" onClick={close}><Icon name="back"/>{t('RETURN TO LOBBY')}</button>
